@@ -1,0 +1,52 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './hooks/useAuth';
+import { useGameStore } from './stores/gameStore';
+import LoginPage from './components/Auth/LoginPage';
+import MainMenu from './components/UI/MainMenu';
+import LevelSelect from './components/UI/LevelSelect';
+import BattleScreen from './components/Battle/BattleScreen';
+import CharacterCustomizer from './components/Character/CharacterCustomizer';
+import Leaderboard from './components/UI/Leaderboard';
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isLoading, player } = useGameStore();
+  const isAuthenticated = !!player;
+
+  if (isLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 50%, #0d1a2e 100%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontSize: 64, marginBottom: 16 }}>⚔️</p>
+          <p style={{ color: 'white', fontSize: 20 }}>Loading FlowFight...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+export default function App() {
+  // เรียก useAuth() ครั้งเดียวที่ root เพื่อ subscribe Firebase Auth
+  useAuth();
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<ProtectedRoute><MainMenu /></ProtectedRoute>} />
+        <Route path="/levels" element={<ProtectedRoute><LevelSelect /></ProtectedRoute>} />
+        <Route path="/battle/:levelId" element={<ProtectedRoute><BattleScreen /></ProtectedRoute>} />
+        <Route path="/character" element={<ProtectedRoute><CharacterCustomizer /></ProtectedRoute>} />
+        <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  );
+}
