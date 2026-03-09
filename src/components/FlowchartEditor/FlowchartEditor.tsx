@@ -144,7 +144,9 @@ export default function FlowchartEditor() {
           connectionLineType={ConnectionLineType.Step}
           connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 2, strokeDasharray: '5,3' }}
           fitView
-          fitViewOptions={{ padding: 0.3 }}
+          fitViewOptions={{ padding: 0.4, maxZoom: 0.85 }}
+          minZoom={0.2}
+          maxZoom={2}
           deleteKeyCode="Delete"
           snapToGrid
           snapGrid={[16, 16]}

@@ -92,6 +92,8 @@ export interface CharacterStats {
   attack: number;
   defense: number;
   speed: number;
+  armor?: number;  // Physical damage reduction (flat)
+  parry?: number;  // % chance to parry incoming attack (0-100)
 }
 
 export interface Character {
@@ -136,6 +138,9 @@ export interface LevelRewards {
   gold?: number;
 }
 
+// block types that a level can REQUIRE the player to use
+export type RequiredBlock = 'condition' | 'loop' | 'heal' | 'dodge' | 'cast_spell';
+
 export interface Level {
   id: string;
   number: number;
@@ -145,6 +150,9 @@ export interface Level {
   enemy: Enemy;
   tutorialText?: string;
   concept: string; // What programming concept this teaches
+  objectives: string[];         // เงื่อนไขการผ่านด่าน (แสดงในหน้า battle)
+  bonusObjective?: string;      // โบนัส (optional, ไม่บังคับ)
+  requiredBlocks?: RequiredBlock[]; // block types ที่ต้องใช้จริง — ตรวจสอบก่อนบันทึก
   unlockRequirements: {
     levelRequired: number;
     previousLevelComplete: boolean;
@@ -248,7 +256,10 @@ export interface LeaderboardEntry {
   playerName: string;
   characterName: string;
   characterClass: CharacterClass;
+  characterLevel: number;
+  experience: number;
   levelReached: number;
+  levelsCompleted: number;
   totalKills: number;
   totalPlayTime: number;
   gameMode: GameMode;

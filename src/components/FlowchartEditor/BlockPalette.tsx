@@ -63,8 +63,7 @@ interface Props {
 
 export default function BlockPalette({ onAddBlock }: Props) {
   return (
-    <div style={{
-      width: 176, flexShrink: 0,
+    <div className="block-palette" style={{
       background: '#0d0d1a',
       borderRight: '1px solid rgba(255,255,255,0.07)',
       display: 'flex', flexDirection: 'column',

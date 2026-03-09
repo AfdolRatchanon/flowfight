@@ -19,7 +19,7 @@ interface GameState {
 export const useGameStore = create<GameState>((set) => ({
   player: null,
   character: null,
-  isLoading: false,
+  isLoading: true,  // start true — Firebase auth resolves asynchronously on refresh
   error: null,
   gameMode: 'normal',
 

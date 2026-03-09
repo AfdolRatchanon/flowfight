@@ -152,3 +152,91 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.4); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(124,58,237,0.7); }
+
+/* ===== RESPONSIVE SYSTEM ===== */
+:root {
+  --arena-height: 42vh;
+  --hero-size: 108px;
+  --enemy-font: 72px;
+  --palette-width: 164px;
+  --page-pad: 16px;
+}
+@media (min-height: 768px) {
+  :root { --arena-height: 44vh; --hero-size: 120px; --enemy-font: 84px; }
+}
+@media (min-height: 900px) {
+  :root { --arena-height: 46vh; --hero-size: 136px; --enemy-font: 96px; }
+}
+@media (min-height: 1080px) {
+  :root { --arena-height: 48vh; --hero-size: 144px; --enemy-font: 100px; }
+}
+@media (min-width: 1024px) {
+  :root { --palette-width: 188px; --page-pad: 24px; }
+}
+@media (min-width: 1280px) {
+  :root { --palette-width: 204px; }
+}
+@media (min-width: 1600px) {
+  :root { --palette-width: 220px; --page-pad: 32px; }
+}
+
+/* Page wrappers */
+.page-outer {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 50%, #0d1a2e 100%);
+  padding: var(--page-pad);
+}
+.page-container {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+@media (min-width: 1024px) { .page-container { max-width: 800px; } }
+@media (min-width: 1440px) { .page-container { max-width: 960px; } }
+
+.menu-container {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+@media (min-width: 1024px)  { .menu-container { max-width: 480px; } }
+@media (min-width: 1440px)  { .menu-container { max-width: 540px; } }
+
+.leaderboard-container {
+  max-width: 640px;
+  margin: 0 auto;
+}
+@media (min-width: 1024px)  { .leaderboard-container { max-width: 840px; } }
+@media (min-width: 1440px)  { .leaderboard-container { max-width: 1000px; } }
+
+/* Level grid: stacked → 2-col on desktop */
+.level-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+@media (min-width: 1024px) {
+  .level-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+}
+
+/* Menu buttons — bigger on desktop */
+@media (min-width: 1024px) {
+  .menu-btn { padding: 20px 28px !important; font-size: 18px !important; }
+}
+
+/* Battle screen arena */
+.battle-arena {
+  height: var(--arena-height);
+  flex-shrink: 0;
+}
+
+/* Block palette */
+.block-palette {
+  width: var(--palette-width);
+  flex-shrink: 0;
+}

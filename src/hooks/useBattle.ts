@@ -4,7 +4,28 @@ import { useFlowchartStore } from '../stores/flowchartStore';
 import { FlowchartEngine } from '../engines/FlowchartEngine';
 import type { BattleState } from '../engines/FlowchartEngine';
 import { STEP_DELAY_MS } from '../utils/constants';
-import type { Character, Enemy } from '../types/game.types';
+import type { Character, Enemy, RequiredBlock } from '../types/game.types';
+
+const BLOCK_LABELS: Record<RequiredBlock, string> = {
+  condition: 'Condition block',
+  loop: 'Loop block',
+  heal: 'Heal block',
+  dodge: 'Dodge block',
+  cast_spell: 'Cast Spell block',
+};
+
+function checkShield(nodes: ReturnType<typeof useFlowchartStore.getState>['nodes'], requiredBlocks: RequiredBlock[]): { shielded: boolean; reason: string } {
+  for (const req of requiredBlocks) {
+    let missing = false;
+    if (req === 'condition')  missing = !nodes.some((n) => n.type === 'condition');
+    if (req === 'loop')       missing = !nodes.some((n) => n.type === 'loop');
+    if (req === 'heal')       missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
+    if (req === 'dodge')      missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
+    if (req === 'cast_spell') missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+    if (missing) return { shielded: true, reason: `ต้องใช้ ${BLOCK_LABELS[req]}` };
+  }
+  return { shielded: false, reason: '' };
+}
 
 export function useBattle() {
   const battleStore = useBattleStore();
@@ -25,7 +46,7 @@ export function useBattle() {
     flowchartStore.highlightNode(null);
   }, [battleStore, flowchartStore]);
 
-  const executeBattle = useCallback(async (speedMs: number = STEP_DELAY_MS) => {
+  const executeBattle = useCallback(async (speedMs: number = STEP_DELAY_MS, requiredBlocks: RequiredBlock[] = []) => {
     stopRef.current = false;
     const { nodes, edges } = flowchartStore;
     const engine = new FlowchartEngine(nodes, edges);
@@ -40,14 +61,23 @@ export function useBattle() {
     battleStore.setExecuting(true);
     battleStore.setStatus('running');
 
+    const charStats  = battleStore.battle?.character.stats;
+    const enemyStats = battleStore.battle?.enemy.stats;
+    const { shielded, reason } = checkShield(nodes, requiredBlocks);
     const battleState: BattleState = {
       heroHP: battleStore.heroHP,
       heroMaxHP: battleStore.heroMaxHP,
       enemyHP: battleStore.enemyHP,
       enemyMaxHP: battleStore.enemyMaxHP,
-      heroAttack: battleStore.battle?.character.stats.attack ?? 10,
-      heroDefense: battleStore.battle?.character.stats.defense ?? 5,
-      enemyAttack: battleStore.battle?.enemy.stats.attack ?? 8,
+      heroAttack:  charStats?.attack  ?? 10,
+      heroDefense: charStats?.defense ?? 5,
+      heroParry:   10,
+      enemyAttack:  enemyStats?.attack  ?? 8,
+      enemyDefense: enemyStats?.defense ?? 3,
+      enemyArmor:   enemyStats?.armor   ?? 0,
+      enemyParry:   enemyStats?.parry   ?? 0,
+      enemyShielded: shielded,
+      shieldReason:  reason,
       round: battleStore.currentRound,
     };
 
@@ -94,7 +124,8 @@ export function useBattle() {
     } else if (result.finalState.heroHP <= 0) {
       battleStore.setStatus('defeat');
     } else {
-      battleStore.setStatus('waiting');
+      // Flowchart ended but enemy still alive = mission failed
+      battleStore.setStatus('defeat');
     }
 
     battleStore.setExecuting(false);
@@ -114,7 +145,7 @@ export function useBattle() {
     isExecuting: battleStore.isExecuting,
     startBattle,
     stopBattle,
-    executeBattle: (speedMs?: number) => executeBattle(speedMs),
+    executeBattle: (speedMs?: number, requiredBlocks?: RequiredBlock[]) => executeBattle(speedMs, requiredBlocks),
     resetBattle: battleStore.resetBattle,
   };
 }

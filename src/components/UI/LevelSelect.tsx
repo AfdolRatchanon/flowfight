@@ -10,7 +10,7 @@ const ENEMY_ICONS: Record<string,string> = {
   spider:'🕷️', ice_giant:'🧊', dragon:'🐉', fire_elemental:'🔥',
   lich:'💀', shadow_demon:'😈', overlord:'👑', boss:'💀',
 };
-const CLASS_ICONS: Record<string,string> = { knight:'🛡️', mage:'🔮', rogue:'🗡️', barbarian:'⚔️' };
+
 
 export default function LevelSelect() {
   const navigate = useNavigate();
@@ -24,8 +24,8 @@ export default function LevelSelect() {
   }
 
   return (
-    <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#0d0d1a,#1a0a2e,#0d1a2e)', padding:'24px' }}>
-      <div style={{ maxWidth:600, margin:'0 auto' }}>
+    <div className="page-outer">
+      <div className="page-container">
         <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:20 }}>
           <button onClick={()=>navigate('/')} style={{ background:'rgba(255,255,255,0.06)', border:'none', color:'white', width:40, height:40, borderRadius:10, cursor:'pointer', fontSize:18 }}>←</button>
           <div style={{ flex:1 }}>
@@ -40,7 +40,7 @@ export default function LevelSelect() {
               background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)',
               borderRadius:12, padding:'8px 12px', display:'flex', flexDirection:'column', alignItems:'center', gap:2, minWidth:72,
             }}>
-              <div style={{ fontSize:20 }}>{CLASS_ICONS[character.class] ?? '🧙'}</div>
+              <img src={`/characters/${character.class}.png`} alt={character.class} style={{ width:36, height:36, objectFit:'contain', imageRendering:'pixelated' }} />
               <span style={{
                 background:'linear-gradient(135deg,#fbbf24,#f59e0b)',
                 color:'#1c1917', fontSize:9, fontWeight:900, padding:'1px 6px', borderRadius:4,
@@ -58,7 +58,7 @@ export default function LevelSelect() {
             </div>
           )}
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <div className="level-grid">
           {LEVELS.map((level, i) => {
             const done    = completed.includes(level.id);
             const unlocked = isUnlocked(level.id, i);

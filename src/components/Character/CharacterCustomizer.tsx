@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCharacterStore, CLASS_BASE_STATS } from '../../stores/characterStore';
 import { useGameStore } from '../../stores/gameStore';
 import type { CharacterClass, EquipmentItem } from '../../types/game.types';
-import { COLOR_PALETTE, WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../../utils/constants';
+import { WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../../utils/constants';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL } from '../../utils/levelSystem';
 import { saveCharacterProgress } from '../../services/authService';
 
@@ -54,7 +54,7 @@ const SLOT_META = {
   accessory: { icon: '💍', label: 'Accessory' },
 };
 
-type Tab = 'class' | 'equipment' | 'colors' | 'stats';
+type Tab = 'class' | 'equipment' | 'stats';
 
 const CARD: React.CSSProperties = {
   background: 'rgba(26,26,62,0.8)',
@@ -110,7 +110,7 @@ export default function CharacterCustomizer() {
           <button onClick={() => navigate('/')} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: 'white', width: 40, height: 40, borderRadius: 10, cursor: 'pointer', fontSize: 18 }}>←</button>
           <div style={{ flex: 1 }}>
             <h1 style={{ color: 'white', fontWeight: 800, fontSize: 24, margin: 0 }}>Character</h1>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, margin: 0 }}>เลือก class · จัดอุปกรณ์ · ปรับแต่ง</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, margin: 0 }}>เลือก class · จัดอุปกรณ์</p>
           </div>
           {/* Current level badge (if exists) */}
           {character && (
@@ -133,12 +133,12 @@ export default function CharacterCustomizer() {
 
           {/* Character preview */}
           <div style={{ ...CARD, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 150, padding: 20 }}>
-            {/* Class icon with glow */}
+            {/* Class image with glow */}
             <div style={{
-              fontSize: 64, marginBottom: 8, lineHeight: 1,
+              width: 96, height: 96, marginBottom: 8,
               filter: `drop-shadow(0 0 16px ${classInfo.tagColor}88)`,
             }}>
-              {classInfo.icon}
+              <img src={`/characters/${store.selectedClass}.png`} alt={store.selectedClass} style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} />
             </div>
             {/* Tag badge */}
             <div style={{
@@ -155,12 +155,6 @@ export default function CharacterCustomizer() {
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: 0, textTransform: 'capitalize' }}>
               {store.selectedClass}
             </p>
-            {/* Color swatch */}
-            <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
-              {(['primary', 'secondary', 'accent'] as const).map(k => (
-                <div key={k} style={{ width: 14, height: 14, borderRadius: '50%', background: store.colors[k], border: '2px solid rgba(255,255,255,0.2)' }} />
-              ))}
-            </div>
           </div>
 
           {/* Stats + name input */}
@@ -201,7 +195,6 @@ export default function CharacterCustomizer() {
           {([
             { id: 'class',     label: '🎭 Class' },
             { id: 'equipment', label: '⚔️ Equip' },
-            { id: 'colors',    label: '🎨 Colors' },
             { id: 'stats',     label: '📊 Stats' },
           ] as { id: Tab; label: string }[]).map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -217,7 +210,6 @@ export default function CharacterCustomizer() {
         <div style={CARD}>
           {tab === 'class'     && <ClassTab />}
           {tab === 'equipment' && <EquipmentTab selectedClass={store.selectedClass} />}
-          {tab === 'colors'    && <ColorsTab />}
           {tab === 'stats'     && <StatsTab />}
         </div>
 
@@ -408,40 +400,6 @@ function EquipmentTab({ selectedClass }: { selectedClass: CharacterClass }) {
   );
 }
 
-function ColorsTab() {
-  const store = useCharacterStore();
-  const COLOR_META = {
-    primary:   { label: 'Primary Color', desc: 'สีหลักของตัวละคร' },
-    secondary: { label: 'Secondary Color', desc: 'สีรอง' },
-    accent:    { label: 'Accent Color', desc: 'สีไฮไลท์' },
-  };
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {(['primary', 'secondary', 'accent'] as const).map((key) => (
-        <div key={key}>
-          <div style={{ marginBottom: 10 }}>
-            <p style={{ color: 'white', fontSize: 13, fontWeight: 700, margin: '0 0 2px' }}>{COLOR_META[key].label}</p>
-            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, margin: 0 }}>{COLOR_META[key].desc}</p>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {COLOR_PALETTE.map((color) => (
-              <button key={color} onClick={() => store.setColors({ [key]: color })} title={color}
-                style={{
-                  width: 34, height: 34, borderRadius: '50%',
-                  border: store.colors[key] === color ? '3px solid white' : '3px solid transparent',
-                  backgroundColor: color, cursor: 'pointer', transition: 'transform 0.15s',
-                  boxShadow: store.colors[key] === color ? `0 0 12px ${color}` : 'none',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.18)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; }}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function StatsTab() {
   const store = useCharacterStore();

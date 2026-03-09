@@ -9,7 +9,6 @@ const MENU_ITEMS = [
   { icon: '🏆', label: 'Leaderboard', path: '/leaderboard', color: '#f59e0b' },
 ];
 
-const CLASS_ICONS: Record<string, string> = { knight: '🛡️', mage: '🔮', rogue: '🗡️', barbarian: '⚔️' };
 
 export default function MainMenu() {
   const { player, character } = useGameStore();
@@ -29,11 +28,11 @@ export default function MainMenu() {
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
       </div>
 
-      <div style={{ position: 'relative', width: '100%', maxWidth: 380 }}>
+      <div className="menu-container">
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
-          <div className="float" style={{ fontSize: 72, marginBottom: 16, filter: 'drop-shadow(0 0 20px rgba(233,69,96,0.5))' }}>⚔️</div>
-          <h1 style={{ fontSize: 42, fontWeight: 800, letterSpacing: 4, marginBottom: 8, background: 'linear-gradient(135deg, #ffffff 0%, #e94560 50%, #7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <div className="float" style={{ fontSize: 'clamp(56px, 6vw, 80px)', marginBottom: 16, filter: 'drop-shadow(0 0 20px rgba(233,69,96,0.5))' }}>⚔️</div>
+          <h1 style={{ fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 800, letterSpacing: 4, marginBottom: 8, background: 'linear-gradient(135deg, #ffffff 0%, #e94560 50%, #7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             FLOWFIGHT
           </h1>
           <div style={{ width: 60, height: 3, background: 'linear-gradient(90deg, #e94560, #7c3aed)', margin: '0 auto 12px', borderRadius: 2 }} />
@@ -62,9 +61,9 @@ export default function MainMenu() {
                 background: 'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(233,69,96,0.2))',
                 border: '2px solid rgba(124,58,237,0.4)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 26,
+                overflow: 'hidden',
               }}>
-                {CLASS_ICONS[character.class] ?? '🧙'}
+                <img src={`/characters/${character.class}.png`} alt={character.class} style={{ width: 44, height: 44, objectFit: 'contain', imageRendering: 'pixelated' }} />
               </div>
 
               {/* Info */}

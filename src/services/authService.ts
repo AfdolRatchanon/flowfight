@@ -134,3 +134,24 @@ export async function saveCharacterProgress(uid: string, character: Character): 
     },
   });
 }
+
+export async function saveLeaderboardEntry(
+  player: Player,
+  character: Character,
+): Promise<void> {
+  const ref = doc(db, 'leaderboards', player.id);
+  await setDoc(ref, {
+    playerId: player.id,
+    playerName: player.username,
+    characterName: character.name,
+    characterClass: character.class,
+    characterLevel: character.level,
+    experience: character.experience,
+    levelReached: player.stats?.levelReached ?? 1,
+    levelsCompleted: (player.levelsCompleted ?? []).length,
+    totalKills: player.stats?.totalKills ?? 0,
+    totalPlayTime: 0,
+    gameMode: 'normal',
+    lastUpdated: Date.now(),
+  });
+}

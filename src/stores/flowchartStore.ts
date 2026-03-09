@@ -26,13 +26,13 @@ const defaultNodes: FlowNode[] = [
   {
     id: 'start',
     type: 'start',
-    position: { x: 250, y: 50 },
+    position: { x: 300, y: 60 },
     data: { label: 'Start' },
   },
   {
     id: 'end',
     type: 'end',
-    position: { x: 250, y: 300 },
+    position: { x: 300, y: 620 },
     data: { label: 'End' },
   },
 ];
