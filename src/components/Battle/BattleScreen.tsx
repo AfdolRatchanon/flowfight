@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LEVELS } from '../../utils/constants';
 import { useBattle } from '../../hooks/useBattle';
 import { useGameStore } from '../../stores/gameStore';
 import { useFlowchartStore } from '../../stores/flowchartStore';
-import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry } from '../../services/authService';
+import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry } from '../../services/authService';
+import type { LevelBattleStats } from '../../services/authService';
 import { gainXP, levelProgressPct, xpToNextLevel, LEVEL_XP_TABLE, MAX_LEVEL } from '../../utils/levelSystem';
 import FlowchartEditor from '../FlowchartEditor/FlowchartEditor';
 import { previewFlowchart } from '../../engines/FlowchartEngine';
-import type { BattleState } from '../../engines/FlowchartEngine';
+import type { BattleState, PreviewStep } from '../../engines/FlowchartEngine';
+import { useTheme } from '../../contexts/ThemeContext';
+import type { ThemeColors } from '../../contexts/ThemeContext';
 
 // Speed levels: 1=ช้ามาก ... 5=เร็วมาก
 const SPEED_LEVELS = [
@@ -68,10 +71,11 @@ const ANIM_CSS = `
 
 // ===== Sub-components =====
 function HPBar({ current, max, color }: { current: number; max: number; color: string }) {
+  const { colors } = useTheme();
   const pct = Math.max(0, (current / max) * 100);
   const isLow = pct < 30;
   return (
-    <div style={{ width: '100%', height: 8, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
+    <div style={{ width: '100%', height: 8, background: colors.border, borderRadius: 4, overflow: 'hidden' }}>
       <div style={{
         width: pct + '%', height: '100%', borderRadius: 4,
         background: isLow ? '#ef4444' : color,
@@ -83,8 +87,9 @@ function HPBar({ current, max, color }: { current: number; max: number; color: s
 }
 
 function XPBar({ pct }: { pct: number }) {
+  const { colors } = useTheme();
   return (
-    <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden', marginTop: 3 }}>
+    <div style={{ width: '100%', height: 4, background: colors.bgSurface, borderRadius: 2, overflow: 'hidden', marginTop: 3 }}>
       <div style={{
         width: pct + '%', height: '100%', borderRadius: 2,
         background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
@@ -131,6 +136,138 @@ function EnemySprite({ id }: { id: string }) {
   );
 }
 
+// ===== Preview renderer (recursive — supports nested decisions/loops) =====
+function renderPreviewSteps(steps: PreviewStep[], heroMaxHP: number, enemyMaxHP: number, colors: ThemeColors, depth = 0): React.ReactElement[] {
+  return steps.map((step, i) => {
+    const isAction = step.type === 'action';
+    const isCond   = step.type === 'condition' || step.type === 'loop';
+    const isEdge   = step.type === 'start' || step.type === 'end';
+
+    const accentColor =
+      isEdge                                  ? '#22c55e'
+      : step.actionType === 'heal'            ? '#4ade80'
+      : step.actionType === 'dodge'           ? '#94a3b8'
+      : step.actionType === 'cast_spell'      ? '#c084fc'
+      : step.actionType === 'power_strike'    ? '#7c3aed'
+      : isAction                              ? '#3b82f6'
+      : isCond                                ? '#d97706'
+      : '#475569';
+
+    const icon =
+      isEdge && step.type === 'start'         ? '▶'
+      : isEdge                                ? '⏹'
+      : step.actionType === 'heal'            ? '💚'
+      : step.actionType === 'dodge'           ? '🌀'
+      : step.actionType === 'cast_spell'      ? '✨'
+      : step.actionType === 'power_strike'    ? '💥'
+      : isAction                              ? '⚔️'
+      : step.type === 'loop'                  ? '◈'
+      : '◇';
+
+    const heroHPPct  = Math.max(0, (step.heroHPAfter  / heroMaxHP)  * 100);
+    const enemyHPPct = Math.max(0, (step.enemyHPAfter / enemyMaxHP) * 100);
+
+    const hasBranches =
+      (step.yesBranch?.length ?? 0) > 0 || (step.noBranch?.length ?? 0) > 0 ||
+      (step.loopBranch?.length ?? 0) > 0 || (step.nextBranch?.length ?? 0) > 0;
+
+    return (
+      <div key={`${depth}-${step.nodeId}-${i}`}>
+        {/* Connector line between sibling steps */}
+        {i > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'center', height: 8 }}>
+            <div style={{ width: 1, height: '100%', background: colors.bgSurface }} />
+          </div>
+        )}
+
+        {/* Step card */}
+        <div style={{ borderLeft: `2px solid ${accentColor}`, borderRadius: '0 6px 6px 0', background: colors.bgSurface, padding: '4px 7px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+            <span style={{ fontSize: 10 }}>{icon}</span>
+            <span style={{ color: colors.textSub, fontSize: 10, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {step.label}
+            </span>
+          </div>
+
+          {isAction && (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 3 }}>
+                {step.enemyDelta !== 0 && <span style={{ color: '#f87171', fontSize: 9, fontWeight: 700 }}>👹 {step.enemyDelta}</span>}
+                {step.heroDelta !== 0 && (
+                  <span style={{ color: step.heroDelta > 0 ? '#4ade80' : '#fda4af', fontSize: 9, fontWeight: step.heroDelta > 0 ? 700 : 400 }}>
+                    🧍 {step.heroDelta > 0 ? '+' : ''}{step.heroDelta}
+                  </span>
+                )}
+                {step.note && <p style={{ color: colors.textMuted, fontSize: 8, margin: 0, fontStyle: 'italic' }}>{step.note}</p>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* Hero HP mini bar */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+                    <span style={{ color: colors.textMuted, fontSize: 7 }}>🧍</span>
+                    <span style={{ color: heroHPPct < 30 ? '#ef4444' : '#4ade80', fontSize: 7, fontWeight: 700 }}>{step.heroHPAfter}</span>
+                  </div>
+                  <div style={{ width: '100%', height: 3, background: colors.bgSurface, borderRadius: 2 }}>
+                    <div style={{ width: heroHPPct + '%', height: '100%', borderRadius: 2, background: heroHPPct < 30 ? '#ef4444' : '#4ade80', transition: 'width 0.2s' }} />
+                  </div>
+                </div>
+                {/* Enemy HP mini bar */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+                    <span style={{ color: colors.textMuted, fontSize: 7 }}>👹</span>
+                    <span style={{ color: '#f87171', fontSize: 7, fontWeight: 700 }}>{step.enemyHPAfter}</span>
+                  </div>
+                  <div style={{ width: '100%', height: 3, background: colors.bgSurface, borderRadius: 2 }}>
+                    <div style={{ width: enemyHPPct + '%', height: '100%', borderRadius: 2, background: '#f87171', transition: 'width 0.2s' }} />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Branch sections — rendered below the step card */}
+        {hasBranches && (
+          <div style={{ marginLeft: 8, marginTop: 3, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {(step.yesBranch?.length ?? 0) > 0 && (
+              <div style={{ borderLeft: '2px solid rgba(74,222,128,0.4)', paddingLeft: 6 }}>
+                <div style={{ color: '#4ade80', fontSize: 8, fontWeight: 800, letterSpacing: 0.8, marginBottom: 3 }}>✓ YES</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {renderPreviewSteps(step.yesBranch!, heroMaxHP, enemyMaxHP, colors, depth + 1)}
+                </div>
+              </div>
+            )}
+            {(step.noBranch?.length ?? 0) > 0 && (
+              <div style={{ borderLeft: '2px solid rgba(248,113,113,0.4)', paddingLeft: 6 }}>
+                <div style={{ color: '#f87171', fontSize: 8, fontWeight: 800, letterSpacing: 0.8, marginBottom: 3 }}>✗ NO</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {renderPreviewSteps(step.noBranch!, heroMaxHP, enemyMaxHP, colors, depth + 1)}
+                </div>
+              </div>
+            )}
+            {(step.loopBranch?.length ?? 0) > 0 && (
+              <div style={{ borderLeft: '2px solid rgba(251,191,36,0.4)', paddingLeft: 6 }}>
+                <div style={{ color: '#fbbf24', fontSize: 8, fontWeight: 800, letterSpacing: 0.8, marginBottom: 3 }}>◈ LOOP</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {renderPreviewSteps(step.loopBranch!, heroMaxHP, enemyMaxHP, colors, depth + 1)}
+                </div>
+              </div>
+            )}
+            {(step.nextBranch?.length ?? 0) > 0 && (
+              <div style={{ borderLeft: '2px solid rgba(148,163,184,0.4)', paddingLeft: 6 }}>
+                <div style={{ color: '#94a3b8', fontSize: 8, fontWeight: 800, letterSpacing: 0.8, marginBottom: 3 }}>→ NEXT</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {renderPreviewSteps(step.nextBranch!, heroMaxHP, enemyMaxHP, colors, depth + 1)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  });
+}
+
 // ===== Types =====
 interface FloatNum { id: number; text: string; color: string; side: 'hero' | 'enemy' }
 interface LevelUpData { oldLevel: number; newLevel: number; hpGain: number; atkGain: number }
@@ -151,13 +288,15 @@ function parseLogAction(action: string) {
 
 // ===== Main Component =====
 export default function BattleScreen() {
+  const { colors, theme } = useTheme();
   const { levelId } = useParams<{ levelId: string }>();
   const navigate = useNavigate();
   const { character, player, setPlayer, setCharacter } = useGameStore();
-  const { status, heroHP, heroMaxHP, enemyHP, enemyMaxHP, battleLog, isExecuting, startBattle, stopBattle, executeBattle } = useBattle();
-  const { validationError, nodes: flowNodes } = useFlowchartStore();
+  const { status, heroHP, heroMaxHP, heroMana, heroMaxMana, enemyHP, enemyMaxHP, battleLog, isExecuting, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
+  const { validationError, nodes: flowNodes, clearToStartEnd } = useFlowchartStore();
   const [speedIdx, setSpeedIdx] = useState(1);
   const progressSaved = useRef(false);
+  const battleStartTime = useRef<number>(0);
   const level = LEVELS.find((l) => l.id === levelId);
 
   // Animation state
@@ -177,24 +316,24 @@ export default function BattleScreen() {
   const isEnemyShielded = useMemo(() => {
     if (!level?.requiredBlocks?.length) return false;
     return level.requiredBlocks.some((req) => {
-      if (req === 'condition')  return !flowNodes.some((n) => n.type === 'condition');
-      if (req === 'loop')       return !flowNodes.some((n) => n.type === 'loop');
-      if (req === 'heal')       return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
-      if (req === 'dodge')      return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
-      if (req === 'cast_spell') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+      if (req === 'condition')    return !flowNodes.some((n) => n.type === 'condition');
+      if (req === 'heal')         return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
+      if (req === 'dodge')        return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
+      if (req === 'cast_spell')   return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+      if (req === 'power_strike') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'power_strike');
       return false;
     });
   }, [level, flowNodes]);
 
   const shieldMissing = useMemo(() => {
     if (!level?.requiredBlocks?.length) return '';
-    const labels: Record<string, string> = { condition: 'Condition', loop: 'Loop', heal: 'Heal', dodge: 'Dodge', cast_spell: 'Cast Spell' };
+    const labels: Record<string, string> = { condition: 'Condition', heal: 'Heal', dodge: 'Dodge', cast_spell: 'Cast Spell', power_strike: 'Power Strike' };
     const first = level.requiredBlocks.find((req) => {
-      if (req === 'condition')  return !flowNodes.some((n) => n.type === 'condition');
-      if (req === 'loop')       return !flowNodes.some((n) => n.type === 'loop');
-      if (req === 'heal')       return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
-      if (req === 'dodge')      return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
-      if (req === 'cast_spell') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+      if (req === 'condition')    return !flowNodes.some((n) => n.type === 'condition');
+      if (req === 'heal')         return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
+      if (req === 'dodge')        return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
+      if (req === 'cast_spell')   return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+      if (req === 'power_strike') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'power_strike');
       return false;
     });
     return first ? `ต้องใช้ ${labels[first]} block` : '';
@@ -204,6 +343,9 @@ export default function BattleScreen() {
   const previewState = useMemo<BattleState>(() => ({
     heroHP: level?.enemy ? heroMaxHP : 100,
     heroMaxHP,
+    heroMana,
+    heroMaxMana: heroMaxMana ?? 50,
+    manaRegen: 5,
     enemyHP: level?.enemy.stats.maxHP ?? 100,
     enemyMaxHP: level?.enemy.stats.maxHP ?? 100,
     heroAttack:  character?.stats.attack  ?? 12,
@@ -216,7 +358,7 @@ export default function BattleScreen() {
     enemyShielded: isEnemyShielded,
     shieldReason:  shieldMissing,
     round: 1,
-  }), [level, character, heroMaxHP, isEnemyShielded, shieldMissing]);
+  }), [level, character, heroMaxHP, heroMana, heroMaxMana, isEnemyShielded, shieldMissing]);
 
   const flowPreview = useMemo(() => {
     if (status !== 'waiting' || validationError) return [];
@@ -281,17 +423,17 @@ export default function BattleScreen() {
       if (won && level.requiredBlocks?.length) {
         const BLOCK_LABELS: Record<string, string> = {
           condition: 'Condition',
-          loop: 'Loop',
           heal: 'Heal',
           dodge: 'Dodge',
           cast_spell: 'Cast Spell',
+          power_strike: 'Power Strike',
         };
         const missing = level.requiredBlocks.filter((req) => {
-          if (req === 'condition') return !flowNodes.some((n) => n.type === 'condition');
-          if (req === 'loop')      return !flowNodes.some((n) => n.type === 'loop');
-          if (req === 'heal')      return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
-          if (req === 'dodge')     return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
-          if (req === 'cast_spell') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+          if (req === 'condition')    return !flowNodes.some((n) => n.type === 'condition');
+          if (req === 'heal')         return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
+          if (req === 'dodge')        return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
+          if (req === 'cast_spell')   return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+          if (req === 'power_strike') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'power_strike');
           return false;
         });
         if (missing.length > 0) {
@@ -313,18 +455,31 @@ export default function BattleScreen() {
         saveCharacterProgress(player.id, newCharacter).catch(() => {});
       }
 
+      const battleStats: LevelBattleStats = {
+        levelId:         level.id,
+        levelNumber:     level.number,
+        damageDealt:     Math.max(0, (level.enemy.stats.maxHP) - Math.max(0, enemyHP)),
+        damageTaken:     Math.max(0, heroMaxHP - heroHP),
+        timeMs:          battleStartTime.current > 0 ? Date.now() - battleStartTime.current : 0,
+        heroHPRemaining: Math.max(0, heroHP),
+        heroMaxHP:       heroMaxHP,
+      };
+
       savePlayerProgress(player.id, level.id, won).then((updated) => {
         if (updated) {
           setPlayer(updated);
-          if (won) saveLeaderboardEntry(updated, savedChar).catch(() => {});
+          if (won) {
+            saveLeaderboardEntry(updated, savedChar, battleStats).catch((e) => console.error('[Leaderboard] overall save error:', e));
+            saveLevelLeaderboardEntry(updated, savedChar, battleStats).catch((e) => console.error('[Leaderboard] level save error:', e));
+          }
         }
       }).catch(() => {});
     }
   }, [status]);
 
   if (!level) return (
-    <div style={{ minHeight: '100vh', background: '#0d0d1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center', color: 'white' }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ textAlign: 'center', color: colors.text }}>
         <p>Level not found</p>
         <button onClick={() => navigate('/levels')} style={{ color: '#e94560', background: 'none', border: 'none', cursor: 'pointer', marginTop: 12 }}>
           Back to Levels
@@ -334,7 +489,7 @@ export default function BattleScreen() {
   );
 
   const statusConfig: Record<string, { label: string; color: string }> = {
-    waiting: { label: '⏸ รอ flowchart...', color: 'rgba(255,255,255,0.4)' },
+    waiting: { label: '⏸ รอ flowchart...', color: colors.textSub },
     running: { label: '⚡ กำลังรัน...', color: '#fbbf24' },
     victory: { label: '🏆 ชนะ!', color: '#4ade80' },
     defeat:  { label: '💀 แพ้...', color: '#f87171' },
@@ -354,12 +509,15 @@ export default function BattleScreen() {
   return (
     <>
       <style>{ANIM_CSS}</style>
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#0d0d1a', overflow: 'hidden' }}>
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: colors.bg, overflow: 'hidden' }}>
 
         {/* ===== BATTLE ARENA ===== */}
         <div className="battle-arena" style={{
           display: 'flex', flexDirection: 'column',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: `1px solid ${colors.borderSubtle}`,
+          background: theme === 'dark'
+            ? 'linear-gradient(to bottom, #0a0a20 0%, #0d0d1a 100%)'
+            : 'linear-gradient(to bottom, #e8edf8 0%, #eef1f8 100%)',
           backgroundImage: `url(/backgrounds/${level.id}.png)`,
           backgroundSize: 'cover',
           backgroundPosition: 'center bottom',
@@ -376,11 +534,11 @@ export default function BattleScreen() {
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'relative', zIndex: 1 }}>
             <button onClick={() => navigate('/levels')} style={{
-              background: 'rgba(255,255,255,0.06)', border: 'none',
-              color: 'rgba(255,255,255,0.6)', padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+              background: colors.bgSurface, border: 'none',
+              color: colors.textSub, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
             }}>← Levels</button>
             <div style={{ textAlign: 'center' }}>
-              <p style={{ color: 'white', fontWeight: 700, fontSize: 14, margin: 0 }}>{level.name}</p>
+              <p style={{ color: colors.text, fontWeight: 700, fontSize: 14, margin: 0 }}>{level.name}</p>
               <p style={{ color: stat.color, fontSize: 12, margin: 0 }}>{stat.label}</p>
             </div>
             <div style={{ width: 80 }} />
@@ -397,7 +555,7 @@ export default function BattleScreen() {
               background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.4)',
               color: '#c4b5fd', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5, whiteSpace: 'nowrap',
             }}>LEVEL {level.number}</span>
-            <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ color: colors.textSub, fontSize: 11, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {level.description}
             </span>
             <span style={{
@@ -423,13 +581,13 @@ export default function BattleScreen() {
             background: 'rgba(0,0,0,0.30)', borderRadius: 8, padding: '5px 12px',
             display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
           }}>
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>ภารกิจ</span>
+            <span style={{ color: colors.textSub, fontSize: 9, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>ภารกิจ</span>
             {level.objectives.map((obj, i) => (
               <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ color: status === 'victory' ? '#4ade80' : 'rgba(255,255,255,0.25)', fontSize: 11 }}>
+                <span style={{ color: status === 'victory' ? '#4ade80' : colors.textMuted, fontSize: 11 }}>
                   {status === 'victory' ? '✅' : '⬜'}
                 </span>
-                <span style={{ color: status === 'victory' ? '#4ade80' : 'rgba(255,255,255,0.6)', fontSize: 10 }}>{obj}</span>
+                <span style={{ color: status === 'victory' ? '#4ade80' : colors.textSub, fontSize: 10 }}>{obj}</span>
               </span>
             ))}
             {level.bonusObjective && (
@@ -450,7 +608,7 @@ export default function BattleScreen() {
                   background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
                   color: '#1c1917', fontSize: 9, fontWeight: 900, padding: '2px 7px', borderRadius: 5,
                 }}>Lv.{heroChar.level}</span>
-                <span style={{ color: 'white', fontWeight: 700, fontSize: 12 }}>{heroChar.name}</span>
+                <span style={{ color: colors.text, fontWeight: 700, fontSize: 12 }}>{heroChar.name}</span>
               </div>
 
               {/* Animated hero icon */}
@@ -474,21 +632,27 @@ export default function BattleScreen() {
                 {heroHP} / {heroMaxHP} HP
               </p>
 
+              {/* Mana bar */}
+              <div style={{ width: '100%', height: 5, background: colors.bgSurface, borderRadius: 3, marginTop: 2, overflow: 'hidden' }}>
+                <div style={{ width: (heroMana / heroMaxMana * 100) + '%', height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, #3b82f6, #6366f1)', transition: 'width 0.3s' }} />
+              </div>
+              <p style={{ color: '#60a5fa', fontSize: 9, margin: '1px 0 0' }}>{heroMana}/{heroMaxMana} MP</p>
+
               {/* XP bar */}
               <XPBar pct={xpPct} />
-              <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, marginTop: 2 }}>
+              <p style={{ color: colors.textMuted, fontSize: 9, marginTop: 2 }}>
                 {heroChar.level >= MAX_LEVEL ? 'MAX LEVEL' : `${xpLeft} XP → Lv.${heroChar.level + 1}`}
               </p>
             </div>
 
             {/* Center controls */}
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800, fontSize: 12 }}>VS</span>
+              <span style={{ color: colors.textSub, fontWeight: 800, fontSize: 12 }}>VS</span>
 
               {/* Play / Stop */}
               <div style={{ display: 'flex', gap: 6 }}>
                 <button
-                  onClick={() => executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as any)}
+                  onClick={() => { battleStartTime.current = Date.now(); executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as any); }}
                   disabled={isExecuting || status === 'victory' || status === 'defeat'}
                   style={{
                     background: isExecuting ? 'rgba(74,222,128,0.15)' : 'linear-gradient(135deg, #16a34a, #15803d)',
@@ -504,9 +668,9 @@ export default function BattleScreen() {
                   onClick={stopBattle}
                   disabled={!isExecuting}
                   style={{
-                    background: isExecuting ? 'linear-gradient(135deg, #dc2626, #991b1b)' : 'rgba(255,255,255,0.05)',
-                    border: isExecuting ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                    color: isExecuting ? 'white' : 'rgba(255,255,255,0.25)',
+                    background: isExecuting ? 'linear-gradient(135deg, #dc2626, #991b1b)' : colors.bgSurface,
+                    border: isExecuting ? 'none' : `1px solid ${colors.border}`,
+                    color: isExecuting ? colors.text : colors.textMuted,
                     padding: '9px 12px', borderRadius: 10,
                     cursor: isExecuting ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: 14,
                     boxShadow: isExecuting ? '0 4px 15px rgba(220,38,38,0.4)' : 'none',
@@ -516,27 +680,17 @@ export default function BattleScreen() {
 
               {/* Speed control */}
               <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9 }}>ช้า</span>
+                <span style={{ color: colors.textMuted, fontSize: 9 }}>ช้า</span>
                 {SPEED_LEVELS.map((s, i) => (
                   <button key={i} onClick={() => setSpeedIdx(i)} disabled={isExecuting} style={{
                     width: 24, height: 20, borderRadius: 4, border: 'none',
-                    background: speedIdx === i ? 'linear-gradient(135deg, #e94560, #7c3aed)' : 'rgba(255,255,255,0.08)',
-                    color: speedIdx === i ? 'white' : 'rgba(255,255,255,0.35)',
+                    background: speedIdx === i ? 'linear-gradient(135deg, #e94560, #7c3aed)' : colors.bgSurfaceHover,
+                    color: speedIdx === i ? colors.text : colors.textSub,
                     fontSize: 9, fontWeight: 700, cursor: isExecuting ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
                   }}>{s.label}</button>
                 ))}
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9 }}>เร็ว</span>
+                <span style={{ color: colors.textMuted, fontSize: 9 }}>เร็ว</span>
               </div>
-
-              {/* Reset */}
-              <button
-                onClick={() => { setLevelUpData(null); setXpGained(0); startBattle(heroChar, level.enemy as any, level.id); }}
-                disabled={isExecuting}
-                style={{
-                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'rgba(255,255,255,0.5)', padding: '4px 14px', borderRadius: 8,
-                  cursor: 'pointer', fontSize: 11,
-                }}>↺ Reset</button>
 
               {validationError && (
                 <p style={{ color: '#f87171', fontSize: 10, maxWidth: 130, textAlign: 'center', margin: 0 }}>
@@ -552,7 +706,7 @@ export default function BattleScreen() {
                   background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.3)',
                   color: '#f87171', fontSize: 9, fontWeight: 900, padding: '2px 7px', borderRadius: 5,
                 }}>ENEMY</span>
-                <span style={{ color: 'white', fontWeight: 700, fontSize: 12 }}>{level.enemy.name}</span>
+                <span style={{ color: colors.text, fontWeight: 700, fontSize: 12 }}>{level.enemy.name}</span>
               </div>
 
               {/* Shield indicator */}
@@ -602,7 +756,8 @@ export default function BattleScreen() {
             ))}
           </div>
 
-          {/* Battle log */}
+          {/* Battle log — hidden */}
+          {false && (
           <div className="battle-log" style={{ maxHeight: 52, flexShrink: 0, position: 'relative', zIndex: 1 }}>
             {battleLog.length === 0
               ? <p style={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', margin: 0, fontSize: 12 }}>
@@ -616,167 +771,54 @@ export default function BattleScreen() {
               ))
             }
           </div>
+          )}
         </div>
 
         {/* ===== FLOWCHART SECTION ===== */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
           {/* ===== FLOWCHART EDITOR ===== */}
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            <FlowchartEditor />
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <FlowchartEditor allowedBlocks={(level as any).allowedBlocks} />
+            </div>
+            {/* Reset flowchart to Start + End only */}
+            <div style={{ flexShrink: 0, padding: '6px 10px', borderTop: `1px solid ${colors.borderSubtle}`, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setLevelUpData(null); setXpGained(0); setMissingBlocks([]); progressSaved.current = false; clearToStartEnd(); restartBattle(heroChar, level.enemy as any, level.id); }}
+                disabled={isExecuting}
+                style={{
+                  background: colors.bgSurface, border: `1px solid ${colors.border}`,
+                  color: colors.textSub, padding: '4px 16px', borderRadius: 8,
+                  cursor: isExecuting ? 'not-allowed' : 'pointer', fontSize: 11,
+                }}>↺ Reset Flowchart</button>
+            </div>
           </div>
 
           {/* ===== PREVIEW SIDEBAR (vertical, right) ===== */}
           {flowPreview.length > 1 && status === 'waiting' && (
             <div style={{
-              width: 130, flexShrink: 0,
-              background: '#09090f',
-              borderLeft: '1px solid rgba(255,255,255,0.07)',
+              width: 165, flexShrink: 0,
+              background: colors.bg,
+              borderLeft: `1px solid ${colors.borderSubtle}`,
               display: 'flex', flexDirection: 'column',
               overflowY: 'auto',
             }}>
               {/* Header */}
               <div style={{
                 padding: '7px 8px 6px',
-                borderBottom: '1px solid rgba(255,255,255,0.07)',
+                borderBottom: `1px solid ${colors.borderSubtle}`,
                 flexShrink: 0,
               }}>
-                <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 9, fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase', margin: 0 }}>
+                <p style={{ color: colors.textSub, fontSize: 9, fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase', margin: 0 }}>
                   Sim Preview
                 </p>
-                <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: 8, margin: '2px 0 0' }}>ประมาณการก่อนกด Play</p>
+                <p style={{ color: colors.textMuted, fontSize: 8, margin: '2px 0 0' }}>ประมาณการก่อนกด Play</p>
               </div>
 
-              {/* Steps */}
+              {/* Steps — recursive renderer handles conditions/loops with both branches */}
               <div style={{ padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {flowPreview.map((step, i) => {
-                  const isAction = step.type === 'action';
-                  const isCond   = step.type === 'condition' || step.type === 'loop';
-                  const isEdge   = step.type === 'start' || step.type === 'end';
-
-                  const accentColor =
-                    isEdge                             ? '#22c55e'
-                    : step.actionType === 'heal'       ? '#4ade80'
-                    : step.actionType === 'dodge'      ? '#94a3b8'
-                    : step.actionType === 'cast_spell' ? '#c084fc'
-                    : isAction                         ? '#3b82f6'
-                    : isCond                           ? '#d97706'
-                    : '#475569';
-
-                  const icon =
-                    isEdge && step.type === 'start'    ? '▶'
-                    : isEdge                           ? '⏹'
-                    : step.actionType === 'heal'       ? '💚'
-                    : step.actionType === 'dodge'      ? '🌀'
-                    : step.actionType === 'cast_spell' ? '✨'
-                    : isAction                         ? '⚔️'
-                    : step.type === 'loop'             ? '◈'
-                    : '◇';
-
-                  const heroHPPct  = Math.max(0, (step.heroHPAfter  / previewState.heroMaxHP)  * 100);
-                  const enemyHPPct = Math.max(0, (step.enemyHPAfter / previewState.enemyMaxHP) * 100);
-
-                  return (
-                    <div key={i}>
-                      {/* Connector line */}
-                      {i > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'center', height: 8, marginBottom: 0 }}>
-                          <div style={{ width: 1, height: '100%', background: 'rgba(255,255,255,0.08)' }} />
-                        </div>
-                      )}
-
-                      {/* Step card */}
-                      <div style={{
-                        borderLeft: `2px solid ${accentColor}`,
-                        borderRadius: '0 6px 6px 0',
-                        background: 'rgba(255,255,255,0.03)',
-                        padding: '4px 7px',
-                      }}>
-                        {/* Step label row */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                          <span style={{ fontSize: 10 }}>{icon}</span>
-                          <span style={{
-                            color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: 600,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }}>{step.label}</span>
-                          {step.branch && (
-                            <span style={{
-                              background: accentColor + '22', color: accentColor,
-                              fontSize: 8, fontWeight: 700, borderRadius: 3, padding: '0 3px',
-                              flexShrink: 0,
-                            }}>{step.branch}</span>
-                          )}
-                        </div>
-
-                        {/* Damage/heal deltas */}
-                        {isAction && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 3 }}>
-                            {step.enemyDelta !== 0 && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <span style={{ color: '#f87171', fontSize: 9, fontWeight: 700 }}>
-                                  👹 {step.enemyDelta}
-                                </span>
-                              </div>
-                            )}
-                            {step.heroDelta !== 0 && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <span style={{
-                                  color: step.heroDelta > 0 ? '#4ade80' : '#fda4af',
-                                  fontSize: 9, fontWeight: step.heroDelta > 0 ? 700 : 400,
-                                }}>
-                                  🧍 {step.heroDelta > 0 ? '+' : ''}{step.heroDelta}
-                                </span>
-                              </div>
-                            )}
-                            {step.note && (
-                              <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 8, margin: 0, fontStyle: 'italic' }}>
-                                {step.note}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Mini HP bars — show after each action step */}
-                        {isAction && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            {/* Hero HP */}
-                            <div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
-                                <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 7 }}>🧍</span>
-                                <span style={{ color: heroHPPct < 30 ? '#ef4444' : '#4ade80', fontSize: 7, fontWeight: 700 }}>
-                                  {step.heroHPAfter}
-                                </span>
-                              </div>
-                              <div style={{ width: '100%', height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2 }}>
-                                <div style={{
-                                  width: heroHPPct + '%', height: '100%', borderRadius: 2,
-                                  background: heroHPPct < 30 ? '#ef4444' : '#4ade80',
-                                  transition: 'width 0.2s',
-                                }} />
-                              </div>
-                            </div>
-                            {/* Enemy HP */}
-                            <div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
-                                <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 7 }}>👹</span>
-                                <span style={{ color: '#f87171', fontSize: 7, fontWeight: 700 }}>
-                                  {step.enemyHPAfter}
-                                </span>
-                              </div>
-                              <div style={{ width: '100%', height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2 }}>
-                                <div style={{
-                                  width: enemyHPPct + '%', height: '100%', borderRadius: 2,
-                                  background: '#f87171',
-                                  transition: 'width 0.2s',
-                                }} />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                {renderPreviewSteps(flowPreview, previewState.heroMaxHP, previewState.enemyMaxHP, colors)}
               </div>
             </div>
           )}
@@ -814,7 +856,7 @@ export default function BattleScreen() {
                   <p style={{ color: '#fb923c', fontWeight: 700, fontSize: 13, margin: '0 0 6px' }}>
                     ศัตรูตายแล้ว แต่ไม่ผ่านเงื่อนไขด่าน!
                   </p>
-                  <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, margin: '0 0 6px' }}>
+                  <p style={{ color: colors.textSub, fontSize: 12, margin: '0 0 6px' }}>
                     ต้องใช้ block เหล่านี้ใน Flowchart:
                   </p>
                   {missingBlocks.map((b) => (
@@ -823,7 +865,7 @@ export default function BattleScreen() {
                       <span style={{ color: '#fca5a5', fontSize: 12, fontWeight: 600 }}>{b} block</span>
                     </div>
                   ))}
-                  <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, margin: '8px 0 0' }}>
+                  <p style={{ color: colors.textMuted, fontSize: 11, margin: '8px 0 0' }}>
                     ความก้าวหน้าไม่ถูกบันทึก
                   </p>
                 </div>
@@ -853,12 +895,12 @@ export default function BattleScreen() {
                   {/* XP progress bar */}
                   <div style={{ marginBottom: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Lv.{heroChar.level}</span>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>
+                      <span style={{ color: colors.textSub, fontSize: 11 }}>Lv.{heroChar.level}</span>
+                      <span style={{ color: colors.textSub, fontSize: 11 }}>
                         {heroChar.level < MAX_LEVEL ? `Lv.${heroChar.level + 1}` : 'MAX'}
                       </span>
                     </div>
-                    <div style={{ width: '100%', height: 10, background: 'rgba(255,255,255,0.1)', borderRadius: 5, overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: 10, background: colors.border, borderRadius: 5, overflow: 'hidden' }}>
                       <div style={{
                         width: levelProgressPct(heroChar.level, heroChar.experience) + '%',
                         height: '100%', borderRadius: 5,
@@ -867,7 +909,7 @@ export default function BattleScreen() {
                         boxShadow: '0 0 8px rgba(251,191,36,0.6)',
                       }} />
                     </div>
-                    <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 4 }}>
+                    <p style={{ color: colors.textMuted, fontSize: 10, marginTop: 4 }}>
                       {heroChar.experience} / {heroChar.level < MAX_LEVEL ? LEVEL_XP_TABLE[heroChar.level + 1] : '—'} XP
                     </p>
                   </div>
@@ -876,7 +918,7 @@ export default function BattleScreen() {
 
               {/* Objectives summary */}
               <div style={{ marginBottom: 16, textAlign: 'left' }}>
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>ภารกิจ</p>
+                <p style={{ color: colors.textSub, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>ภารกิจ</p>
                 {level.objectives.map((obj, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <span style={{ fontSize: 14 }}>{status === 'victory' ? '✅' : '❌'}</span>
@@ -888,7 +930,7 @@ export default function BattleScreen() {
                   return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                       <span style={{ fontSize: 14 }}>{bonusPassed ? '⭐' : '☆'}</span>
-                      <span style={{ color: bonusPassed ? '#fbbf24' : 'rgba(255,255,255,0.3)', fontSize: 12, fontStyle: 'italic' }}>
+                      <span style={{ color: bonusPassed ? '#fbbf24' : colors.textMuted, fontSize: 12, fontStyle: 'italic' }}>
                         โบนัส: {level.bonusObjective}
                       </span>
                     </div>
@@ -897,7 +939,7 @@ export default function BattleScreen() {
               </div>
 
               {status === 'defeat' && (
-                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, margin: '0 0 16px' }}>
+                <p style={{ color: colors.textSub, fontSize: 13, margin: '0 0 16px' }}>
                   {heroHP <= 0 ? 'Hero ถูกสังหาร — ปรับ flowchart แล้วลองใหม่!' : 'Flowchart จบแต่ยังไม่สังหารศัตรู — เพิ่ม Loop หรือ Action เพิ่มเติม'}
                 </p>
               )}
@@ -908,7 +950,7 @@ export default function BattleScreen() {
                   background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)',
                   borderRadius: 10, padding: '8px 14px', marginBottom: 12, textAlign: 'left',
                 }}>
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: 800, textTransform: 'uppercase', margin: '0 0 5px' }}>บันทึกลง Firestore</p>
+                  <p style={{ color: colors.textSub, fontSize: 9, fontWeight: 800, textTransform: 'uppercase', margin: '0 0 5px' }}>บันทึกลง Firestore</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ color: '#4ade80', fontSize: 11 }}>✓ ด่าน {level.number} — บันทึกเป็น "ผ่านแล้ว"</span>
                     <span style={{ color: '#4ade80', fontSize: 11 }}>✓ +{level.rewards.experience} XP → ตัวละคร Lv.{heroChar.level}</span>
@@ -919,8 +961,8 @@ export default function BattleScreen() {
 
               <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 16 }}>
                 <button
-                  onClick={() => { setLevelUpData(null); setXpGained(0); startBattle(heroChar, level.enemy as any, level.id); }}
-                  style={{ padding: '12px 24px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)', color: 'white', cursor: 'pointer', fontWeight: 600 }}>
+                  onClick={() => { setLevelUpData(null); setXpGained(0); setMissingBlocks([]); progressSaved.current = false; restartBattle(heroChar, level.enemy as any, level.id); }}
+                  style={{ padding: '12px 24px', borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.bgSurfaceHover, color: colors.text, cursor: 'pointer', fontWeight: 600 }}>
                   ↺ Retry
                 </button>
                 <button

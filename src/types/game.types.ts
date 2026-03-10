@@ -94,6 +94,8 @@ export interface CharacterStats {
   speed: number;
   armor?: number;  // Physical damage reduction (flat)
   parry?: number;  // % chance to parry incoming attack (0-100)
+  maxMana?: number;
+  currentMana?: number;
 }
 
 export interface Character {
@@ -139,7 +141,7 @@ export interface LevelRewards {
 }
 
 // block types that a level can REQUIRE the player to use
-export type RequiredBlock = 'condition' | 'loop' | 'heal' | 'dodge' | 'cast_spell';
+export type RequiredBlock = 'condition' | 'heal' | 'dodge' | 'cast_spell' | 'power_strike';
 
 export interface Level {
   id: string;
@@ -153,6 +155,7 @@ export interface Level {
   objectives: string[];         // เงื่อนไขการผ่านด่าน (แสดงในหน้า battle)
   bonusObjective?: string;      // โบนัส (optional, ไม่บังคับ)
   requiredBlocks?: RequiredBlock[]; // block types ที่ต้องใช้จริง — ตรวจสอบก่อนบันทึก
+  allowedBlocks?: string[]; // block types ที่อนุญาตให้ใช้ใน level นี้ (undefined = ทั้งหมด)
   unlockRequirements: {
     levelRequired: number;
     previousLevelComplete: boolean;
@@ -165,7 +168,7 @@ export interface Level {
 // ===========================
 
 export type FlowNodeType = 'start' | 'end' | 'action' | 'condition' | 'loop' | 'operator';
-export type ActionType = 'attack' | 'heal' | 'dodge' | 'cast_spell' | 'use_item';
+export type ActionType = 'attack' | 'heal' | 'dodge' | 'cast_spell' | 'use_item' | 'power_strike';
 export type ConditionType = 'hp_greater' | 'hp_less' | 'enemy_alive' | 'enemy_close';
 export type LoopType = 'repeat' | 'while_alive' | 'while_hp';
 
@@ -204,6 +207,7 @@ export interface ExecutionStep {
   timestamp: number;
   heroHP?: number;   // HP หลังจาก step นี้รัน (สำหรับ real-time update)
   enemyHP?: number;
+  heroMana?: number; // Mana หลังจาก step นี้รัน
 }
 
 export interface FlowchartData {
@@ -261,7 +265,27 @@ export interface LeaderboardEntry {
   levelReached: number;
   levelsCompleted: number;
   totalKills: number;
-  totalPlayTime: number;
+  totalPlayTime: number;   // ms รวมทุกด่าน
+  totalDamageDealt: number;
+  totalDamageTaken: number;
   gameMode: GameMode;
   lastUpdated: number;
+}
+
+// สถิติต่อด่าน (collection: levelboards)
+export interface LevelLeaderboardEntry {
+  rank: number;
+  playerId: string;
+  playerName: string;
+  characterName: string;
+  characterClass: CharacterClass;
+  characterLevel: number;
+  levelId: string;
+  levelNumber: number;
+  damageDealt: number;
+  damageTaken: number;
+  timeMs: number;
+  heroHPRemaining: number;
+  heroHPPercent: number; // % HP เหลือเมื่อชนะ (0-100)
+  timestamp: number;
 }

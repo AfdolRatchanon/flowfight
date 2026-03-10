@@ -20,6 +20,7 @@ interface FlowchartState {
   setValid: (valid: boolean, error?: string) => void;
   highlightNode: (nodeId: string | null) => void;
   resetFlowchart: () => void;
+  clearToStartEnd: () => void;
 }
 
 const defaultNodes: FlowNode[] = [
@@ -81,6 +82,15 @@ export const useFlowchartStore = create<FlowchartState>((set) => ({
   })),
 
   resetFlowchart: () => set({
+    nodes: defaultNodes,
+    edges: [],
+    executionLog: [],
+    currentStepIndex: -1,
+    isValid: false,
+    validationError: null,
+  }),
+
+  clearToStartEnd: () => set({
     nodes: defaultNodes,
     edges: [],
     executionLog: [],

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loginWithEmail, loginWithGoogle, loginAnonymous, registerWithEmail, resetPassword } from '../../services/authService';
 import { useGameStore } from '../../stores/gameStore';
+import { useTheme } from '../../contexts/ThemeContext';
 
 type Mode = 'login' | 'register' | 'guest' | 'reset';
 
@@ -17,6 +18,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { player } = useGameStore();
+  const { colors } = useTheme();
 
   useEffect(() => {
     if (player) navigate('/', { replace: true });
@@ -53,7 +55,7 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 50%, #0d1a2e 100%)',
+      background: colors.bgGrad,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
       position: 'relative', overflow: 'hidden',
     }}>
@@ -68,27 +70,27 @@ export default function LoginPage() {
           <h1 style={{ fontSize: 36, fontWeight: 800, background: 'linear-gradient(135deg, #e94560, #7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: 2, marginBottom: 6 }}>
             FLOWFIGHT
           </h1>
-          <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, letterSpacing: 3, textTransform: 'uppercase' }}>
+          <p style={{ color: colors.textMuted, fontSize: 13, letterSpacing: 3, textTransform: 'uppercase' }}>
             Flowchart Battle RPG
           </p>
         </div>
 
         {/* Card */}
         <div style={{
-          background: 'rgba(26,26,62,0.8)', backdropFilter: 'blur(20px)',
+          background: colors.bgCard, backdropFilter: 'blur(20px)',
           border: '1px solid rgba(124,58,237,0.3)', borderRadius: 20,
-          padding: 32, boxShadow: '0 25px 60px rgba(0,0,0,0.5)',
+          padding: 32, boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
         }}>
           {/* Tabs */}
           {mode !== 'reset' && (
-            <div style={{ display: 'flex', gap: 3, marginBottom: 24, background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 4 }}>
+            <div style={{ display: 'flex', gap: 3, marginBottom: 24, background: colors.bgSurface, borderRadius: 10, padding: 4 }}>
               {([['login','Sign In'],['register','Register'],['guest','Guest']] as [Mode,string][]).map(([m, label]) => (
                 <button key={m} onClick={() => { setMode(m); setError(''); }}
                   style={{
                     flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
                     fontWeight: 600, fontSize: 12, transition: 'all 0.2s',
                     background: mode === m ? 'linear-gradient(135deg, #e94560, #7c3aed)' : 'transparent',
-                    color: mode === m ? 'white' : 'rgba(255,255,255,0.5)',
+                    color: mode === m ? 'white' : colors.textSub,
                   }}>
                   {label}
                 </button>
@@ -151,9 +153,9 @@ export default function LoginPage() {
           {(mode === 'login' || mode === 'register') && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', gap: 12 }}>
-                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>OR</span>
-                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
+                <div style={{ flex: 1, height: 1, background: colors.border }} />
+                <span style={{ color: colors.textMuted, fontSize: 12 }}>OR</span>
+                <div style={{ flex: 1, height: 1, background: colors.border }} />
               </div>
               <button onClick={handleGoogle} disabled={loading} className="btn-secondary"
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 14 }}>
@@ -165,7 +167,7 @@ export default function LoginPage() {
           <div style={{ marginTop: 20, textAlign: 'center' }}>
             {mode === 'login' && (
               <button onClick={() => { setMode('reset'); setError(''); }}
-                style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>
+                style={{ color: colors.textMuted, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>
                 Forgot password?
               </button>
             )}

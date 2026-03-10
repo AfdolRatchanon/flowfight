@@ -1,191 +1,520 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import {
+  collection, query, limit, getDocs, where,
+} from 'firebase/firestore';
 import { db } from '../../services/firebaseService';
 import { useGameStore } from '../../stores/gameStore';
-import type { LeaderboardEntry } from '../../types/game.types';
+import type { LeaderboardEntry, LevelLeaderboardEntry } from '../../types/game.types';
 import { LEVELS } from '../../utils/constants';
 
-const RANK_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
-const RANK_BG     = ['rgba(255,215,0,0.08)', 'rgba(192,192,192,0.06)', 'rgba(205,127,50,0.06)'];
-const RANK_BORDER = ['rgba(255,215,0,0.25)',  'rgba(192,192,192,0.2)',  'rgba(205,127,50,0.2)'];
+// ===== Types =====
+type OverallSort =
+  | 'levelsCompleted'   // ด่านมากสุด
+  | 'experience'        // XP มากสุด
+  | 'totalDamageDealt'  // ทำดาเมจรวมมากสุด
+  | 'totalDamageTaken'  // โดนดาเมจรวมน้อยสุด
+  | 'totalPlayTime';    // เวลาน้อยสุด (เร็วสุด)
 
+type LevelSort =
+  | 'damageDealt'    // ทำดาเมจมากสุด
+  | 'damageTaken'    // โดนดาเมจน้อยสุด
+  | 'timeMs'         // เวลาน้อยสุด
+  | 'heroHPPercent'; // HP เหลือมากสุด
+
+// ===== Helpers =====
+const RANK_BG     = ['rgba(255,215,0,0.10)', 'rgba(192,192,192,0.07)', 'rgba(205,127,50,0.07)'];
+const RANK_BORDER = ['rgba(255,215,0,0.30)', 'rgba(192,192,192,0.22)', 'rgba(205,127,50,0.22)'];
+
+function fmtTime(ms: number) {
+  if (!ms) return '—';
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+}
+
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 1) return <span style={{ fontSize: 22 }}>🥇</span>;
+  if (rank === 2) return <span style={{ fontSize: 22 }}>🥈</span>;
+  if (rank === 3) return <span style={{ fontSize: 22 }}>🥉</span>;
+  return <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, fontSize: 15 }}>#{rank}</span>;
+}
+
+function CharAvatar({ cls }: { cls: string }) {
+  return (
+    <div style={{
+      width: 40, height: 40, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
+      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <img src={`/characters/${cls}.png`} alt={cls}
+        style={{ width: 36, height: 36, objectFit: 'contain', imageRendering: 'pixelated' }} />
+    </div>
+  );
+}
+
+// ===== Sort config =====
+const OVERALL_SORTS: { key: OverallSort; label: string; icon: string; asc: boolean }[] = [
+  { key: 'levelsCompleted',  label: 'ด่านที่ผ่าน',       icon: '🗺️', asc: false },
+  { key: 'experience',       label: 'XP สะสม',           icon: '✨', asc: false },
+  { key: 'totalDamageDealt', label: 'ดาเมจรวมมากสุด',   icon: '⚔️', asc: false },
+  { key: 'totalDamageTaken', label: 'โดนดาเมจน้อยสุด',  icon: '🛡️', asc: true  },
+  { key: 'totalPlayTime',    label: 'เวลาน้อยสุด',       icon: '⏱️', asc: true  },
+];
+
+const LEVEL_SORTS: { key: LevelSort; label: string; icon: string; asc: boolean }[] = [
+  { key: 'damageDealt',   label: 'ดาเมจมากสุด',    icon: '⚔️', asc: false },
+  { key: 'damageTaken',   label: 'โดนดาเมจน้อยสุด', icon: '🛡️', asc: true  },
+  { key: 'timeMs',        label: 'เวลาน้อยสุด',     icon: '⏱️', asc: true  },
+  { key: 'heroHPPercent', label: 'HP เหลือมากสุด',  icon: '💚', asc: false },
+];
+
+// ===== Main Component =====
 export default function Leaderboard() {
   const navigate = useNavigate();
   const { player } = useGameStore();
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
 
+  // Tab: 'overall' | 'level'
+  const [tab, setTab] = useState<'overall' | 'level'>('overall');
+
+  // Overall state
+  const [overallEntries, setOverallEntries] = useState<LeaderboardEntry[]>([]);
+  const [overallSort, setOverallSort]       = useState<OverallSort>('levelsCompleted');
+  const [overallLoading, setOverallLoading] = useState(true);
+  const [overallError, setOverallError]     = useState('');
+
+  // Per-level state
+  const [selectedLevel, setSelectedLevel]   = useState(LEVELS[0].id);
+  const [levelEntries, setLevelEntries]     = useState<LevelLeaderboardEntry[]>([]);
+  const [levelSort, setLevelSort]           = useState<LevelSort>('damageDealt');
+  const [levelLoading, setLevelLoading]     = useState(false);
+  const [levelError, setLevelError]         = useState('');
+
+  // ===== Load overall =====
   useEffect(() => {
     async function load() {
+      setOverallLoading(true);
+      setOverallError('');
       try {
-        const q = query(
-          collection(db, 'leaderboards'),
-          orderBy('levelsCompleted', 'desc'),
-          orderBy('characterLevel', 'desc'),
-          orderBy('experience', 'desc'),
-          limit(50),
-        );
+        // Firestore ไม่รองรับ order ที่ซับซ้อน — โหลด 200 records แล้ว sort client-side
+        const q = query(collection(db, 'leaderboards'), limit(200));
         const snap = await getDocs(q);
-        setEntries(snap.docs.map((d, i) => ({ rank: i + 1, ...d.data() } as LeaderboardEntry)));
-      } catch (e) {
-        setError('ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่');
-        setEntries([]);
+        const rows = snap.docs.map((d) => ({ rank: 0, ...d.data() } as LeaderboardEntry));
+        setOverallEntries(rows);
+      } catch {
+        setOverallError('โหลดข้อมูลไม่ได้ กรุณาลองใหม่');
+        setOverallEntries([]);
       } finally {
-        setLoading(false);
+        setOverallLoading(false);
       }
     }
     load();
   }, []);
 
-  const myEntry = entries.find((e) => e.playerId === player?.id);
+  // ===== Load per-level =====
+  useEffect(() => {
+    if (tab !== 'level') return;
+    async function load() {
+      setLevelLoading(true);
+      setLevelError('');
+      try {
+        const q = query(
+          collection(db, 'levelboards'),
+          where('levelId', '==', selectedLevel),
+          limit(100),
+        );
+        const snap = await getDocs(q);
+        const rows = snap.docs.map((d) => ({ rank: 0, ...d.data() } as LevelLeaderboardEntry));
+        setLevelEntries(rows);
+      } catch (e) {
+        console.error('[Leaderboard] levelboards fetch error:', e);
+        setLevelError('โหลดข้อมูลไม่ได้');
+        setLevelEntries([]);
+      } finally {
+        setLevelLoading(false);
+      }
+    }
+    load();
+  }, [tab, selectedLevel]);
+
+  // ===== Sort overall client-side =====
+  const sortedOverall = useMemo(() => {
+    const cfg = OVERALL_SORTS.find((s) => s.key === overallSort)!;
+    const sorted = [...overallEntries].sort((a, b) => {
+      const av = (a as any)[cfg.key] ?? 0;
+      const bv = (b as any)[cfg.key] ?? 0;
+      return cfg.asc ? av - bv : bv - av;
+    });
+    return sorted.map((e, i) => ({ ...e, rank: i + 1 }));
+  }, [overallEntries, overallSort]);
+
+  // ===== Sort per-level client-side =====
+  const sortedLevel = useMemo(() => {
+    const cfg = LEVEL_SORTS.find((s) => s.key === levelSort)!;
+    const sorted = [...levelEntries].sort((a, b) => {
+      const av = (a as any)[cfg.key] ?? 0;
+      const bv = (b as any)[cfg.key] ?? 0;
+      return cfg.asc ? av - bv : bv - av;
+    });
+    return sorted.map((e, i) => ({ ...e, rank: i + 1 }));
+  }, [levelEntries, levelSort]);
+
+  const myOverall = sortedOverall.find((e) => e.playerId === player?.id);
+  const myLevel   = sortedLevel.find((e)   => e.playerId === player?.id);
+  const selLevel  = LEVELS.find((l) => l.id === selectedLevel);
 
   return (
     <div className="page-outer">
       <div className="leaderboard-container">
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-          <button onClick={() => navigate('/')} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: 'white', width: 40, height: 40, borderRadius: 10, cursor: 'pointer', fontSize: 18 }}>←</button>
+        {/* ===== Header ===== */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+          <button onClick={() => navigate('/')} style={{
+            background: 'rgba(255,255,255,0.06)', border: 'none',
+            color: 'white', width: 40, height: 40, borderRadius: 10, cursor: 'pointer', fontSize: 18,
+          }}>←</button>
           <div style={{ flex: 1 }}>
-            <h1 style={{ color: 'white', fontWeight: 800, fontSize: 26, margin: 0 }}>Leaderboard</h1>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, margin: 0 }}>
-              Top {entries.length} players · {LEVELS.length} levels total
+            <h1 style={{ color: 'white', fontWeight: 800, fontSize: 24, margin: 0 }}>Leaderboard</h1>
+            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, margin: 0 }}>
+              {LEVELS.length} levels · อัปเดตหลังจบแต่ละด่าน
             </p>
           </div>
-          <div style={{ fontSize: 32 }}>🏆</div>
+          <div style={{ fontSize: 28 }}>🏆</div>
         </div>
 
-        {/* My rank highlight (if in list) */}
-        {myEntry && (
-          <div style={{
-            background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.35)',
-            borderRadius: 14, padding: '12px 18px', marginBottom: 16,
-            display: 'flex', alignItems: 'center', gap: 12,
-          }}>
-            <span style={{ color: '#a78bfa', fontSize: 12, fontWeight: 700 }}>YOUR RANK</span>
-            <span style={{ color: 'white', fontWeight: 900, fontSize: 20 }}>#{myEntry.rank}</span>
-            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>·</span>
-            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
-              {myEntry.levelsCompleted}/{LEVELS.length} ด่าน · Lv.{myEntry.characterLevel}
-            </span>
-          </div>
-        )}
-
-        {/* Sort legend */}
-        <div style={{ display: 'flex', gap: 16, marginBottom: 14, padding: '0 4px' }}>
-          {[
-            { icon: '🗺️', label: 'ด่านที่ผ่าน', color: '#4ade80' },
-            { icon: '⭐', label: 'Level ตัวละคร', color: '#fbbf24' },
-            { icon: '✨', label: 'XP สะสม', color: '#a78bfa' },
-          ].map((s) => (
-            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 12 }}>{s.icon}</span>
-              <span style={{ color: s.color, fontSize: 10, fontWeight: 600 }}>{s.label}</span>
-            </div>
+        {/* ===== Tabs ===== */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          {(['overall', 'level'] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
+              fontWeight: 700, fontSize: 13,
+              background: tab === t
+                ? 'linear-gradient(135deg,#e94560,#7c3aed)'
+                : 'rgba(255,255,255,0.06)',
+              color: tab === t ? 'white' : 'rgba(255,255,255,0.45)',
+            }}>
+              {t === 'overall' ? '🌐 ภาพรวมทุกด่าน' : '🗺️ แต่ละด่าน'}
+            </button>
           ))}
         </div>
 
-        {/* Content */}
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 60 }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 15 }}>Loading...</p>
-          </div>
-        ) : error ? (
-          <div style={{ textAlign: 'center', padding: 60 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-            <p style={{ color: '#f87171', fontSize: 14 }}>{error}</p>
-          </div>
-        ) : entries.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60 }}>
-            <div style={{ fontSize: 64, marginBottom: 16 }}>🏆</div>
-            <p style={{ color: 'white', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>ยังไม่มีผู้เล่น!</p>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>เล่นจนจบด่านแรกเพื่อเข้า Leaderboard</p>
-            <button onClick={() => navigate('/levels')} style={{
-              marginTop: 24, padding: '12px 28px', borderRadius: 12, border: 'none',
-              background: 'linear-gradient(135deg,#e94560,#7c3aed)', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 14,
-            }}>เริ่มเล่น →</button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {entries.map((entry) => {
-              const isTop3  = entry.rank <= 3;
-              const isMe    = entry.playerId === player?.id;
-              const bgColor = isTop3 ? RANK_BG[entry.rank - 1] : isMe ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.03)';
-              const border  = isTop3 ? RANK_BORDER[entry.rank - 1] : isMe ? '1px solid rgba(124,58,237,0.3)' : '1px solid rgba(255,255,255,0.06)';
-
-              return (
-                <div key={entry.playerId} style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  background: bgColor, border, borderRadius: 14, padding: '12px 16px',
-                  transition: 'transform 0.15s',
+        {/* ============================= OVERALL TAB ============================= */}
+        {tab === 'overall' && (
+          <>
+            {/* Sort chips */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              {OVERALL_SORTS.map((s) => (
+                <button key={s.key} onClick={() => setOverallSort(s.key)} style={{
+                  padding: '5px 11px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: 700,
+                  background: overallSort === s.key
+                    ? 'rgba(233,69,96,0.25)'
+                    : 'rgba(255,255,255,0.06)',
+                  color: overallSort === s.key ? '#f87171' : 'rgba(255,255,255,0.4)',
+                  outline: overallSort === s.key ? '1px solid rgba(233,69,96,0.5)' : 'none',
                 }}>
-                  {/* Rank */}
-                  <div style={{ width: 36, textAlign: 'center', flexShrink: 0 }}>
-                    {isTop3 ? (
-                      <span style={{ fontSize: 24 }}>{['🥇','🥈','🥉'][entry.rank - 1]}</span>
-                    ) : (
-                      <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, fontSize: 16 }}>#{entry.rank}</span>
-                    )}
-                  </div>
+                  {s.icon} {s.label}
+                </button>
+              ))}
+            </div>
 
-                  {/* Character image */}
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
-                    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <img
-                      src={`/characters/${entry.characterClass}.png`}
-                      alt={entry.characterClass}
-                      style={{ width: 38, height: 38, objectFit: 'contain', imageRendering: 'pixelated' }}
-                    />
-                  </div>
+            {/* My rank banner */}
+            {myOverall && (
+              <div style={{
+                background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.35)',
+                borderRadius: 12, padding: '10px 16px', marginBottom: 14,
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <span style={{ color: '#a78bfa', fontSize: 11, fontWeight: 700 }}>YOUR RANK</span>
+                <span style={{ color: 'white', fontWeight: 900, fontSize: 20 }}>#{myOverall.rank}</span>
+                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>·</span>
+                <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
+                  {myOverall.levelsCompleted}/{LEVELS.length} ด่าน · Lv.{myOverall.characterLevel} · {myOverall.experience.toLocaleString()} XP
+                </span>
+              </div>
+            )}
 
-                  {/* Info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                      <span style={{ color: 'white', fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {entry.playerName}
-                      </span>
-                      {isMe && (
-                        <span style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 4 }}>YOU</span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textTransform: 'capitalize' }}>
-                        {entry.characterName} · {entry.characterClass}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Stats */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 700 }}>
-                        🗺️ {entry.levelsCompleted}/{LEVELS.length}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{
-                        background: 'linear-gradient(135deg,#fbbf24,#f59e0b)',
-                        color: '#1c1917', fontSize: 9, fontWeight: 900, padding: '1px 6px', borderRadius: 4,
-                      }}>Lv.{entry.characterLevel}</span>
-                      <span style={{ color: '#a78bfa', fontSize: 11 }}>{entry.experience.toLocaleString()} XP</span>
-                    </div>
-                  </div>
+            {/* List */}
+            {overallLoading ? <LoadingState /> : overallError ? <ErrorState msg={overallError} /> :
+              sortedOverall.length === 0 ? <EmptyState onPlay={() => navigate('/levels')} /> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {sortedOverall.slice(0, 50).map((entry) => {
+                    const isTop3 = entry.rank <= 3;
+                    const isMe   = entry.playerId === player?.id;
+                    const cfg    = OVERALL_SORTS.find((s) => s.key === overallSort)!;
+                    return (
+                      <OverallRow
+                        key={entry.playerId}
+                        entry={entry}
+                        isTop3={isTop3} isMe={isMe}
+                        sortKey={overallSort} sortCfg={cfg}
+                      />
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              )
+            }
+          </>
         )}
 
-        <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.15)', fontSize: 11, marginTop: 24 }}>
-          อัปเดตหลังจบแต่ละด่าน
-        </p>
+        {/* ============================= PER-LEVEL TAB ============================= */}
+        {tab === 'level' && (
+          <>
+            {/* Level selector */}
+            <div style={{
+              display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap',
+            }}>
+              {LEVELS.map((lv) => (
+                <button key={lv.id} onClick={() => setSelectedLevel(lv.id)} style={{
+                  padding: '4px 10px', borderRadius: 16, border: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: 700,
+                  background: selectedLevel === lv.id
+                    ? 'rgba(124,58,237,0.3)'
+                    : 'rgba(255,255,255,0.06)',
+                  color: selectedLevel === lv.id ? '#c4b5fd' : 'rgba(255,255,255,0.35)',
+                  outline: selectedLevel === lv.id ? '1px solid rgba(124,58,237,0.5)' : 'none',
+                }}>
+                  {lv.number}
+                </button>
+              ))}
+            </div>
+
+            {/* Level name */}
+            {selLevel && (
+              <div style={{
+                background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)',
+                borderRadius: 10, padding: '8px 14px', marginBottom: 12,
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{
+                  background: 'rgba(124,58,237,0.3)', color: '#c4b5fd',
+                  fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
+                }}>LEVEL {selLevel.number}</span>
+                <span style={{ color: 'white', fontWeight: 700, fontSize: 13 }}>{selLevel.name}</span>
+                <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>{selLevel.concept}</span>
+              </div>
+            )}
+
+            {/* Sort chips */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              {LEVEL_SORTS.map((s) => (
+                <button key={s.key} onClick={() => setLevelSort(s.key)} style={{
+                  padding: '5px 11px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: 700,
+                  background: levelSort === s.key
+                    ? 'rgba(233,69,96,0.25)'
+                    : 'rgba(255,255,255,0.06)',
+                  color: levelSort === s.key ? '#f87171' : 'rgba(255,255,255,0.4)',
+                  outline: levelSort === s.key ? '1px solid rgba(233,69,96,0.5)' : 'none',
+                }}>
+                  {s.icon} {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* My rank on this level */}
+            {myLevel && (
+              <div style={{
+                background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.35)',
+                borderRadius: 12, padding: '10px 16px', marginBottom: 14,
+                display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              }}>
+                <span style={{ color: '#a78bfa', fontSize: 11, fontWeight: 700 }}>YOUR RANK</span>
+                <span style={{ color: 'white', fontWeight: 900, fontSize: 20 }}>#{myLevel.rank}</span>
+                <LevelStatChips entry={myLevel} />
+              </div>
+            )}
+
+            {/* List */}
+            {levelLoading ? <LoadingState /> : levelError ? <ErrorState msg={levelError} /> :
+              sortedLevel.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>🏜️</div>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>
+                    ยังไม่มีใครผ่านด่านนี้!
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {sortedLevel.slice(0, 50).map((entry) => {
+                    const isTop3 = entry.rank <= 3;
+                    const isMe   = entry.playerId === player?.id;
+                    return (
+                      <LevelRow
+                        key={entry.playerId}
+                        entry={entry}
+                        isTop3={isTop3} isMe={isMe}
+                        sortKey={levelSort}
+                      />
+                    );
+                  })}
+                </div>
+              )
+            }
+          </>
+        )}
+
       </div>
+    </div>
+  );
+}
+
+// ===== Overall row =====
+function OverallRow({
+  entry, isTop3, isMe, sortKey,
+}: {
+  entry: LeaderboardEntry; isTop3: boolean; isMe: boolean; sortKey: OverallSort; sortCfg: (typeof OVERALL_SORTS)[0];
+}) {
+  const bg     = isTop3 ? RANK_BG[entry.rank - 1]     : isMe ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.03)';
+  const border = isTop3 ? `1px solid ${RANK_BORDER[entry.rank - 1]}` : isMe ? '1px solid rgba(124,58,237,0.3)' : '1px solid rgba(255,255,255,0.06)';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: bg, border, borderRadius: 14, padding: '10px 14px' }}>
+      <div style={{ width: 32, textAlign: 'center', flexShrink: 0 }}>
+        <RankBadge rank={entry.rank} />
+      </div>
+      <CharAvatar cls={entry.characterClass} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+          <span style={{ color: 'white', fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {entry.playerName}
+          </span>
+          {isMe && <span style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>YOU</span>}
+        </div>
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, textTransform: 'capitalize' }}>
+          {entry.characterName} · {entry.characterClass}
+        </span>
+      </div>
+
+      {/* Stats column */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+        {/* Primary highlighted stat */}
+        <PrimaryOverallStat entry={entry} sortKey={sortKey} />
+        {/* Secondary always-visible */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ color: '#4ade80', fontSize: 11, fontWeight: 700 }}>
+            🗺️ {entry.levelsCompleted}/{LEVELS.length}
+          </span>
+          <span style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', color: '#1c1917', fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 4 }}>
+            Lv.{entry.characterLevel}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrimaryOverallStat({ entry, sortKey }: { entry: LeaderboardEntry; sortKey: OverallSort }) {
+  if (sortKey === 'levelsCompleted')
+    return <span style={{ color: '#4ade80', fontWeight: 900, fontSize: 14 }}>🗺️ {entry.levelsCompleted}/{LEVELS.length}</span>;
+  if (sortKey === 'experience')
+    return <span style={{ color: '#a78bfa', fontWeight: 700, fontSize: 13 }}>✨ {entry.experience.toLocaleString()} XP</span>;
+  if (sortKey === 'totalDamageDealt')
+    return <span style={{ color: '#f87171', fontWeight: 700, fontSize: 13 }}>⚔️ {(entry.totalDamageDealt ?? 0).toLocaleString()}</span>;
+  if (sortKey === 'totalDamageTaken')
+    return <span style={{ color: '#60a5fa', fontWeight: 700, fontSize: 13 }}>🛡️ {(entry.totalDamageTaken ?? 0).toLocaleString()}</span>;
+  if (sortKey === 'totalPlayTime')
+    return <span style={{ color: '#fbbf24', fontWeight: 700, fontSize: 13 }}>⏱️ {fmtTime(entry.totalPlayTime ?? 0)}</span>;
+  return null;
+}
+
+// ===== Level row =====
+function LevelRow({
+  entry, isTop3, isMe, sortKey,
+}: {
+  entry: LevelLeaderboardEntry; isTop3: boolean; isMe: boolean; sortKey: LevelSort;
+}) {
+  const bg     = isTop3 ? RANK_BG[entry.rank - 1]     : isMe ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.03)';
+  const border = isTop3 ? `1px solid ${RANK_BORDER[entry.rank - 1]}` : isMe ? '1px solid rgba(124,58,237,0.3)' : '1px solid rgba(255,255,255,0.06)';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: bg, border, borderRadius: 14, padding: '10px 14px' }}>
+      <div style={{ width: 32, textAlign: 'center', flexShrink: 0 }}>
+        <RankBadge rank={entry.rank} />
+      </div>
+      <CharAvatar cls={entry.characterClass} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+          <span style={{ color: 'white', fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {entry.playerName}
+          </span>
+          {isMe && <span style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>YOU</span>}
+        </div>
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, textTransform: 'capitalize' }}>
+          {entry.characterName} · {entry.characterClass}
+        </span>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+        <PrimaryLevelStat entry={entry} sortKey={sortKey} />
+        <LevelStatChips entry={entry} exclude={sortKey} />
+      </div>
+    </div>
+  );
+}
+
+function PrimaryLevelStat({ entry, sortKey }: { entry: LevelLeaderboardEntry; sortKey: LevelSort }) {
+  if (sortKey === 'damageDealt')
+    return <span style={{ color: '#f87171', fontWeight: 900, fontSize: 14 }}>⚔️ {entry.damageDealt.toLocaleString()}</span>;
+  if (sortKey === 'damageTaken')
+    return <span style={{ color: '#60a5fa', fontWeight: 900, fontSize: 14 }}>🛡️ {entry.damageTaken.toLocaleString()}</span>;
+  if (sortKey === 'timeMs')
+    return <span style={{ color: '#fbbf24', fontWeight: 900, fontSize: 14 }}>⏱️ {fmtTime(entry.timeMs)}</span>;
+  if (sortKey === 'heroHPPercent')
+    return <span style={{ color: '#4ade80', fontWeight: 900, fontSize: 14 }}>💚 {entry.heroHPPercent}%</span>;
+  return null;
+}
+
+function LevelStatChips({ entry, exclude }: { entry: LevelLeaderboardEntry; exclude?: LevelSort }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      {exclude !== 'damageDealt' && (
+        <span style={{ color: '#f87171', fontSize: 10 }}>⚔️ {entry.damageDealt.toLocaleString()}</span>
+      )}
+      {exclude !== 'damageTaken' && (
+        <span style={{ color: '#60a5fa', fontSize: 10 }}>🛡️ {entry.damageTaken.toLocaleString()}</span>
+      )}
+      {exclude !== 'timeMs' && (
+        <span style={{ color: '#fbbf24', fontSize: 10 }}>⏱️ {fmtTime(entry.timeMs)}</span>
+      )}
+      {exclude !== 'heroHPPercent' && (
+        <span style={{ color: '#4ade80', fontSize: 10 }}>💚 {entry.heroHPPercent}%</span>
+      )}
+    </div>
+  );
+}
+
+// ===== Shared UI =====
+function LoadingState() {
+  return (
+    <div style={{ textAlign: 'center', padding: 60 }}>
+      <div style={{ fontSize: 30, marginBottom: 10 }}>⏳</div>
+      <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 14 }}>Loading...</p>
+    </div>
+  );
+}
+
+function ErrorState({ msg }: { msg: string }) {
+  return (
+    <div style={{ textAlign: 'center', padding: 40 }}>
+      <div style={{ fontSize: 36, marginBottom: 10 }}>⚠️</div>
+      <p style={{ color: '#f87171', fontSize: 13 }}>{msg}</p>
+    </div>
+  );
+}
+
+function EmptyState({ onPlay }: { onPlay: () => void }) {
+  return (
+    <div style={{ textAlign: 'center', padding: 60 }}>
+      <div style={{ fontSize: 56, marginBottom: 14 }}>🏆</div>
+      <p style={{ color: 'white', fontWeight: 700, fontSize: 17, marginBottom: 6 }}>ยังไม่มีผู้เล่น!</p>
+      <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>ผ่านด่านแรกเพื่อเข้า Leaderboard</p>
+      <button onClick={onPlay} style={{
+        marginTop: 22, padding: '11px 28px', borderRadius: 12, border: 'none',
+        background: 'linear-gradient(135deg,#e94560,#7c3aed)',
+        color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 13,
+      }}>เริ่มเล่น →</button>
     </div>
   );
 }

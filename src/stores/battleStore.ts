@@ -6,6 +6,8 @@ interface BattleState {
   status: BattleStatus;
   heroHP: number;
   heroMaxHP: number;
+  heroMana: number;
+  heroMaxMana: number;
   enemyHP: number;
   enemyMaxHP: number;
   currentRound: number;
@@ -18,6 +20,7 @@ interface BattleState {
   setStatus: (status: BattleStatus) => void;
   updateHeroHP: (hp: number) => void;
   updateEnemyHP: (hp: number) => void;
+  updateHeroMana: (mana: number) => void;
   addLog: (log: BattleLog) => void;
   setExecuting: (executing: boolean) => void;
   setCurrentNode: (nodeId: string | null) => void;
@@ -30,6 +33,8 @@ export const useBattleStore = create<BattleState>((set) => ({
   status: 'waiting',
   heroHP: 100,
   heroMaxHP: 100,
+  heroMana: 50,
+  heroMaxMana: 50,
   enemyHP: 80,
   enemyMaxHP: 80,
   currentRound: 1,
@@ -55,6 +60,8 @@ export const useBattleStore = create<BattleState>((set) => ({
       status: 'waiting',
       heroHP: character.stats.currentHP,
       heroMaxHP: character.stats.maxHP,
+      heroMana: character.stats.currentMana ?? character.stats.maxMana ?? 50,
+      heroMaxMana: character.stats.maxMana ?? 50,
       enemyHP: enemy.stats.currentHP,
       enemyMaxHP: enemy.stats.maxHP,
       currentRound: 1,
@@ -66,6 +73,7 @@ export const useBattleStore = create<BattleState>((set) => ({
   setStatus: (status) => set({ status }),
   updateHeroHP: (hp) => set({ heroHP: Math.max(0, hp) }),
   updateEnemyHP: (hp) => set({ enemyHP: Math.max(0, hp) }),
+  updateHeroMana: (mana) => set({ heroMana: Math.max(0, mana) }),
   addLog: (log) => set((state) => ({ battleLog: [...state.battleLog, log] })),
   setExecuting: (isExecuting) => set({ isExecuting }),
   setCurrentNode: (currentNodeId) => set({ currentNodeId }),
@@ -76,6 +84,8 @@ export const useBattleStore = create<BattleState>((set) => ({
     status: 'waiting',
     heroHP: 100,
     heroMaxHP: 100,
+    heroMana: 50,
+    heroMaxMana: 50,
     enemyHP: 80,
     enemyMaxHP: 80,
     currentRound: 1,

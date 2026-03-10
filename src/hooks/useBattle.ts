@@ -8,20 +8,20 @@ import type { Character, Enemy, RequiredBlock } from '../types/game.types';
 
 const BLOCK_LABELS: Record<RequiredBlock, string> = {
   condition: 'Condition block',
-  loop: 'Loop block',
   heal: 'Heal block',
   dodge: 'Dodge block',
   cast_spell: 'Cast Spell block',
+  power_strike: 'Power Strike block',
 };
 
 function checkShield(nodes: ReturnType<typeof useFlowchartStore.getState>['nodes'], requiredBlocks: RequiredBlock[]): { shielded: boolean; reason: string } {
   for (const req of requiredBlocks) {
     let missing = false;
-    if (req === 'condition')  missing = !nodes.some((n) => n.type === 'condition');
-    if (req === 'loop')       missing = !nodes.some((n) => n.type === 'loop');
-    if (req === 'heal')       missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
-    if (req === 'dodge')      missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
-    if (req === 'cast_spell') missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+    if (req === 'condition')    missing = !nodes.some((n) => n.type === 'condition');
+    if (req === 'heal')         missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
+    if (req === 'dodge')        missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
+    if (req === 'cast_spell')   missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+    if (req === 'power_strike') missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'power_strike');
     if (missing) return { shielded: true, reason: `ต้องใช้ ${BLOCK_LABELS[req]}` };
   }
   return { shielded: false, reason: '' };
@@ -37,6 +37,12 @@ export function useBattle() {
     battleStore.initBattle(character, enemy, levelId);
     flowchartStore.resetFlowchart();
   }, []);
+
+  // Retry — reset battle state only, keep flowchart as-is
+  const restartBattle = useCallback((character: Character, enemy: Enemy, levelId: string) => {
+    stopRef.current = false;
+    battleStore.initBattle(character, enemy, levelId);
+  }, [battleStore]);
 
   const stopBattle = useCallback(() => {
     stopRef.current = true;
@@ -67,6 +73,9 @@ export function useBattle() {
     const battleState: BattleState = {
       heroHP: battleStore.heroHP,
       heroMaxHP: battleStore.heroMaxHP,
+      heroMana: battleStore.heroMana,
+      heroMaxMana: battleStore.heroMaxMana,
+      manaRegen: 5,
       enemyHP: battleStore.enemyHP,
       enemyMaxHP: battleStore.enemyMaxHP,
       heroAttack:  charStats?.attack  ?? 10,
@@ -99,9 +108,10 @@ export function useBattle() {
         });
       }
 
-      // Update HP immediately after each action step (not wait for end)
-      if (step.heroHP  !== undefined) battleStore.updateHeroHP(step.heroHP);
-      if (step.enemyHP !== undefined) battleStore.updateEnemyHP(step.enemyHP);
+      // Update HP/Mana immediately after each action step (not wait for end)
+      if (step.heroHP   !== undefined) battleStore.updateHeroHP(step.heroHP);
+      if (step.enemyHP  !== undefined) battleStore.updateEnemyHP(step.enemyHP);
+      if (step.heroMana !== undefined) battleStore.updateHeroMana(step.heroMana);
 
       await delay(speedMs);
     }
@@ -139,11 +149,14 @@ export function useBattle() {
     status: battleStore.status,
     heroHP: battleStore.heroHP,
     heroMaxHP: battleStore.heroMaxHP,
+    heroMana: battleStore.heroMana,
+    heroMaxMana: battleStore.heroMaxMana,
     enemyHP: battleStore.enemyHP,
     enemyMaxHP: battleStore.enemyMaxHP,
     battleLog: battleStore.battleLog,
     isExecuting: battleStore.isExecuting,
     startBattle,
+    restartBattle,
     stopBattle,
     executeBattle: (speedMs?: number, requiredBlocks?: RequiredBlock[]) => executeBattle(speedMs, requiredBlocks),
     resetBattle: battleStore.resetBattle,

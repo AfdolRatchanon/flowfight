@@ -3,6 +3,9 @@ import type { FlowNode, FlowEdge, ExecutionStep, ActionType } from '../types/gam
 export interface BattleState {
   heroHP: number;
   heroMaxHP: number;
+  heroMana: number;
+  heroMaxMana: number;
+  manaRegen: number;
   enemyHP: number;
   enemyMaxHP: number;
   heroAttack: number;
@@ -34,16 +37,21 @@ export interface PreviewStep {
   heroHPAfter: number;
   enemyHPAfter: number;
   note?: string;        // e.g. "Parried!", "Armor -X", "Spell bypasses armor"
-  branch?: string;      // 'YES' | 'NO' | 'LOOP' | 'NEXT'
+  branch?: string;      // legacy — kept for compatibility
+  // Decision/loop branches (tree structure for preview)
+  yesBranch?: PreviewStep[];
+  noBranch?: PreviewStep[];
+  loopBranch?: PreviewStep[];
+  nextBranch?: PreviewStep[];
 }
 
 /** Deterministic (no random) combat calculator for preview panel */
-function calcAction(action: ActionType, state: BattleState): { heroDelta: number; enemyDelta: number; note: string } {
+function calcAction(action: ActionType, state: BattleState): { heroDelta: number; enemyDelta: number; note: string; manaCost: number } {
   switch (action) {
     case 'attack': {
       if (state.enemyShielded) {
         const counterDmg = Math.max(0, state.enemyAttack - Math.floor(state.heroDefense * 0.5));
-        return { heroDelta: -counterDmg, enemyDelta: 0, note: `🛡️ ${state.shieldReason}` };
+        return { heroDelta: -counterDmg, enemyDelta: 0, note: `🛡️ ${state.shieldReason}`, manaCost: 0 };
       }
       // Hero hits: reduced by defense + armor
       const effectiveArmor = state.enemyDefense + state.enemyArmor;
@@ -58,134 +66,164 @@ function calcAction(action: ActionType, state: BattleState): { heroDelta: number
         heroDelta: -counterDmg,
         enemyDelta: -rawDmg,
         note: parts ? `[${parts}]` : '',
+        manaCost: 0,
       };
     }
     case 'heal': {
       const healAmt = Math.min(20, state.heroMaxHP - state.heroHP);
-      return { heroDelta: healAmt, enemyDelta: 0, note: '+20 HP' };
+      return { heroDelta: healAmt, enemyDelta: 0, note: '+20 HP', manaCost: 0 };
     }
     case 'dodge': {
       // Best case: no damage
-      return { heroDelta: 0, enemyDelta: 0, note: '65% dodge chance' };
+      return { heroDelta: 0, enemyDelta: 0, note: '65% dodge chance', manaCost: 0 };
     }
     case 'cast_spell': {
       if (state.enemyShielded) {
         const counterDmg = Math.max(0, state.enemyAttack - Math.floor(state.heroDefense * 0.5));
-        return { heroDelta: -counterDmg, enemyDelta: 0, note: `🛡️ ${state.shieldReason}` };
+        return { heroDelta: -counterDmg, enemyDelta: 0, note: `🛡️ ${state.shieldReason}`, manaCost: 25 };
+      }
+      if (state.heroMana < 25) {
+        // Low mana: 60% damage
+        const spellDmg = Math.max(3, Math.floor(Math.floor(state.heroAttack * 1.8) * 0.6) - Math.floor(state.enemyDefense * 0.25));
+        return {
+          heroDelta: 0,
+          enemyDelta: -spellDmg,
+          note: '⚠️ Low mana! (reduced dmg)',
+          manaCost: 25,
+        };
       }
       // Spell ignores armor, only half defense
       const spellDmg = Math.max(5, Math.floor(state.heroAttack * 1.8) - Math.floor(state.enemyDefense * 0.25));
       return {
         heroDelta: 0,
         enemyDelta: -spellDmg,
-        note: state.enemyArmor > 0 ? 'Magic bypasses armor' : 'High damage',
+        note: state.enemyArmor > 0 ? 'Magic bypasses armor (25 MP)' : 'High damage (25 MP)',
+        manaCost: 25,
+      };
+    }
+    case 'power_strike': {
+      if (state.heroMana >= 20) {
+        const effectiveArmor = state.enemyDefense + state.enemyArmor;
+        const rawDmg = Math.max(1, state.heroAttack * 2 - Math.floor(effectiveArmor * 0.5));
+        const counterDmg = Math.max(0, state.enemyAttack - Math.floor(state.heroDefense * 0.5));
+        return {
+          heroDelta: -counterDmg,
+          enemyDelta: -rawDmg,
+          note: '💥 Power Strike! (20 MP)',
+          manaCost: 20,
+        };
+      }
+      // Not enough mana: normal attack
+      const effectiveArmor = state.enemyDefense + state.enemyArmor;
+      const rawDmg = Math.max(1, state.heroAttack - Math.floor(effectiveArmor * 0.5));
+      const counterDmg = Math.max(0, state.enemyAttack - Math.floor(state.heroDefense * 0.5));
+      return {
+        heroDelta: -counterDmg,
+        enemyDelta: -rawDmg,
+        note: '⚠️ Not enough mana → normal attack',
+        manaCost: 0,
       };
     }
     default:
-      return { heroDelta: 0, enemyDelta: 0, note: '' };
+      return { heroDelta: 0, enemyDelta: 0, note: '', manaCost: 0 };
   }
 }
 
-/** Walk the flowchart deterministically and return HP preview steps */
+/** Recursively build a preview tree from a node, showing both branches of conditions/loops */
+function buildPreviewTree(
+  nodeId: string | null,
+  state: BattleState,
+  nodeMap: Map<string, FlowNode>,
+  edges: FlowEdge[],
+  visited: Set<string>,
+  budget: number
+): PreviewStep[] {
+  if (!nodeId || budget <= 0) return [];
+  if (visited.has(nodeId)) return [];
+
+  const node = nodeMap.get(nodeId);
+  if (!node) return [];
+
+  const outgoing = edges.filter((e) => e.source === nodeId);
+  const nextVisited = new Set([...visited, nodeId]);
+
+  if (node.type === 'start') {
+    const step: PreviewStep = {
+      nodeId, label: 'Start', type: 'start',
+      heroDelta: 0, enemyDelta: 0,
+      heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP,
+    };
+    return [step, ...buildPreviewTree(outgoing[0]?.target ?? null, state, nodeMap, edges, nextVisited, budget - 1)];
+  }
+
+  if (node.type === 'end') {
+    return [{ nodeId, label: 'End', type: 'end', heroDelta: 0, enemyDelta: 0, heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP }];
+  }
+
+  if (node.type === 'action') {
+    const action = node.data.actionType as ActionType;
+    const { heroDelta, enemyDelta, note, manaCost } = calcAction(action, state);
+    const newMana = Math.min(state.heroMaxMana, Math.max(0, state.heroMana - manaCost) + state.manaRegen);
+    const newState = {
+      ...state,
+      heroHP: Math.max(0, Math.min(state.heroMaxHP, state.heroHP + heroDelta)),
+      enemyHP: Math.max(0, state.enemyHP + enemyDelta),
+      heroMana: newMana,
+    };
+    const manaNote = manaCost > 0 ? `${note ? note + ' ' : ''}-${manaCost} MP` : note;
+    const step: PreviewStep = {
+      nodeId, label: node.data.label, type: 'action', actionType: action,
+      heroDelta, enemyDelta,
+      heroHPAfter: newState.heroHP, enemyHPAfter: newState.enemyHP,
+      note: manaNote,
+    };
+    if (newState.heroHP <= 0 || newState.enemyHP <= 0) return [step];
+    return [step, ...buildPreviewTree(outgoing[0]?.target ?? null, newState, nodeMap, edges, nextVisited, budget - 1)];
+  }
+
+  if (node.type === 'condition') {
+    const yesEdge = outgoing.find((e) => e.sourceHandle === 'yes' || e.label?.toLowerCase() === 'yes');
+    const noEdge  = outgoing.find((e) => e.sourceHandle === 'no'  || e.label?.toLowerCase() === 'no');
+    const branchBudget = Math.max(2, Math.floor((budget - 1) / 2));
+    const yesBranch = yesEdge ? buildPreviewTree(yesEdge.target, state, nodeMap, edges, nextVisited, branchBudget) : [];
+    const noBranch  = noEdge  ? buildPreviewTree(noEdge.target,  state, nodeMap, edges, nextVisited, branchBudget) : [];
+    return [{
+      nodeId, label: node.data.label, type: 'condition',
+      heroDelta: 0, enemyDelta: 0,
+      heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP,
+      yesBranch, noBranch,
+    }];
+  }
+
+  if (node.type === 'loop') {
+    const loopEdge = outgoing.find((e) => e.sourceHandle === 'loop' || e.label?.toLowerCase() === 'loop');
+    const nextEdge = outgoing.find((e) => e.sourceHandle === 'next' || e.label?.toLowerCase() === 'next');
+    const branchBudget = Math.max(2, Math.floor((budget - 1) / 2));
+    const loopBranch = loopEdge ? buildPreviewTree(loopEdge.target, state, nodeMap, edges, nextVisited, branchBudget) : [];
+    const nextBranch = nextEdge ? buildPreviewTree(nextEdge.target, state, nodeMap, edges, nextVisited, branchBudget) : [];
+    return [{
+      nodeId, label: node.data.label, type: 'loop',
+      heroDelta: 0, enemyDelta: 0,
+      heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP,
+      loopBranch, nextBranch,
+    }];
+  }
+
+  // Unknown node — follow first edge
+  return buildPreviewTree(outgoing[0]?.target ?? null, state, nodeMap, edges, nextVisited, budget - 1);
+}
+
+/** Walk the flowchart as a tree, showing both branches of every decision/loop */
 export function previewFlowchart(
   nodes: FlowNode[],
   edges: FlowEdge[],
   initialState: BattleState,
-  maxSteps = 24
+  maxSteps = 30
 ): PreviewStep[] {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  const loopVisited = new Map<string, number>();
-
-  const steps: PreviewStep[] = [];
-  let state = { ...initialState };
-  let stepCount = 0;
-
   const startNode = nodes.find((n) => n.type === 'start');
   if (!startNode) return [];
-  let currentId: string | null = startNode.id;
-
-  while (currentId && stepCount < maxSteps) {
-    const node = nodeMap.get(currentId);
-    if (!node) break;
-    stepCount++;
-
-    const outgoing = edges.filter((e) => e.source === currentId);
-
-    if (node.type === 'start') {
-      steps.push({ nodeId: currentId, label: 'Start', type: 'start', heroDelta: 0, enemyDelta: 0, heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP });
-      currentId = outgoing[0]?.target ?? null;
-      continue;
-    }
-
-    if (node.type === 'end') {
-      steps.push({ nodeId: currentId, label: 'End', type: 'end', heroDelta: 0, enemyDelta: 0, heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP });
-      break;
-    }
-
-    if (node.type === 'action') {
-      const action = node.data.actionType as ActionType;
-      const { heroDelta, enemyDelta, note } = calcAction(action, state);
-      state = {
-        ...state,
-        heroHP: Math.max(0, Math.min(state.heroMaxHP, state.heroHP + heroDelta)),
-        enemyHP: Math.max(0, state.enemyHP + enemyDelta),
-      };
-      steps.push({
-        nodeId: currentId, label: node.data.label, type: 'action', actionType: action,
-        heroDelta, enemyDelta,
-        heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP,
-        note,
-      });
-      if (state.heroHP <= 0 || state.enemyHP <= 0) break;
-      currentId = outgoing[0]?.target ?? null;
-      continue;
-    }
-
-    if (node.type === 'condition') {
-      // Assume YES for preview (most likely positive branch)
-      const yesEdge = outgoing.find((e) => e.sourceHandle === 'yes' || e.label?.toLowerCase() === 'yes');
-      const noEdge  = outgoing.find((e) => e.sourceHandle === 'no'  || e.label?.toLowerCase() === 'no');
-      steps.push({
-        nodeId: currentId, label: node.data.label, type: 'condition',
-        heroDelta: 0, enemyDelta: 0,
-        heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP,
-        branch: 'YES',
-      });
-      currentId = (yesEdge ?? noEdge)?.target ?? null;
-      continue;
-    }
-
-    if (node.type === 'loop') {
-      const visited = loopVisited.get(currentId) ?? 0;
-      const max = node.data.loopCount ?? 3;
-      const loopEdge = outgoing.find((e) => e.sourceHandle === 'loop' || e.label?.toLowerCase() === 'loop');
-      const nextEdge = outgoing.find((e) => e.sourceHandle === 'next' || e.label?.toLowerCase() === 'next');
-      if (visited < max) {
-        loopVisited.set(currentId, visited + 1);
-        steps.push({
-          nodeId: currentId, label: node.data.label, type: 'loop',
-          heroDelta: 0, enemyDelta: 0,
-          heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP,
-          branch: 'LOOP',
-        });
-        currentId = loopEdge?.target ?? null;
-      } else {
-        steps.push({
-          nodeId: currentId, label: node.data.label, type: 'loop',
-          heroDelta: 0, enemyDelta: 0,
-          heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP,
-          branch: 'NEXT',
-        });
-        currentId = nextEdge?.target ?? null;
-      }
-      continue;
-    }
-
-    // Unknown node type — skip
-    currentId = outgoing[0]?.target ?? null;
-  }
-
-  return steps;
+  return buildPreviewTree(startNode.id, initialState, nodeMap, edges, new Set(), maxSteps);
 }
 
 
@@ -270,8 +308,9 @@ export class FlowchartEngine {
         step.action = node.data.actionType;
       }
 
-      step.heroHP  = state.heroHP;
-      step.enemyHP = state.enemyHP;
+      step.heroHP   = state.heroHP;
+      step.enemyHP  = state.enemyHP;
+      step.heroMana = state.heroMana;
       steps.push(step);
 
       if (state.heroHP <= 0) { log.push('Hero has fallen!'); break; }
@@ -326,6 +365,7 @@ export class FlowchartEngine {
           const heroParried = Math.random() * 100 < state.heroParry;
           const finalCounter = heroParried ? 0 : counterDmg;
           state.heroHP = Math.max(0, state.heroHP - finalCounter);
+          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
           return `🛡️ Shield blocks the attack! (${state.shieldReason}) Enemy counters! Hero -${finalCounter} HP.`;
         }
 
@@ -345,6 +385,7 @@ export class FlowchartEngine {
         const heroParried = Math.random() * 100 < state.heroParry;
         const finalCounter = heroParried ? 0 : counterDmg;
         state.heroHP = Math.max(0, state.heroHP - finalCounter);
+        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
 
         let msg = `Hero attacks!`;
         if (state.enemyArmor > 0) msg += ` [Armor]`;
@@ -357,16 +398,19 @@ export class FlowchartEngine {
       case 'heal': {
         const healAmt = 20 + variance();
         state.heroHP = Math.min(state.heroMaxHP, state.heroHP + healAmt);
+        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
         return `Hero heals! +${healAmt} HP (${state.heroHP}/${state.heroMaxHP})`;
       }
 
       case 'dodge': {
         if (Math.random() < 0.65) {
+          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
           return `Hero dodges! Attack avoided completely.`;
         }
         // Dodge failed — take full attack (no defense reduction)
         const dmg = Math.max(1, state.enemyAttack + variance());
         state.heroHP = Math.max(0, state.heroHP - dmg);
+        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
         return `Dodge failed! Hero takes full attack -${dmg} HP.`;
       }
 
@@ -377,8 +421,21 @@ export class FlowchartEngine {
           const heroParried = Math.random() * 100 < state.heroParry;
           const finalCounter = heroParried ? 0 : counterDmg;
           state.heroHP = Math.max(0, state.heroHP - finalCounter);
+          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
           return `🛡️ Shield absorbs the spell! (${state.shieldReason}) Enemy counters! Hero -${finalCounter} HP.`;
         }
+
+        if (state.heroMana < 25) {
+          // Low mana: 60% damage, no mana cost
+          const spellDmg = Math.max(3, Math.floor(Math.floor(state.heroAttack * 1.8) * 0.6) + variance() - Math.floor(state.enemyDefense * 0.25));
+          state.enemyHP = Math.max(0, state.enemyHP - spellDmg);
+          // Mana regen still applies
+          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
+          return `⚠️ Low mana! Hero casts weak spell! Enemy -${spellDmg} HP. (reduced dmg)`;
+        }
+
+        // Spend 25 mana
+        state.heroMana = Math.min(state.heroMaxMana, Math.max(0, state.heroMana - 25) + state.manaRegen);
 
         // Magic ignores armor entirely, only partial defense
         const spellDmg = Math.max(5, Math.floor(state.heroAttack * 1.8) + variance() - Math.floor(state.enemyDefense * 0.25));
@@ -393,6 +450,54 @@ export class FlowchartEngine {
         }
         const armorNote = state.enemyArmor > 0 ? ' [Magic bypasses armor!]' : '';
         return `Hero casts spell!${armorNote} Enemy -${spellDmg} HP. (Enemy missed counter!)`;
+      }
+
+      case 'power_strike': {
+        if (state.heroMana >= 20) {
+          // Spend 20 mana, deal 2x damage
+          state.heroMana = Math.min(state.heroMaxMana, Math.max(0, state.heroMana - 20) + state.manaRegen);
+
+          const effectiveArmor = state.enemyDefense + state.enemyArmor;
+          const rawDmg = Math.max(1, state.heroAttack * 2 + variance() - Math.floor(effectiveArmor * 0.5));
+
+          // Enemy parry check
+          const parried = Math.random() * 100 < state.enemyParry;
+          const finalDmg = parried ? Math.max(1, Math.floor(rawDmg * 0.3)) : rawDmg;
+          state.enemyHP = Math.max(0, state.enemyHP - finalDmg);
+
+          // Enemy counter
+          const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
+          const heroParried = Math.random() * 100 < state.heroParry;
+          const finalCounter = heroParried ? 0 : counterDmg;
+          state.heroHP = Math.max(0, state.heroHP - finalCounter);
+
+          let msg = `💥 Power Strike!`;
+          msg += parried ? ` Parried! Enemy -${finalDmg} HP.` : ` Enemy -${finalDmg} HP.`;
+          if (heroParried) msg += ` Hero parries counter!`;
+          else if (finalCounter > 0) msg += ` Enemy counters! Hero -${finalCounter} HP.`;
+          return msg;
+        }
+
+        // Not enough mana — normal attack
+        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
+
+        const effectiveArmor = state.enemyDefense + state.enemyArmor;
+        const rawDmg = Math.max(1, state.heroAttack + variance() - Math.floor(effectiveArmor * 0.5));
+
+        const parried = Math.random() * 100 < state.enemyParry;
+        const finalDmg = parried ? Math.max(1, Math.floor(rawDmg * 0.3)) : rawDmg;
+        state.enemyHP = Math.max(0, state.enemyHP - finalDmg);
+
+        const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
+        const heroParried = Math.random() * 100 < state.heroParry;
+        const finalCounter = heroParried ? 0 : counterDmg;
+        state.heroHP = Math.max(0, state.heroHP - finalCounter);
+
+        let msg2 = `⚠️ Not enough mana → normal attack!`;
+        msg2 += parried ? ` Parried! Enemy -${finalDmg} HP.` : ` Enemy -${finalDmg} HP.`;
+        if (heroParried) msg2 += ` Hero parries counter!`;
+        else if (finalCounter > 0) msg2 += ` Enemy counters! Hero -${finalCounter} HP.`;
+        return msg2;
       }
 
       default:

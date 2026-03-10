@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { LEVELS } from '../../utils/constants';
 import { useGameStore } from '../../stores/gameStore';
 import { levelProgressPct, MAX_LEVEL } from '../../utils/levelSystem';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const DIFFICULTY_COLORS = ['#4ade80','#4ade80','#facc15','#facc15','#fb923c','#fb923c','#f87171','#f87171','#e94560','#e94560','#a855f7','#a855f7','#ec4899','#ec4899','#ffffff'];
 const ENEMY_ICONS: Record<string,string> = {
@@ -15,6 +16,7 @@ const ENEMY_ICONS: Record<string,string> = {
 export default function LevelSelect() {
   const navigate = useNavigate();
   const { player, character } = useGameStore();
+  const { colors } = useTheme();
   const completed = player?.levelsCompleted ?? [];
 
   // level_1 เปิดเสมอ, level_N เปิดเมื่อผ่าน level_{N-1}
@@ -27,17 +29,17 @@ export default function LevelSelect() {
     <div className="page-outer">
       <div className="page-container">
         <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:20 }}>
-          <button onClick={()=>navigate('/')} style={{ background:'rgba(255,255,255,0.06)', border:'none', color:'white', width:40, height:40, borderRadius:10, cursor:'pointer', fontSize:18 }}>←</button>
+          <button onClick={()=>navigate('/')} style={{ background:colors.bgSurface, border:`1px solid ${colors.borderSubtle}`, color:colors.text, width:40, height:40, borderRadius:10, cursor:'pointer', fontSize:18 }}>←</button>
           <div style={{ flex:1 }}>
-            <h1 style={{ color:'white', fontWeight:800, fontSize:26, margin:0 }}>Select Level</h1>
-            <p style={{ color:'rgba(255,255,255,0.4)', fontSize:13, margin:0 }}>
+            <h1 style={{ color:colors.text, fontWeight:800, fontSize:26, margin:0 }}>Select Level</h1>
+            <p style={{ color:colors.textMuted, fontSize:13, margin:0 }}>
               ผ่านแล้ว {completed.length}/{LEVELS.length} ด่าน
             </p>
           </div>
           {/* Character mini-badge */}
           {character && (
             <div style={{
-              background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)',
+              background:colors.bgSurface, border:`1px solid ${colors.border}`,
               borderRadius:12, padding:'8px 12px', display:'flex', flexDirection:'column', alignItems:'center', gap:2, minWidth:72,
             }}>
               <img src={`/characters/${character.class}.png`} alt={character.class} style={{ width:36, height:36, objectFit:'contain', imageRendering:'pixelated' }} />
@@ -46,13 +48,13 @@ export default function LevelSelect() {
                 color:'#1c1917', fontSize:9, fontWeight:900, padding:'1px 6px', borderRadius:4,
               }}>Lv.{character.level}</span>
               {/* mini XP bar */}
-              <div style={{ width:52, height:3, background:'rgba(255,255,255,0.1)', borderRadius:2, overflow:'hidden' }}>
+              <div style={{ width:52, height:3, background:colors.border, borderRadius:2, overflow:'hidden' }}>
                 <div style={{
                   width: levelProgressPct(character.level, character.experience) + '%',
                   height:'100%', background:'linear-gradient(90deg,#fbbf24,#f59e0b)', borderRadius:2,
                 }} />
               </div>
-              <span style={{ color:'rgba(255,255,255,0.3)', fontSize:8 }}>
+              <span style={{ color:colors.textMuted, fontSize:8 }}>
                 {character.level >= MAX_LEVEL ? 'MAX' : `${character.experience} XP`}
               </span>
             </div>
@@ -67,8 +69,8 @@ export default function LevelSelect() {
               <div key={level.id}
                 onClick={() => unlocked && navigate('/battle/' + level.id)}
                 style={{
-                  background: done ? 'rgba(74,222,128,0.06)' : 'rgba(255,255,255,0.04)',
-                  border: done ? '1px solid rgba(74,222,128,0.25)' : '1px solid rgba(255,255,255,0.07)',
+                  background: done ? 'rgba(74,222,128,0.06)' : colors.bgSurface,
+                  border: done ? '1px solid rgba(74,222,128,0.25)' : `1px solid ${colors.borderSubtle}`,
                   borderRadius:16, padding:'20px 24px',
                   cursor: unlocked ? 'pointer' : 'not-allowed',
                   transition:'all 0.2s', position:'relative', overflow:'hidden',
@@ -77,12 +79,12 @@ export default function LevelSelect() {
                 onMouseEnter={(e) => {
                   if (!unlocked) return;
                   const d = e.currentTarget as HTMLDivElement;
-                  d.style.background = done ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.08)';
+                  d.style.background = done ? 'rgba(74,222,128,0.12)' : colors.bgSurfaceHover;
                   d.style.transform = 'translateY(-2px)';
                 }}
                 onMouseLeave={(e) => {
                   const d = e.currentTarget as HTMLDivElement;
-                  d.style.background = done ? 'rgba(74,222,128,0.06)' : 'rgba(255,255,255,0.04)';
+                  d.style.background = done ? 'rgba(74,222,128,0.06)' : colors.bgSurface;
                   d.style.transform = 'none';
                 }}
               >
@@ -103,8 +105,8 @@ export default function LevelSelect() {
                       <span style={{ color:'#f59e0b', fontSize:12 }}>{'★'.repeat(level.difficultyEstimate)}</span>
                       {done && <span style={{ background:'rgba(74,222,128,0.2)', color:'#4ade80', fontSize:10, fontWeight:800, padding:'2px 8px', borderRadius:6 }}>✓ CLEARED</span>}
                     </div>
-                    <h3 style={{ color:'white', fontWeight:700, fontSize:17, margin:'0 0 4px' }}>{level.name}</h3>
-                    <p style={{ color:'rgba(255,255,255,0.4)', fontSize:13, margin:0 }}>{level.description}</p>
+                    <h3 style={{ color:colors.text, fontWeight:700, fontSize:17, margin:'0 0 4px' }}>{level.name}</h3>
+                    <p style={{ color:colors.textSub, fontSize:13, margin:0 }}>{level.description}</p>
                     <p style={{ color:'#7c3aed', fontSize:12, marginTop:4 }}>📚 {level.concept}</p>
                   </div>
 
@@ -115,7 +117,7 @@ export default function LevelSelect() {
                 </div>
 
                 {!unlocked && (
-                  <p style={{ color:'rgba(255,255,255,0.3)', fontSize:12, margin:'10px 0 0 52px' }}>
+                  <p style={{ color:colors.textMuted, fontSize:12, margin:'10px 0 0 52px' }}>
                     ผ่านด่านที่ {i} ก่อนเพื่อปลดล็อก
                   </p>
                 )}

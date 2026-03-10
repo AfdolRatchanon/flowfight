@@ -14,6 +14,16 @@ import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firest
 import { auth, db } from './firebaseService';
 import type { Player, Character } from '../types/game.types';
 
+export interface LevelBattleStats {
+  levelId: string;
+  levelNumber: number;
+  damageDealt: number;
+  damageTaken: number;
+  timeMs: number;
+  heroHPRemaining: number;
+  heroMaxHP: number;
+}
+
 const googleProvider = new GoogleAuthProvider();
 
 export async function registerWithEmail(email: string, password: string, username: string): Promise<User> {
@@ -138,8 +148,21 @@ export async function saveCharacterProgress(uid: string, character: Character): 
 export async function saveLeaderboardEntry(
   player: Player,
   character: Character,
+  battleStats?: LevelBattleStats,
 ): Promise<void> {
   const ref = doc(db, 'leaderboards', player.id);
+
+  // อ่านค่าเดิมก่อน เพื่อสะสม totalDamage/totalTime
+  let prevDealt = 0, prevTaken = 0, prevTime = 0;
+  try {
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      prevDealt = snap.data().totalDamageDealt ?? 0;
+      prevTaken = snap.data().totalDamageTaken ?? 0;
+      prevTime  = snap.data().totalPlayTime    ?? 0;
+    }
+  } catch { /* ถ้าอ่านไม่ได้ให้ใช้ 0 */ }
+
   await setDoc(ref, {
     playerId: player.id,
     playerName: player.username,
@@ -150,8 +173,63 @@ export async function saveLeaderboardEntry(
     levelReached: player.stats?.levelReached ?? 1,
     levelsCompleted: (player.levelsCompleted ?? []).length,
     totalKills: player.stats?.totalKills ?? 0,
-    totalPlayTime: 0,
+    totalPlayTime:    prevTime  + (battleStats?.timeMs        ?? 0),
+    totalDamageDealt: prevDealt + (battleStats?.damageDealt   ?? 0),
+    totalDamageTaken: prevTaken + (battleStats?.damageTaken   ?? 0),
     gameMode: 'normal',
     lastUpdated: Date.now(),
+  });
+}
+
+export async function saveLevelLeaderboardEntry(
+  player: Player,
+  character: Character,
+  stats: LevelBattleStats,
+): Promise<void> {
+  // key = levelId_playerId (1 record ต่อ player ต่อด่าน — เก็บแค่สถิติดีสุดล่าสุด)
+  const docId = `${stats.levelId}_${player.id}`;
+  const ref = doc(db, 'levelboards', docId);
+
+  // เช็คว่ามีของเก่าไหม ถ้ามีให้เก็บแค่ค่าที่ดีกว่า
+  try {
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const prev = snap.data();
+      // เก็บ damageTaken น้อยสุด, damageDealt มากสุด, timeMs น้อยสุด, heroHPPercent มากสุด
+      const newTaken   = Math.min(stats.damageTaken, prev.damageTaken ?? Infinity);
+      const newDealt   = Math.max(stats.damageDealt, prev.damageDealt ?? 0);
+      const newTime    = Math.min(stats.timeMs,      prev.timeMs      ?? Infinity);
+      const newHPPct   = Math.max(
+        Math.round((stats.heroHPRemaining / stats.heroMaxHP) * 100),
+        prev.heroHPPercent ?? 0,
+      );
+      await setDoc(ref, {
+        ...prev,
+        damageTaken:    newTaken,
+        damageDealt:    newDealt,
+        timeMs:         newTime,
+        heroHPRemaining: stats.heroHPRemaining,
+        heroHPPercent:  newHPPct,
+        characterLevel: character.level,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+  } catch { /* ถ้าอ่านไม่ได้ให้ overwrite */ }
+
+  await setDoc(ref, {
+    playerId:       player.id,
+    playerName:     player.username,
+    characterName:  character.name,
+    characterClass: character.class,
+    characterLevel: character.level,
+    levelId:        stats.levelId,
+    levelNumber:    stats.levelNumber,
+    damageDealt:    stats.damageDealt,
+    damageTaken:    stats.damageTaken,
+    timeMs:         stats.timeMs,
+    heroHPRemaining: stats.heroHPRemaining,
+    heroHPPercent:  Math.round((stats.heroHPRemaining / stats.heroMaxHP) * 100),
+    timestamp:      Date.now(),
   });
 }

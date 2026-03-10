@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { logout } from '../../services/authService';
 import { useGameStore } from '../../stores/gameStore';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL } from '../../utils/levelSystem';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const MENU_ITEMS = [
   { icon: '⚔️', label: 'Play Game',   path: '/levels',      color: '#e94560' },
@@ -13,11 +14,12 @@ const MENU_ITEMS = [
 export default function MainMenu() {
   const { player, character } = useGameStore();
   const navigate = useNavigate();
+  const { colors } = useTheme();
 
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 50%, #0d1a2e 100%)',
+      background: colors.bgGrad,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: 24, position: 'relative', overflow: 'hidden',
     }}>
@@ -36,9 +38,9 @@ export default function MainMenu() {
             FLOWFIGHT
           </h1>
           <div style={{ width: 60, height: 3, background: 'linear-gradient(90deg, #e94560, #7c3aed)', margin: '0 auto 12px', borderRadius: 2 }} />
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, letterSpacing: 3, textTransform: 'uppercase' }}>Flowchart Battle RPG</p>
+          <p style={{ color: colors.textMuted, fontSize: 12, letterSpacing: 3, textTransform: 'uppercase' }}>Flowchart Battle RPG</p>
           {player && (
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, marginTop: 12 }}>
+            <p style={{ color: colors.textSub, fontSize: 14, marginTop: 12 }}>
               Welcome back, <span style={{ color: '#7c3aed', fontWeight: 700 }}>{player.username}</span>
             </p>
           )}
@@ -50,8 +52,8 @@ export default function MainMenu() {
           const xpLeft = xpToNextLevel(character.level, character.experience);
           return (
             <div style={{
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.09)',
+              background: colors.bgSurface,
+              border: `1px solid ${colors.borderSubtle}`,
               borderRadius: 16, padding: '14px 20px', marginBottom: 20,
               display: 'flex', alignItems: 'center', gap: 16,
             }}>
@@ -74,14 +76,14 @@ export default function MainMenu() {
                     color: '#1c1917', fontSize: 10, fontWeight: 900,
                     padding: '2px 8px', borderRadius: 6,
                   }}>Lv.{character.level}</span>
-                  <span style={{ color: 'white', fontWeight: 700, fontSize: 14 }}>{character.name}</span>
-                  <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, textTransform: 'capitalize' }}>
+                  <span style={{ color: colors.text, fontWeight: 700, fontSize: 14 }}>{character.name}</span>
+                  <span style={{ color: colors.textMuted, fontSize: 12, textTransform: 'capitalize' }}>
                     {character.class}
                   </span>
                 </div>
 
                 {/* XP bar */}
-                <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden', marginBottom: 4 }}>
+                <div style={{ width: '100%', height: 6, background: colors.bgSurface, borderRadius: 3, overflow: 'hidden', marginBottom: 4 }}>
                   <div style={{
                     width: xpPct + '%', height: '100%', borderRadius: 3,
                     background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
@@ -90,10 +92,10 @@ export default function MainMenu() {
                   }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+                  <span style={{ color: colors.textMuted, fontSize: 10 }}>
                     {character.level >= MAX_LEVEL ? 'MAX LEVEL' : `${xpLeft} XP → Lv.${character.level + 1}`}
                   </span>
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
+                  <span style={{ color: colors.textMuted, fontSize: 10 }}>
                     {character.experience} XP
                   </span>
                 </div>
@@ -116,7 +118,7 @@ export default function MainMenu() {
             borderRadius: 16, padding: '14px 20px', marginBottom: 20,
             textAlign: 'center', cursor: 'pointer',
           }} onClick={() => navigate('/character')}>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, margin: 0 }}>
+            <p style={{ color: colors.textMuted, fontSize: 13, margin: 0 }}>
               ✨ สร้างตัวละครเพื่อเริ่มเกม
             </p>
           </div>
@@ -138,14 +140,14 @@ export default function MainMenu() {
         {/* Sign out */}
         <button
           onClick={() => logout()}
-          style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', background: 'transparent', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 13 }}
+          style={{ width: '100%', padding: 12, borderRadius: 12, border: `1px solid ${colors.borderSubtle}`, background: 'transparent', color: colors.textMuted, cursor: 'pointer', fontSize: 13 }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#e94560'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.3)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = colors.textMuted; }}
         >
           Sign Out
         </button>
 
-        <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.15)', fontSize: 11, marginTop: 20 }}>
+        <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 11, marginTop: 20, opacity: 0.5 }}>
           v{import.meta.env.VITE_APP_VERSION ?? '0.1.0'}
         </p>
       </div>
@@ -154,32 +156,33 @@ export default function MainMenu() {
 }
 
 function MenuButton({ icon, label, color, onClick }: { icon: string; label: string; color: string; onClick: () => void }) {
+  const { colors } = useTheme();
   return (
     <button
       onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 16,
         padding: '18px 24px', borderRadius: 16, border: 'none', cursor: 'pointer',
-        background: 'rgba(255,255,255,0.04)',
+        background: colors.bgSurface,
         borderLeft: '4px solid ' + color,
-        color: 'white', fontWeight: 700, fontSize: 16,
+        color: colors.text, fontWeight: 700, fontSize: 16,
         transition: 'all 0.2s ease',
-        outline: '1px solid rgba(255,255,255,0.06)',
+        outline: `1px solid ${colors.borderSubtle}`,
       }}
       onMouseEnter={(e) => {
         const b = e.currentTarget as HTMLButtonElement;
-        b.style.background = 'rgba(255,255,255,0.08)';
+        b.style.background = colors.bgSurfaceHover;
         b.style.transform = 'translateX(4px)';
       }}
       onMouseLeave={(e) => {
         const b = e.currentTarget as HTMLButtonElement;
-        b.style.background = 'rgba(255,255,255,0.04)';
+        b.style.background = colors.bgSurface;
         b.style.transform = 'translateX(0)';
       }}
     >
       <span style={{ fontSize: 24, width: 32, textAlign: 'center' }}>{icon}</span>
       <span>{label}</span>
-      <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.3)', fontSize: 18 }}>›</span>
+      <span style={{ marginLeft: 'auto', color: colors.textMuted, fontSize: 18 }}>›</span>
     </button>
   );
 }

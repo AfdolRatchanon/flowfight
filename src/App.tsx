@@ -2,27 +2,30 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { useGameStore } from './stores/gameStore';
+import { useTheme } from './contexts/ThemeContext';
 import LoginPage from './components/Auth/LoginPage';
 import MainMenu from './components/UI/MainMenu';
 import LevelSelect from './components/UI/LevelSelect';
 import BattleScreen from './components/Battle/BattleScreen';
 import CharacterCustomizer from './components/Character/CharacterCustomizer';
 import Leaderboard from './components/UI/Leaderboard';
+import ThemeToggle from './components/UI/ThemeToggle';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, player } = useGameStore();
+  const { colors } = useTheme();
   const isAuthenticated = !!player;
 
   if (isLoading) {
     return (
       <div style={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 50%, #0d1a2e 100%)',
+        background: colors.bgGrad,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <div style={{ textAlign: 'center' }}>
           <p style={{ fontSize: 64, marginBottom: 16 }}>⚔️</p>
-          <p style={{ color: 'white', fontSize: 20 }}>Loading FlowFight...</p>
+          <p style={{ color: colors.text, fontSize: 20 }}>Loading FlowFight...</p>
         </div>
       </div>
     );
@@ -38,6 +41,7 @@ export default function App() {
 
   return (
     <Router>
+      <ThemeToggle />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<ProtectedRoute><MainMenu /></ProtectedRoute>} />
