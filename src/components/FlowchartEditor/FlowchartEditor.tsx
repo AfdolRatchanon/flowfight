@@ -74,6 +74,8 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
   const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges as Edge[]);
   const [ctxMenu, setCtxMenu] = useState<CtxMenu>(null);
   const ctxRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const rfInstance = useRef<any>(null);
 
   useEffect(() => { setNodes(storeNodes as Node[]); }, [storeNodes]);
   useEffect(() => { setEdges(storeEdges as Edge[]); }, [storeEdges]);
@@ -160,13 +162,14 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
     }
   }
 
-  function addBlock(type: FlowNodeType, label: string, data: Record<string, any> = {}) {
+  function addBlock(type: FlowNodeType, label: string, data: Record<string, any> = {}, screenPos?: { x: number; y: number }) {
     const id = `${type}_${Date.now()}`;
-    const newNode: FlowNode = {
-      id, type,
-      position: { x: 180 + Math.random() * 160, y: 80 + Math.random() * 140 },
-      data: { label, ...data },
-    } as FlowNode;
+    let position = { x: 180 + Math.random() * 160, y: 80 + Math.random() * 140 };
+    if (screenPos && rfInstance.current && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      position = rfInstance.current.project({ x: screenPos.x - rect.left, y: screenPos.y - rect.top });
+    }
+    const newNode: FlowNode = { id, type, position, data: { label, ...data } } as FlowNode;
     store.setNodes([...storeNodes, newNode]);
     setCtxMenu(null);
   }
@@ -216,8 +219,9 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
     <div style={{ display: 'flex', height: '100%' }}>
       <BlockPalette onAddBlock={addBlock} allowedBlocks={allowedBlocks} />
 
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div ref={wrapperRef} style={{ flex: 1, position: 'relative' }}>
         <ReactFlow
+          onInit={(instance) => { rfInstance.current = instance; }}
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChangeHandler}
@@ -227,7 +231,7 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
           connectionLineType={ConnectionLineType.Step}
           connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 2, strokeDasharray: '5,3' }}
           fitView
-          fitViewOptions={{ padding: 0.4, maxZoom: 0.85 }}
+          fitViewOptions={{ padding: 0.3, maxZoom: 1.1 }}
           minZoom={0.2}
           maxZoom={2}
           deleteKeyCode="Delete"
@@ -306,7 +310,7 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
                 {visibleBlocks.map((b, i) => (
                   <button
                     key={i}
-                    onClick={() => addBlock(b.type, b.label, b.data)}
+                    onClick={() => addBlock(b.type, b.label, b.data, { x: ctxMenu.x, y: ctxMenu.y })}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       width: '100%', padding: '7px 12px', border: 'none', background: 'transparent',

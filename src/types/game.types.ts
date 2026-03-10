@@ -30,7 +30,9 @@ export interface Player {
   email: string;
   isAnonymous?: boolean;
   levelsCompleted: string[]; // level IDs ที่ผ่านแล้ว ['level_1', 'level_2']
-  characterProgress?: CharacterProgress; // ความก้าวหน้าตัวละคร
+  /** ความก้าวหน้าแยกต่อ class */
+  characterProgress?: Partial<Record<CharacterClass, CharacterProgress>>;
+  lastPlayedClass?: CharacterClass; // class ล่าสุดที่เลือก
   createdAt: number;
   lastActive: number;
   stats: PlayerStats;
@@ -70,6 +72,8 @@ export interface EquipmentItem {
   stats: EquipmentStats;
   cost: number;
   rarity: ItemRarity;
+  requiredLevel: number;          // minimum character level to equip
+  allowedClasses: readonly CharacterClass[]; // empty = all classes can use
 }
 
 export interface EquipmentStats {

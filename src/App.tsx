@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { useGameStore } from './stores/gameStore';
 import { useTheme } from './contexts/ThemeContext';
@@ -12,9 +12,9 @@ import Leaderboard from './components/UI/Leaderboard';
 import ThemeToggle from './components/UI/ThemeToggle';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isLoading, player } = useGameStore();
+  const { isLoading, player, character } = useGameStore();
   const { colors } = useTheme();
-  const isAuthenticated = !!player;
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -31,7 +31,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!player) return <Navigate to="/login" replace />;
+
+  // ผู้เล่นใหม่ที่ยังไม่มีตัวละคร ต้องสร้างตัวละครก่อนเสมอ
+  if (!character && location.pathname !== '/character') {
+    return <Navigate to="/character" replace />;
+  }
+
   return <>{children}</>;
 }
 

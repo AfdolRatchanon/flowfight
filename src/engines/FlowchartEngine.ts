@@ -269,6 +269,84 @@ export class FlowchartEngine {
         }
       }
     }
+    const loopCheck = this.detectInfiniteLoops();
+    if (!loopCheck.valid) return loopCheck;
+
+    return { valid: true };
+  }
+
+  /** Detect cycles that have no Condition or Loop node — these are guaranteed infinite loops */
+  private detectInfiniteLoops(): { valid: boolean; error?: string } {
+    const nodeArr = Array.from(this.nodes.values());
+
+    // Build adjacency list
+    const adj = new Map<string, string[]>();
+    for (const n of nodeArr) adj.set(n.id, []);
+    for (const e of this.edges) adj.get(e.source)?.push(e.target);
+
+    // Tarjan's SCC
+    const idx = new Map<string, number>();
+    const low = new Map<string, number>();
+    const onStack = new Set<string>();
+    const stack: string[] = [];
+    let counter = 0;
+    const sccs: string[][] = [];
+
+    const strongconnect = (v: string) => {
+      idx.set(v, counter);
+      low.set(v, counter);
+      counter++;
+      stack.push(v);
+      onStack.add(v);
+
+      for (const w of (adj.get(v) ?? [])) {
+        if (!idx.has(w)) {
+          strongconnect(w);
+          low.set(v, Math.min(low.get(v)!, low.get(w)!));
+        } else if (onStack.has(w)) {
+          low.set(v, Math.min(low.get(v)!, idx.get(w)!));
+        }
+      }
+
+      if (low.get(v) === idx.get(v)) {
+        const scc: string[] = [];
+        let w: string;
+        do {
+          w = stack.pop()!;
+          onStack.delete(w);
+          scc.push(w);
+        } while (w !== v);
+        sccs.push(scc);
+      }
+    };
+
+    for (const n of nodeArr) {
+      if (!idx.has(n.id)) strongconnect(n.id);
+    }
+
+    for (const scc of sccs) {
+      const isCycle =
+        scc.length > 1 ||
+        (scc.length === 1 && this.edges.some((e) => e.source === scc[0] && e.target === scc[0]));
+
+      if (!isCycle) continue;
+
+      const hasDecision = scc.some((id) => {
+        const node = this.nodes.get(id);
+        return node?.type === 'condition' || node?.type === 'loop';
+      });
+
+      if (!hasDecision) {
+        const labels = scc
+          .map((id) => this.nodes.get(id)?.data.label ?? id)
+          .join(' → ');
+        return {
+          valid: false,
+          error: `Infinite loop detected: [${labels}]. ต้องมี Condition หรือ Loop block เพื่อหยุด loop ได้`,
+        };
+      }
+    }
+
     return { valid: true };
   }
 

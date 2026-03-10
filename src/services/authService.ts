@@ -131,18 +131,23 @@ export async function savePlayerProgress(uid: string, levelId: string, won: bool
 
 export async function saveCharacterProgress(uid: string, character: Character): Promise<void> {
   const ref = doc(db, 'users', uid);
-  await updateDoc(ref, {
+  // ใช้ setDoc + merge:true เพื่อสร้าง document ถ้าไม่มี และ merge ถ้ามีแล้ว
+  // (updateDoc จะ throw ถ้า document ยังไม่ถูกสร้าง → ทำให้ character ไม่ถูก save)
+  await setDoc(ref, {
     characterProgress: {
-      level: character.level,
-      experience: character.experience,
-      maxHP: character.stats.maxHP,
-      attack: character.stats.attack,
-      defense: character.stats.defense,
-      speed: character.stats.speed,
-      class: character.class,
-      name: character.name,
+      [character.class]: {
+        level: character.level,
+        experience: character.experience,
+        maxHP: character.stats.maxHP,
+        attack: character.stats.attack,
+        defense: character.stats.defense,
+        speed: character.stats.speed,
+        class: character.class,
+        name: character.name,
+      },
     },
-  });
+    lastPlayedClass: character.class,
+  }, { merge: true });
 }
 
 export async function saveLeaderboardEntry(

@@ -4,7 +4,7 @@ import { useCharacterStore, CLASS_BASE_STATS } from '../../stores/characterStore
 import { useGameStore } from '../../stores/gameStore';
 import type { CharacterClass, EquipmentItem } from '../../types/game.types';
 import { WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../../utils/constants';
-import { levelProgressPct, xpToNextLevel, MAX_LEVEL } from '../../utils/levelSystem';
+import { levelProgressPct, xpToNextLevel, MAX_LEVEL, CLASS_STAT_GAIN } from '../../utils/levelSystem';
 import { saveCharacterProgress } from '../../services/authService';
 
 // ===== Class definitions =====
@@ -38,13 +38,14 @@ const CLASS_INFO: Record<CharacterClass, {
   },
 };
 
-// Equipment recommended per class
-const CLASS_RECOMMENDED: Record<CharacterClass, string[]> = {
-  knight:    ['iron_sword', 'plate_armor', 'iron_helmet', 'ring_health'],
-  mage:      ['magic_staff', 'leather_armor', 'crown_wisdom', 'amulet_speed'],
-  rogue:     ['axe_fury', 'leather_armor', 'boots_swift', 'amulet_speed'],
-  barbarian: ['axe_fury', 'leather_armor', 'iron_helmet', 'ring_health'],
-};
+/** Returns the id of the best available item per slot (highest requiredLevel that is still unlocked) */
+function getBestAvailable(items: EquipmentItem[], cls: string, currentLevel: number): string | null {
+  const available = items.filter(
+    (i) => (i.allowedClasses.length === 0 || (i.allowedClasses as string[]).includes(cls)) && i.requiredLevel <= currentLevel
+  );
+  if (available.length === 0) return null;
+  return available.reduce((best, i) => i.requiredLevel > best.requiredLevel ? i : best).id;
+}
 
 // Equipment slot icons & labels
 const SLOT_META = {
@@ -67,24 +68,48 @@ export default function CharacterCustomizer() {
   const [tab, setTab] = useState<Tab>('class');
   const navigate = useNavigate();
   const store = useCharacterStore();
-  const { character, player, setCharacter } = useGameStore();
+  const { character, player, setCharacter, setPlayer } = useGameStore();
   const stats = store.getCalculatedStats();
 
   const classInfo = CLASS_INFO[store.selectedClass];
-  const xpPct  = character ? levelProgressPct(character.level, character.experience) : 0;
-  const xpLeft = character ? xpToNextLevel(character.level, character.experience) : 0;
+
+  // โหลด level/XP ของ class ที่กำลังเลือกอยู่ (แยกต่อ class)
+  const classProgress = player?.characterProgress?.[store.selectedClass];
+  // ถ้า class ที่เลือกตรงกับ character ปัจจุบัน ใช้ character (ข้อมูลล่าสุด) แทน classProgress ที่อาจ stale
+  const isCurrentClass = character?.class === store.selectedClass;
+  const displayLevel = (isCurrentClass ? character?.level : classProgress?.level) ?? 1;
+  const displayXP    = (isCurrentClass ? character?.experience : classProgress?.experience) ?? 0;
+  const xpPct  = levelProgressPct(displayLevel, displayXP);
+  const xpLeft = xpToNextLevel(displayLevel, displayXP);
 
   const handleSave = () => {
-    // Build Character object, preserving existing level/XP if already leveled
+    // Build Character object — level/XP มาจาก progress ของ class นั้นๆ
     const now = Date.now();
+    const cls = store.selectedClass;
+    const cp  = player?.characterProgress?.[cls];
+    const isCurrent = character?.class === cls;
+    const savedLevel = (isCurrent ? character?.level : cp?.level) ?? 1;
+    const savedXP    = (isCurrent ? character?.experience : cp?.experience) ?? 0;
+
+    // Apply level bonus on top of base+equipment stats
+    const gain = CLASS_STAT_GAIN[cls];
+    const levelsAboveBase = savedLevel - 1;
+    const finalStats = {
+      maxHP:     stats.maxHP     + levelsAboveBase * gain.maxHP,
+      currentHP: stats.maxHP     + levelsAboveBase * gain.maxHP,
+      attack:    stats.attack    + levelsAboveBase * gain.attack,
+      defense:   stats.defense   + levelsAboveBase * gain.defense,
+      speed:     stats.speed     + levelsAboveBase * gain.speed,
+    };
+
     const newChar = {
-      id: character?.id ?? `char_${player?.id ?? now}`,
+      id: `char_${player?.id ?? now}_${cls}`,
       playerId: player?.id ?? 'local',
       name: store.characterName || 'Hero',
-      class: store.selectedClass,
-      level: character?.level ?? 1,
-      experience: character?.experience ?? 0,
-      stats: { ...stats, currentHP: stats.maxHP },
+      class: cls,
+      level: savedLevel,
+      experience: savedXP,
+      stats: finalStats,
       appearance: {
         skinId: `${store.selectedClass}_blue`,
         colors: store.colors,
@@ -97,7 +122,23 @@ export default function CharacterCustomizer() {
       lastModified: now,
     };
     setCharacter(newChar);
-    if (player) saveCharacterProgress(player.id, newChar).catch(() => {});
+    // sync player.characterProgress ใน store ทันที (ป้องกัน stale เมื่อสลับ class)
+    if (player) {
+      setPlayer({
+        ...player,
+        characterProgress: {
+          ...player.characterProgress,
+          [cls]: {
+            level: newChar.level, experience: newChar.experience,
+            maxHP: newChar.stats.maxHP, attack: newChar.stats.attack,
+            defense: newChar.stats.defense, speed: newChar.stats.speed,
+            class: cls, name: newChar.name,
+          },
+        },
+        lastPlayedClass: cls,
+      });
+      saveCharacterProgress(player.id, newChar).catch(() => {});
+    }
     navigate('/');
   };
 
@@ -113,19 +154,17 @@ export default function CharacterCustomizer() {
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, margin: 0 }}>เลือก class · จัดอุปกรณ์</p>
           </div>
           {/* Current level badge (if exists) */}
-          {character && (
-            <div style={{ textAlign: 'center', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 12, padding: '8px 14px' }}>
-              <div style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 900, fontSize: 22 }}>
-                Lv.{character.level}
-              </div>
-              <div style={{ width: 60, height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', margin: '4px auto 2px' }}>
-                <div style={{ width: xpPct + '%', height: '100%', background: 'linear-gradient(90deg,#fbbf24,#f59e0b)', borderRadius: 2 }} />
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9 }}>
-                {character.level >= MAX_LEVEL ? 'MAX' : `${xpLeft} XP`}
-              </div>
+          <div style={{ textAlign: 'center', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 12, padding: '8px 14px' }}>
+            <div style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 900, fontSize: 22 }}>
+              Lv.{displayLevel}
             </div>
-          )}
+            <div style={{ width: 60, height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', margin: '4px auto 2px' }}>
+              <div style={{ width: xpPct + '%', height: '100%', background: 'linear-gradient(90deg,#fbbf24,#f59e0b)', borderRadius: 2 }} />
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9 }}>
+              {displayLevel >= MAX_LEVEL ? 'MAX' : `${xpLeft} XP`}
+            </div>
+          </div>
         </div>
 
         {/* Preview + Stats */}
@@ -161,14 +200,14 @@ export default function CharacterCustomizer() {
           <div style={{ ...CARD, flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, letterSpacing: 2, margin: 0 }}>STATS</p>
-              {character && (
+              {classProgress && (
                 <span style={{ color: '#fbbf24', fontSize: 11, fontWeight: 700 }}>+Lv bonus applied</span>
               )}
             </div>
-            <StatBar icon="❤️" label="HP"  value={stats.maxHP}   max={200} color="#4ade80" />
-            <StatBar icon="⚔️" label="ATK" value={stats.attack}  max={50}  color="#f87171" />
-            <StatBar icon="🛡️" label="DEF" value={stats.defense} max={30}  color="#60a5fa" />
-            <StatBar icon="⚡" label="SPD" value={stats.speed}   max={20}  color="#fbbf24" />
+            <StatBar icon="❤️" label="HP"  value={stats.maxHP   + (displayLevel - 1) * CLASS_STAT_GAIN[store.selectedClass].maxHP}   max={250} color="#4ade80" />
+            <StatBar icon="⚔️" label="ATK" value={stats.attack  + (displayLevel - 1) * CLASS_STAT_GAIN[store.selectedClass].attack}  max={55}  color="#f87171" />
+            <StatBar icon="🛡️" label="DEF" value={stats.defense + (displayLevel - 1) * CLASS_STAT_GAIN[store.selectedClass].defense} max={35}  color="#60a5fa" />
+            <StatBar icon="⚡" label="SPD" value={stats.speed   + (displayLevel - 1) * CLASS_STAT_GAIN[store.selectedClass].speed}   max={35}  color="#fbbf24" />
 
             <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
               <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, margin: '0 0 3px' }}>💡 {classInfo.playstyle}</p>
@@ -209,7 +248,7 @@ export default function CharacterCustomizer() {
         {/* Tab content */}
         <div style={CARD}>
           {tab === 'class'     && <ClassTab />}
-          {tab === 'equipment' && <EquipmentTab selectedClass={store.selectedClass} />}
+          {tab === 'equipment' && <EquipmentTab selectedClass={store.selectedClass} displayLevel={displayLevel} />}
           {tab === 'stats'     && <StatsTab />}
         </div>
 
@@ -312,9 +351,8 @@ function MiniStatBar({ label, value, max, color }: { label: string; value: numbe
   );
 }
 
-function EquipmentTab({ selectedClass }: { selectedClass: CharacterClass }) {
+function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: CharacterClass; displayLevel: number }) {
   const store = useCharacterStore();
-  const recommended = CLASS_RECOMMENDED[selectedClass];
 
   const ALL_BY_SLOT = {
     weapon:    WEAPONS,
@@ -324,14 +362,25 @@ function EquipmentTab({ selectedClass }: { selectedClass: CharacterClass }) {
   } as const;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: 340, overflowY: 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: 400, overflowY: 'auto' }}>
       {(Object.entries(ALL_BY_SLOT) as [keyof typeof ALL_BY_SLOT, EquipmentItem[]][]).map(([slot, items]) => {
         const meta = SLOT_META[slot];
-        // Sort: recommended first
-        const sorted = [...items].sort((a, b) => {
-          const aRec = recommended.includes(a.id) ? 0 : 1;
-          const bRec = recommended.includes(b.id) ? 0 : 1;
-          return aRec - bRec;
+
+        // Filter: only items usable by this class (allowedClasses empty = all)
+        const classItems = (items as EquipmentItem[]).filter(
+          (item) => item.allowedClasses.length === 0 || (item.allowedClasses as string[]).includes(selectedClass)
+        );
+
+        // Best-in-slot = highest requiredLevel item that is unlocked right now
+        const bestId = getBestAvailable(classItems, selectedClass, displayLevel);
+
+        // Sort: available first (by level desc), then locked (by required level asc)
+        const sorted = [...classItems].sort((a, b) => {
+          const aLocked = a.requiredLevel > displayLevel ? 1 : 0;
+          const bLocked = b.requiredLevel > displayLevel ? 1 : 0;
+          if (aLocked !== bLocked) return aLocked - bLocked;
+          if (!aLocked) return b.requiredLevel - a.requiredLevel; // unlocked: best first
+          return a.requiredLevel - b.requiredLevel;               // locked: lowest level first
         });
 
         return (
@@ -350,20 +399,36 @@ function EquipmentTab({ selectedClass }: { selectedClass: CharacterClass }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {sorted.map((item) => {
                 const isEquipped = store.equipment[slot]?.id === item.id;
-                const isRec = recommended.includes(item.id);
+                const isRec     = item.id === bestId && !isEquipped;
+                const isLocked  = item.requiredLevel > displayLevel;
+
                 return (
                   <div key={item.id}
-                    onClick={() => isEquipped ? store.unequipItem(slot) : store.equipItem(item as EquipmentItem)}
+                    onClick={() => {
+                      if (isLocked) return;
+                      isEquipped ? store.unequipItem(slot) : store.equipItem(item as EquipmentItem);
+                    }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '9px 12px', borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s',
+                      padding: '9px 12px', borderRadius: 8,
+                      cursor: isLocked ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s',
+                      opacity: isLocked ? 0.4 : 1,
                       background: isEquipped ? 'rgba(233,69,96,0.12)' : isRec ? 'rgba(251,191,36,0.05)' : 'rgba(255,255,255,0.02)',
-                      border: isEquipped ? '1px solid rgba(233,69,96,0.5)' : isRec ? '1px solid rgba(251,191,36,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                      border: isEquipped
+                        ? '1px solid rgba(233,69,96,0.5)'
+                        : isLocked
+                        ? '1px solid rgba(255,255,255,0.04)'
+                        : isRec
+                        ? '1px solid rgba(251,191,36,0.2)'
+                        : '1px solid rgba(255,255,255,0.06)',
                     }}>
 
-                    {/* Rec badge */}
+                    {/* Left icon */}
                     <div style={{ width: 28, textAlign: 'center', flexShrink: 0 }}>
-                      {isEquipped
+                      {isLocked
+                        ? <span style={{ fontSize: 13 }}>🔒</span>
+                        : isEquipped
                         ? <span style={{ color: '#e94560', fontSize: 14 }}>✓</span>
                         : isRec
                         ? <span style={{ color: '#fbbf24', fontSize: 10, fontWeight: 900 }}>★</span>
@@ -372,18 +437,25 @@ function EquipmentTab({ selectedClass }: { selectedClass: CharacterClass }) {
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ color: 'white', fontSize: 13, fontWeight: 600 }}>{item.name}</span>
-                        {isRec && !isEquipped && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ color: isLocked ? 'rgba(255,255,255,0.4)' : 'white', fontSize: 13, fontWeight: 600 }}>
+                          {item.name}
+                        </span>
+                        {isLocked && (
+                          <span style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 4 }}>
+                            Lv.{item.requiredLevel}
+                          </span>
+                        )}
+                        {!isLocked && isRec && !isEquipped && (
                           <span style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 4 }}>REC</span>
                         )}
                       </div>
-                      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, margin: 0, textTransform: 'capitalize' }}>
-                        {item.rarity}
+                      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, margin: 0, textTransform: 'capitalize' }}>
+                        {item.rarity}{item.allowedClasses.length > 0 ? ` · ${selectedClass} only` : ''}
                       </p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 8, flexShrink: 0, fontSize: 11 }}>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, fontSize: 11, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       {item.stats.attackBonus  > 0 && <span style={{ color: '#f87171' }}>+{item.stats.attackBonus}⚔️</span>}
                       {item.stats.defenseBonus > 0 && <span style={{ color: '#60a5fa' }}>+{item.stats.defenseBonus}🛡️</span>}
                       {item.stats.hpBonus      > 0 && <span style={{ color: '#4ade80' }}>+{item.stats.hpBonus}❤️</span>}
@@ -403,49 +475,74 @@ function EquipmentTab({ selectedClass }: { selectedClass: CharacterClass }) {
 
 function StatsTab() {
   const store = useCharacterStore();
-  const { character } = useGameStore();
+  const { character, player } = useGameStore();
   const stats = store.getCalculatedStats();
   const base = CLASS_BASE_STATS[store.selectedClass];
+  const cls = store.selectedClass;
+  const gain = CLASS_STAT_GAIN[cls];
+
+  // Determine display level for selected class
+  const cp = player?.characterProgress?.[cls];
+  const isCurrentClass = character?.class === cls;
+  const displayLevel = (isCurrentClass ? character?.level : cp?.level) ?? 1;
+  const levelsAboveBase = displayLevel - 1;
 
   const rows = [
-    { icon: '❤️', label: 'Max HP',  base: base.maxHP,   final: stats.maxHP,   max: 200, color: '#4ade80' },
-    { icon: '⚔️', label: 'Attack',  base: base.attack,  final: stats.attack,  max: 50,  color: '#f87171' },
-    { icon: '🛡️', label: 'Defense', base: base.defense, final: stats.defense, max: 30,  color: '#60a5fa' },
-    { icon: '⚡', label: 'Speed',   base: base.speed,   final: stats.speed,   max: 20,  color: '#fbbf24' },
+    { icon: '❤️', label: 'Max HP',  base: base.maxHP,   eq: stats.maxHP,   final: stats.maxHP   + levelsAboveBase * gain.maxHP,   max: 250, color: '#4ade80', gainPer: gain.maxHP   },
+    { icon: '⚔️', label: 'Attack',  base: base.attack,  eq: stats.attack,  final: stats.attack  + levelsAboveBase * gain.attack,  max: 55,  color: '#f87171', gainPer: gain.attack  },
+    { icon: '🛡️', label: 'Defense', base: base.defense, eq: stats.defense, final: stats.defense + levelsAboveBase * gain.defense, max: 35,  color: '#60a5fa', gainPer: gain.defense },
+    { icon: '⚡', label: 'Speed',   base: base.speed,   eq: stats.speed,   final: stats.speed   + levelsAboveBase * gain.speed,   max: 35,  color: '#fbbf24', gainPer: gain.speed   },
   ];
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Base → Equipment bonus → Final</span>
-        {character && (
-          <span style={{ color: '#fbbf24', fontSize: 11, fontWeight: 700 }}>Lv.{character.level}</span>
-        )}
+        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Base → Equip → Level → Final</span>
+        <span style={{ color: '#fbbf24', fontSize: 11, fontWeight: 700 }}>Lv.{displayLevel}</span>
       </div>
       {rows.map((r) => {
-        const eqBonus = r.final - r.base;
+        const eqBonus  = r.eq - r.base;
+        const lvBonus  = levelsAboveBase * r.gainPer;
         return (
           <div key={r.label} style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>{r.icon}</span>
                 <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{r.label}</span>
+                {r.gainPer > 0 && (
+                  <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9 }}>+{r.gainPer}/Lv</span>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>{r.base}</span>
-                {eqBonus > 0 && <span style={{ color: r.color, fontSize: 11 }}>+{eqBonus}</span>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>{r.base}</span>
+                {eqBonus > 0 && <span style={{ color: r.color + 'aa', fontSize: 11 }}>+{eqBonus}⚔️</span>}
+                {lvBonus > 0 && <span style={{ color: '#fbbf24', fontSize: 11 }}>+{lvBonus}★</span>}
                 <span style={{ color: r.color, fontWeight: 800, fontSize: 14 }}>{r.final}</span>
               </div>
             </div>
             <div style={{ width: '100%', height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
               {/* Base bar */}
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: Math.min((r.base / r.max) * 100, 100) + '%', background: r.color + '55', borderRadius: 4 }} />
-              {/* Full bar */}
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: Math.min((r.base / r.max) * 100, 100) + '%', background: r.color + '33', borderRadius: 4 }} />
+              {/* Base + equipment bar */}
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: Math.min((r.eq / r.max) * 100, 100) + '%', background: r.color + '66', borderRadius: 4 }} />
+              {/* Full bar (base + equip + level) */}
               <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: Math.min((r.final / r.max) * 100, 100) + '%', background: r.color, borderRadius: 4, transition: 'width 0.4s ease' }} />
             </div>
           </div>
         );
       })}
+
+      {/* Per-level growth note */}
+      <div style={{ marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'rgba(251,191,36,0.06)', borderRadius: 8, border: '1px solid rgba(251,191,36,0.15)' }}>
+        <p style={{ color: 'rgba(251,191,36,0.7)', fontSize: 10, margin: 0, fontWeight: 600 }}>
+          ★ Level Growth ({cls.charAt(0).toUpperCase() + cls.slice(1)}):
+          {gain.maxHP > 0 ? ` +${gain.maxHP}HP` : ''}
+          {gain.attack > 0 ? ` +${gain.attack}ATK` : ''}
+          {gain.defense > 0 ? ` +${gain.defense}DEF` : ''}
+          {gain.speed > 0 ? ` +${gain.speed}SPD` : ''}
+          {' '}per level
+        </p>
+      </div>
 
       {/* Equipment summary */}
       <div style={{ marginTop: 16, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>

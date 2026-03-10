@@ -1,5 +1,13 @@
 import { create } from 'zustand';
 import type { Character, CharacterClass, CharacterColors, EquipmentItem, CharacterEquipment } from '../types/game.types';
+import { WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../utils/constants';
+
+function isItemAllowed(equipped: EquipmentItem | null, cls: CharacterClass, allItems: EquipmentItem[]): boolean {
+  if (!equipped) return true;
+  const def = allItems.find((i) => i.id === equipped.id);
+  if (!def) return true;
+  return def.allowedClasses.length === 0 || (def.allowedClasses as string[]).includes(cls);
+}
 
 // Class base stats
 export const CLASS_BASE_STATS = {
@@ -50,9 +58,17 @@ export const useCharacterStore = create<CharacterState>((set, get) => ({
 
   setCharacter: (character) => set({ character }),
 
-  setClass: (selectedClass) => set({
-    selectedClass,
-    selectedSkin: `${selectedClass}_blue`,
+  setClass: (selectedClass) => set((state) => {
+    // Auto-unequip items that don't allow the new class
+    const allItems = [...WEAPONS, ...ARMORS, ...HELMETS, ...ACCESSORIES] as EquipmentItem[];
+    const eq = state.equipment;
+    const newEquipment: CharacterEquipment = {
+      weapon:    isItemAllowed(eq.weapon,    selectedClass, allItems) ? eq.weapon    : null,
+      armor:     isItemAllowed(eq.armor,     selectedClass, allItems) ? eq.armor     : null,
+      head:      isItemAllowed(eq.head,      selectedClass, allItems) ? eq.head      : null,
+      accessory: isItemAllowed(eq.accessory, selectedClass, allItems) ? eq.accessory : null,
+    };
+    return { selectedClass, selectedSkin: `${selectedClass}_blue`, equipment: newEquipment };
   }),
 
   setSkin: (selectedSkin) => set({ selectedSkin }),

@@ -124,6 +124,19 @@ export function useBattle() {
       return;
     }
 
+    // Compute gross damage taken (sum of all HP decreases, heals excluded)
+    {
+      let grossDmg = 0;
+      let prevHP = battleState.heroHP;
+      for (const step of result.steps) {
+        if (step.heroHP !== undefined) {
+          if (step.heroHP < prevHP) grossDmg += prevHP - step.heroHP;
+          prevHP = step.heroHP;
+        }
+      }
+      battleStore.setTotalDamageTaken(grossDmg);
+    }
+
     // Apply final state
     battleStore.updateHeroHP(result.finalState.heroHP);
     battleStore.updateEnemyHP(result.finalState.enemyHP);
@@ -155,6 +168,7 @@ export function useBattle() {
     enemyMaxHP: battleStore.enemyMaxHP,
     battleLog: battleStore.battleLog,
     isExecuting: battleStore.isExecuting,
+    totalDamageTaken: battleStore.totalDamageTaken,
     startBattle,
     restartBattle,
     stopBattle,

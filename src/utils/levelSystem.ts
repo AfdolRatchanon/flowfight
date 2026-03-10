@@ -1,4 +1,4 @@
-import type { Character } from '../types/game.types';
+import type { Character, CharacterClass } from '../types/game.types';
 
 // Total XP required to reach each level (index = level number)
 export const LEVEL_XP_TABLE = [
@@ -17,8 +17,20 @@ export const LEVEL_XP_TABLE = [
 
 export const MAX_LEVEL = 10;
 
-// Stat gains per level up (per level)
-const STAT_GAIN = { maxHP: 10, attack: 2, defense: 1, speed: 1 };
+/**
+ * Stat gains per level — each class grows differently to reinforce its role.
+ *
+ * Knight    (TANK)        : +HP +DEF per level  — ทนดาเมจสูง
+ * Mage      (GLASS CANNON): +ATK per level       — ดาเมจสูงแต่บอบบาง
+ * Rogue     (SPEEDSTER)   : +SPD +ATK per level  — เร็วและคล่องแคล่ว
+ * Barbarian (BERSERKER)   : +HP +ATK per level   — พละกำลังดิบล้วน
+ */
+export const CLASS_STAT_GAIN: Record<CharacterClass, { maxHP: number; attack: number; defense: number; speed: number }> = {
+  knight:    { maxHP: 15, attack: 1, defense: 2, speed: 0 },
+  mage:      { maxHP:  8, attack: 3, defense: 0, speed: 1 },
+  rogue:     { maxHP:  8, attack: 2, defense: 0, speed: 2 },
+  barbarian: { maxHP: 18, attack: 2, defense: 1, speed: 0 },
+};
 
 export interface GainXPResult {
   newCharacter: Character;
@@ -38,14 +50,15 @@ export function gainXP(character: Character, xpGain: number): GainXPResult {
 
   const leveledUp = newLevel > character.level;
   const levelsGained = newLevel - character.level;
+  const gain = CLASS_STAT_GAIN[character.class];
 
   const newStats = leveledUp
     ? {
-        maxHP:     character.stats.maxHP     + levelsGained * STAT_GAIN.maxHP,
-        currentHP: character.stats.maxHP     + levelsGained * STAT_GAIN.maxHP, // full heal on level up
-        attack:    character.stats.attack    + levelsGained * STAT_GAIN.attack,
-        defense:   character.stats.defense   + levelsGained * STAT_GAIN.defense,
-        speed:     character.stats.speed     + levelsGained * STAT_GAIN.speed,
+        maxHP:     character.stats.maxHP     + levelsGained * gain.maxHP,
+        currentHP: character.stats.maxHP     + levelsGained * gain.maxHP, // full heal on level up
+        attack:    character.stats.attack    + levelsGained * gain.attack,
+        defense:   character.stats.defense   + levelsGained * gain.defense,
+        speed:     character.stats.speed     + levelsGained * gain.speed,
       }
     : character.stats;
 

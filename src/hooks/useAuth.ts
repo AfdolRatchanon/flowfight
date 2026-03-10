@@ -15,26 +15,29 @@ export function useAuth() {
           const profile = await getPlayerProfile(user.uid);
           if (profile) {
             setPlayer(profile);
-            // Restore character progress if previously saved
-            if (profile.characterProgress) {
-              const cp = profile.characterProgress;
-              const restoredChar: Character = {
-                id: `char_${user.uid}`,
-                playerId: user.uid,
-                name: cp.name ?? profile.username,
-                class: cp.class ?? 'knight',
-                level: cp.level,
-                experience: cp.experience,
-                stats: { maxHP: cp.maxHP, currentHP: cp.maxHP, attack: cp.attack, defense: cp.defense, speed: cp.speed },
-                appearance: { skinId: 'knight_blue', colors: { primary: '#1a1a2e', secondary: '#16213e', accent: '#e94560' } },
-                equipment: { weapon: null, armor: null, head: null, accessory: null },
-                gameMode: 'normal',
-                isAlive: true,
-                currentLevel: 1,
-                createdAt: Date.now(),
-                lastModified: Date.now(),
-              };
-              setCharacter(restoredChar);
+            // Restore character progress (per-class map format)
+            if (profile.characterProgress && profile.lastPlayedClass) {
+              const cp = profile.characterProgress[profile.lastPlayedClass];
+              if (cp) {
+                const cls = profile.lastPlayedClass;
+                const restoredChar: Character = {
+                  id: `char_${user.uid}_${cls}`,
+                  playerId: user.uid,
+                  name: cp.name ?? profile.username,
+                  class: cls,
+                  level: cp.level,
+                  experience: cp.experience,
+                  stats: { maxHP: cp.maxHP, currentHP: cp.maxHP, attack: cp.attack, defense: cp.defense, speed: cp.speed },
+                  appearance: { skinId: `${cls}_blue`, colors: { primary: '#1a1a2e', secondary: '#16213e', accent: '#e94560' } },
+                  equipment: { weapon: null, armor: null, head: null, accessory: null },
+                  gameMode: 'normal',
+                  isAlive: true,
+                  currentLevel: 1,
+                  createdAt: Date.now(),
+                  lastModified: Date.now(),
+                };
+                setCharacter(restoredChar);
+              }
             }
           } else {
             // Profile doesn't exist in Firestore yet — use Firebase Auth data as fallback

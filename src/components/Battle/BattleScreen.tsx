@@ -292,7 +292,7 @@ export default function BattleScreen() {
   const { levelId } = useParams<{ levelId: string }>();
   const navigate = useNavigate();
   const { character, player, setPlayer, setCharacter } = useGameStore();
-  const { status, heroHP, heroMaxHP, heroMana, heroMaxMana, enemyHP, enemyMaxHP, battleLog, isExecuting, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
+  const { status, heroHP, heroMaxHP, heroMana, heroMaxMana, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
   const { validationError, nodes: flowNodes, clearToStartEnd } = useFlowchartStore();
   const [speedIdx, setSpeedIdx] = useState(1);
   const progressSaved = useRef(false);
@@ -449,6 +449,22 @@ export default function BattleScreen() {
         const { newCharacter, leveledUp, oldLevel, newLevel } = gainXP(heroChar, xp);
         savedChar = newCharacter;
         setCharacter(newCharacter);
+        // sync player.characterProgress ใน store ให้เป็นปัจจุบัน (ป้องกัน stale ใน CharacterCustomizer)
+        if (player) {
+          setPlayer({
+            ...player,
+            characterProgress: {
+              ...player.characterProgress,
+              [newCharacter.class]: {
+                level: newCharacter.level, experience: newCharacter.experience,
+                maxHP: newCharacter.stats.maxHP, attack: newCharacter.stats.attack,
+                defense: newCharacter.stats.defense, speed: newCharacter.stats.speed,
+                class: newCharacter.class, name: newCharacter.name,
+              },
+            },
+            lastPlayedClass: newCharacter.class,
+          });
+        }
         if (leveledUp) {
           setLevelUpData({ oldLevel, newLevel, hpGain: (newLevel - oldLevel) * 10, atkGain: (newLevel - oldLevel) * 2 });
         }
@@ -459,8 +475,8 @@ export default function BattleScreen() {
         levelId:         level.id,
         levelNumber:     level.number,
         damageDealt:     Math.max(0, (level.enemy.stats.maxHP) - Math.max(0, enemyHP)),
-        damageTaken:     Math.max(0, heroMaxHP - heroHP),
-        timeMs:          battleStartTime.current > 0 ? Date.now() - battleStartTime.current : 0,
+        damageTaken:     totalDamageTaken,
+        timeMs:          battleStartTime.current > 0 ? (Date.now() - battleStartTime.current) * (speedIdx + 1) : 0,
         heroHPRemaining: Math.max(0, heroHP),
         heroMaxHP:       heroMaxHP,
       };

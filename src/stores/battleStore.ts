@@ -14,6 +14,8 @@ interface BattleState {
   battleLog: BattleLog[];
   isExecuting: boolean;
   currentNodeId: string | null;
+  /** Total raw damage taken from enemy (sum of every HP decrease, ignoring heals) */
+  totalDamageTaken: number;
 
   initBattle: (character: Character, enemy: Enemy, levelId: string) => void;
   setBattle: (battle: Battle | null) => void;
@@ -25,6 +27,7 @@ interface BattleState {
   setExecuting: (executing: boolean) => void;
   setCurrentNode: (nodeId: string | null) => void;
   incrementRound: () => void;
+  setTotalDamageTaken: (dmg: number) => void;
   resetBattle: () => void;
 }
 
@@ -41,6 +44,7 @@ export const useBattleStore = create<BattleState>((set) => ({
   battleLog: [],
   isExecuting: false,
   currentNodeId: null,
+  totalDamageTaken: 0,
 
   initBattle: (character, enemy, levelId) => {
     const newBattle: Battle = {
@@ -71,6 +75,7 @@ export const useBattleStore = create<BattleState>((set) => ({
 
   setBattle: (battle) => set({ battle }),
   setStatus: (status) => set({ status }),
+  setTotalDamageTaken: (totalDamageTaken) => set({ totalDamageTaken }),
   updateHeroHP: (hp) => set({ heroHP: Math.max(0, hp) }),
   updateEnemyHP: (hp) => set({ enemyHP: Math.max(0, hp) }),
   updateHeroMana: (mana) => set({ heroMana: Math.max(0, mana) }),
@@ -92,5 +97,6 @@ export const useBattleStore = create<BattleState>((set) => ({
     battleLog: [],
     isExecuting: false,
     currentNodeId: null,
+    totalDamageTaken: 0,
   }),
 }));
