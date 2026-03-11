@@ -6,7 +6,7 @@ import { useGameStore } from '../../stores/gameStore';
 import { useFlowchartStore } from '../../stores/flowchartStore';
 import { useShopStore } from '../../stores/shopStore';
 import ShopScreen from '../Shop/ShopScreen';
-import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry } from '../../services/authService';
+import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry, saveShopData } from '../../services/authService';
 import type { LevelBattleStats } from '../../services/authService';
 import { gainXP, levelProgressPct, xpToNextLevel, LEVEL_XP_TABLE, MAX_LEVEL } from '../../utils/levelSystem';
 import FlowchartEditor from '../FlowchartEditor/FlowchartEditor';
@@ -368,7 +368,7 @@ export default function BattleScreen() {
   const navigate = useNavigate();
   const { character, player, setPlayer, setCharacter } = useGameStore();
   const { status, heroHP, heroMaxHP, heroMana, heroMaxMana, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, heroBurnRounds, heroFreezeRounds, heroPoisonRounds, enemyStunnedRounds, healCharges, comboCount, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
-  const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold } = useShopStore();
+  const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold, addGold, purchasedEquipment } = useShopStore();
   const { validationError, nodes: flowNodes, clearToStartEnd } = useFlowchartStore();
   const [speedIdx, setSpeedIdx] = useState(1);
   const progressSaved = useRef(false);
@@ -566,7 +566,12 @@ export default function BattleScreen() {
       if (won) {
         // Award gold
         const earnedGold = (level.rewards as any).gold ?? 0;
-        if (earnedGold > 0) setGoldEarned(earnedGold);
+        if (earnedGold > 0) {
+          setGoldEarned(earnedGold);
+          addGold(earnedGold);
+          const newGold = shopGold + earnedGold;
+          saveShopData(player.id, newGold, purchasedEquipment).catch(() => {});
+        }
 
         const xp = level.rewards.experience;
         setXpGained(xp);
@@ -1264,6 +1269,17 @@ export default function BattleScreen() {
       {showShop && (
         <ShopScreen
           goldEarned={goldEarned}
+          characterClass={heroChar.class}
+          characterLevel={heroChar.level}
+          onRetry={() => {
+            setShowShop(false);
+            setGoldEarned(0);
+            setLevelUpData(null);
+            setXpGained(0);
+            setMissingBlocks([]);
+            progressSaved.current = false;
+            restartBattle(heroChar, level.enemy as any, level.id);
+          }}
           onClose={() => {
             setShowShop(false);
             setGoldEarned(0);

@@ -18,6 +18,7 @@ interface ShopState extends ShopInventory {
   applyInventory: (inv: ShopInventory) => void;
   buyEquipment: (itemId: string, cost: number) => boolean;
   hasEquipment: (itemId: string) => boolean;
+  initFromProfile: (gold: number, purchasedEquipment: string[]) => void;
   reset: () => void;
 }
 
@@ -60,6 +61,8 @@ export const useShopStore = create<ShopState>((set, get) => ({
   hasEquipment: (itemId) => {
     return get().purchasedEquipment.includes(itemId);
   },
+
+  initFromProfile: (gold, purchasedEquipment) => set({ gold, purchasedEquipment }),
 
   reset: () => set({ gold: 150, potions: 0, antidotes: 0, attackBonus: 0, purchasedEquipment: [] }),
 }));

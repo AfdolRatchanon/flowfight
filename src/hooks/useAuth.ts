@@ -2,10 +2,12 @@ import { useEffect } from 'react';
 import type { User } from 'firebase/auth';
 import { onAuthChange, getPlayerProfile } from '../services/authService';
 import { useGameStore } from '../stores/gameStore';
+import { useShopStore } from '../stores/shopStore';
 import type { Character } from '../types/game.types';
 
 export function useAuth() {
   const { player, setPlayer, setLoading, setCharacter } = useGameStore();
+  const initShop = useShopStore((s) => s.initFromProfile);
 
   useEffect(() => {
     setLoading(true);
@@ -19,6 +21,8 @@ export function useAuth() {
               profile.username = user.displayName ?? user.email?.split('@')[0] ?? 'Player';
             }
             setPlayer(profile);
+            // Restore shop data (gold + purchased equipment — shared across all classes)
+            initShop(profile.gold ?? 150, profile.purchasedEquipment ?? []);
             // Restore character progress (per-class map format)
             if (profile.characterProgress && profile.lastPlayedClass) {
               const cp = profile.characterProgress[profile.lastPlayedClass];

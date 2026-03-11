@@ -33,6 +33,10 @@ export interface Player {
   /** ความก้าวหน้าแยกต่อ class */
   characterProgress?: Partial<Record<CharacterClass, CharacterProgress>>;
   lastPlayedClass?: CharacterClass; // class ล่าสุดที่เลือก
+  /** เงิน (gold) — ใช้ร่วมกันทุก class */
+  gold?: number;
+  /** อุปกรณ์ที่ซื้อแล้ว — ใช้ร่วมกันทุก class */
+  purchasedEquipment?: string[];
   createdAt: number;
   lastActive: number;
   stats: PlayerStats;

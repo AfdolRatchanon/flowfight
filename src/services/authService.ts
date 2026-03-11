@@ -90,6 +90,8 @@ async function createPlayerProfile(user: User, fields: ProfileFields): Promise<v
     email: fields.email ?? user.email ?? '',
     isAnonymous: fields.isAnonymous ?? false,
     levelsCompleted: [],
+    gold: 150,
+    purchasedEquipment: [],
     createdAt: Date.now(),
     lastActive: Date.now(),
     stats: { totalKills: 0, totalDefeats: 0, levelReached: 1, totalPlayTime: 0 },
@@ -147,6 +149,11 @@ export async function saveCharacterProgress(uid: string, character: Character): 
     },
     lastPlayedClass: character.class,
   }, { merge: true });
+}
+
+export async function saveShopData(uid: string, gold: number, purchasedEquipment: string[]): Promise<void> {
+  const ref = doc(db, 'users', uid);
+  await setDoc(ref, { gold, purchasedEquipment }, { merge: true });
 }
 
 export async function saveLeaderboardEntry(

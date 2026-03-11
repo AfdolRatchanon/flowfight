@@ -6,7 +6,7 @@ import { useShopStore } from '../../stores/shopStore';
 import type { CharacterClass, EquipmentItem } from '../../types/game.types';
 import { WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../../utils/constants';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL, CLASS_STAT_GAIN } from '../../utils/levelSystem';
-import { saveCharacterProgress } from '../../services/authService';
+import { saveCharacterProgress, saveShopData } from '../../services/authService';
 import { useTheme } from '../../contexts/ThemeContext';
 
 // ===== Class definitions =====
@@ -356,6 +356,7 @@ const RARITY_COLOR: Record<string, string> = {
 function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: CharacterClass; displayLevel: number }) {
   const store = useCharacterStore();
   const shopStore = useShopStore();
+  const { player } = useGameStore();
   const { colors } = useTheme();
   const [flash, setFlash] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -367,8 +368,15 @@ function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: Characte
   function buyItem(item: EquipmentItem) {
     if (item.requiredLevel > displayLevel) { showFlash(`ต้องเป็น Lv.${item.requiredLevel} ก่อน`, false); return; }
     const ok = shopStore.buyEquipment(item.id, item.cost);
-    if (ok) showFlash(`ซื้อ ${item.name} สำเร็จ!`, true);
-    else showFlash(`เงินไม่พอ! ต้องการ ${item.cost}g (มี ${shopStore.gold}g)`, false);
+    if (ok) {
+      showFlash(`ซื้อ ${item.name} สำเร็จ!`, true);
+      if (player) {
+        const { gold, purchasedEquipment } = useShopStore.getState();
+        saveShopData(player.id, gold, purchasedEquipment).catch(() => {});
+      }
+    } else {
+      showFlash(`เงินไม่พอ! ต้องการ ${item.cost}g (มี ${shopStore.gold}g)`, false);
+    }
   }
 
   const ALL_BY_SLOT = {
