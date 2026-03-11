@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { LEVELS } from '../../utils/constants';
+import { LEVELS, ENDLESS_LEVEL } from '../../utils/constants';
 import { useGameStore } from '../../stores/gameStore';
+import { useShopStore } from '../../stores/shopStore';
 import { levelProgressPct, MAX_LEVEL } from '../../utils/levelSystem';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -17,6 +18,7 @@ export default function LevelSelect() {
   const navigate = useNavigate();
   const { player, character } = useGameStore();
   const { colors } = useTheme();
+  const shopStore = useShopStore();
   const completed = player?.levelsCompleted ?? [];
 
   // level_1 เปิดเสมอ, level_N เปิดเมื่อผ่าน level_{N-1}
@@ -36,6 +38,19 @@ export default function LevelSelect() {
               ผ่านแล้ว {completed.length}/{LEVELS.length} ด่าน
             </p>
           </div>
+          {/* Shop button */}
+          <button
+            onClick={() => navigate('/shop')}
+            style={{
+              background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.35)',
+              borderRadius: 12, padding: '8px 14px', cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            }}
+          >
+            <span style={{ fontSize: 20 }}>🏪</span>
+            <span style={{ color: '#fbbf24', fontSize: 11, fontWeight: 700 }}>{shopStore.gold}g</span>
+          </button>
+
           {/* Character mini-badge */}
           {character && (
             <div style={{
@@ -61,6 +76,48 @@ export default function LevelSelect() {
           )}
         </div>
         <div className="level-grid">
+          {/* Endless Mode Card */}
+          <div
+            onClick={() => navigate('/battle/' + ENDLESS_LEVEL.id)}
+            style={{
+              background: 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(239,68,68,0.08))',
+              border: '1px solid rgba(124,58,237,0.4)',
+              borderRadius: 16, padding: '20px 24px',
+              cursor: 'pointer', transition: 'all 0.2s', position: 'relative', overflow: 'hidden',
+              gridColumn: '1 / -1',
+            }}
+            onMouseEnter={(e) => {
+              const d = e.currentTarget as HTMLDivElement;
+              d.style.background = 'linear-gradient(135deg, rgba(124,58,237,0.22), rgba(239,68,68,0.14))';
+              d.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              const d = e.currentTarget as HTMLDivElement;
+              d.style.background = 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(239,68,68,0.08))';
+              d.style.transform = 'none';
+            }}
+          >
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#7c3aed,#e94560)', borderRadius: '16px 0 0 16px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div style={{ fontSize: 40, width: 52, textAlign: 'center' }}>∞</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ background: 'rgba(124,58,237,0.25)', color: '#c4b5fd', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, border: '1px solid rgba(124,58,237,0.5)' }}>
+                    ENDLESS
+                  </span>
+                  <span style={{ color: '#f59e0b', fontSize: 12 }}>★★★★★</span>
+                </div>
+                <h3 style={{ color: colors.text, fontWeight: 700, fontSize: 17, margin: '0 0 4px' }}>{ENDLESS_LEVEL.name}</h3>
+                <p style={{ color: colors.textSub, fontSize: 13, margin: 0 }}>{ENDLESS_LEVEL.description}</p>
+                <p style={{ color: '#7c3aed', fontSize: 12, marginTop: 4 }}>📚 {ENDLESS_LEVEL.concept}</p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ color: '#c4b5fd', fontSize: 13, fontWeight: 600, margin: '0 0 2px' }}>Wave × Score</p>
+                <p style={{ color: '#4ade80', fontSize: 12, margin: 0 }}>ไม่จำกัด</p>
+              </div>
+            </div>
+          </div>
+
           {LEVELS.map((level, i) => {
             const done    = completed.includes(level.id);
             const unlocked = isUnlocked(level.id, i);

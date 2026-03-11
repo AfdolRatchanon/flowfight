@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCharacterStore, CLASS_BASE_STATS } from '../../stores/characterStore';
 import { useGameStore } from '../../stores/gameStore';
+import { useShopStore } from '../../stores/shopStore';
 import type { CharacterClass, EquipmentItem } from '../../types/game.types';
 import { WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../../utils/constants';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL, CLASS_STAT_GAIN } from '../../utils/levelSystem';
 import { saveCharacterProgress } from '../../services/authService';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // ===== Class definitions =====
 const CLASS_INFO: Record<CharacterClass, {
@@ -38,15 +40,6 @@ const CLASS_INFO: Record<CharacterClass, {
   },
 };
 
-/** Returns the id of the best available item per slot (highest requiredLevel that is still unlocked) */
-function getBestAvailable(items: EquipmentItem[], cls: string, currentLevel: number): string | null {
-  const available = items.filter(
-    (i) => (i.allowedClasses.length === 0 || (i.allowedClasses as string[]).includes(cls)) && i.requiredLevel <= currentLevel
-  );
-  if (available.length === 0) return null;
-  return available.reduce((best, i) => i.requiredLevel > best.requiredLevel ? i : best).id;
-}
-
 // Equipment slot icons & labels
 const SLOT_META = {
   weapon:    { icon: '⚔️', label: 'Weapon' },
@@ -55,21 +48,21 @@ const SLOT_META = {
   accessory: { icon: '💍', label: 'Accessory' },
 };
 
-type Tab = 'class' | 'equipment' | 'stats';
-
-const CARD: React.CSSProperties = {
-  background: 'rgba(26,26,62,0.8)',
-  border: '1px solid rgba(124,58,237,0.2)',
-  borderRadius: 16,
-  padding: 16,
-};
+type Tab = 'class' | 'equipment' | 'shop' | 'stats';
 
 export default function CharacterCustomizer() {
   const [tab, setTab] = useState<Tab>('class');
   const navigate = useNavigate();
   const store = useCharacterStore();
   const { character, player, setCharacter, setPlayer } = useGameStore();
+  const { colors } = useTheme();
   const stats = store.getCalculatedStats();
+  const CARD: React.CSSProperties = {
+    background: colors.bgCard,
+    border: `1px solid ${colors.border}`,
+    borderRadius: 16,
+    padding: 16,
+  };
 
   const classInfo = CLASS_INFO[store.selectedClass];
 
@@ -143,25 +136,25 @@ export default function CharacterCustomizer() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 50%, #0d1a2e 100%)', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: colors.bgGrad, padding: 24 }}>
       <div style={{ maxWidth: 640, margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-          <button onClick={() => navigate('/')} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: 'white', width: 40, height: 40, borderRadius: 10, cursor: 'pointer', fontSize: 18 }}>←</button>
+          <button onClick={() => navigate('/')} style={{ background: colors.bgSurface, border: 'none', color: colors.text, width: 40, height: 40, borderRadius: 10, cursor: 'pointer', fontSize: 18 }}>←</button>
           <div style={{ flex: 1 }}>
-            <h1 style={{ color: 'white', fontWeight: 800, fontSize: 24, margin: 0 }}>Character</h1>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, margin: 0 }}>เลือก class · จัดอุปกรณ์</p>
+            <h1 style={{ color: colors.text, fontWeight: 800, fontSize: 24, margin: 0 }}>Character</h1>
+            <p style={{ color: colors.textMuted, fontSize: 13, margin: 0 }}>เลือก class · จัดอุปกรณ์</p>
           </div>
           {/* Current level badge (if exists) */}
           <div style={{ textAlign: 'center', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 12, padding: '8px 14px' }}>
             <div style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 900, fontSize: 22 }}>
               Lv.{displayLevel}
             </div>
-            <div style={{ width: 60, height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', margin: '4px auto 2px' }}>
+            <div style={{ width: 60, height: 4, background: colors.bgSurface, borderRadius: 2, overflow: 'hidden', margin: '4px auto 2px' }}>
               <div style={{ width: xpPct + '%', height: '100%', background: 'linear-gradient(90deg,#fbbf24,#f59e0b)', borderRadius: 2 }} />
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9 }}>
+            <div style={{ color: colors.textMuted, fontSize: 9 }}>
               {displayLevel >= MAX_LEVEL ? 'MAX' : `${xpLeft} XP`}
             </div>
           </div>
@@ -188,10 +181,10 @@ export default function CharacterCustomizer() {
               borderRadius: 20, letterSpacing: 1, marginBottom: 8,
             }}>{classInfo.tag}</div>
             {/* Name */}
-            <p style={{ color: 'white', fontWeight: 700, fontSize: 14, margin: '0 0 2px', textAlign: 'center' }}>
+            <p style={{ color: colors.text, fontWeight: 700, fontSize: 14, margin: '0 0 2px', textAlign: 'center' }}>
               {store.characterName || 'Hero'}
             </p>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: 0, textTransform: 'capitalize' }}>
+            <p style={{ color: colors.textMuted, fontSize: 12, margin: 0, textTransform: 'capitalize' }}>
               {store.selectedClass}
             </p>
           </div>
@@ -199,7 +192,7 @@ export default function CharacterCustomizer() {
           {/* Stats + name input */}
           <div style={{ ...CARD, flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, letterSpacing: 2, margin: 0 }}>STATS</p>
+              <p style={{ color: colors.textMuted, fontSize: 11, letterSpacing: 2, margin: 0 }}>STATS</p>
               {classProgress && (
                 <span style={{ color: '#fbbf24', fontSize: 11, fontWeight: 700 }}>+Lv bonus applied</span>
               )}
@@ -209,8 +202,8 @@ export default function CharacterCustomizer() {
             <StatBar icon="🛡️" label="DEF" value={stats.defense + (displayLevel - 1) * CLASS_STAT_GAIN[store.selectedClass].defense} max={35}  color="#60a5fa" />
             <StatBar icon="⚡" label="SPD" value={stats.speed   + (displayLevel - 1) * CLASS_STAT_GAIN[store.selectedClass].speed}   max={35}  color="#fbbf24" />
 
-            <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
-              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, margin: '0 0 3px' }}>💡 {classInfo.playstyle}</p>
+            <div style={{ marginTop: 12, padding: '8px 10px', background: colors.bgSurface, borderRadius: 8, border: `1px solid ${colors.borderSubtle}` }}>
+              <p style={{ color: colors.textMuted, fontSize: 10, margin: '0 0 3px' }}>💡 {classInfo.playstyle}</p>
             </div>
 
             <input
@@ -220,8 +213,8 @@ export default function CharacterCustomizer() {
               maxLength={20}
               placeholder="ชื่อตัวละคร"
               style={{
-                width: '100%', marginTop: 10, background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.15)', color: 'white',
+                width: '100%', marginTop: 10, background: colors.bgSurface,
+                border: `1px solid ${colors.border}`, color: colors.text,
                 borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none',
                 boxSizing: 'border-box',
               }}
@@ -230,17 +223,18 @@ export default function CharacterCustomizer() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 2, marginBottom: 14, background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 4 }}>
+        <div style={{ display: 'flex', gap: 2, marginBottom: 14, background: colors.bgSurface, borderRadius: 10, padding: 4 }}>
           {([
             { id: 'class',     label: '🎭 Class' },
             { id: 'equipment', label: '⚔️ Equip' },
+            { id: 'shop',      label: '🧪 Items' },
             { id: 'stats',     label: '📊 Stats' },
           ] as { id: Tab; label: string }[]).map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
               fontWeight: 600, fontSize: 12, transition: 'all 0.2s',
               background: tab === t.id ? 'linear-gradient(135deg, #e94560, #7c3aed)' : 'transparent',
-              color: tab === t.id ? 'white' : 'rgba(255,255,255,0.4)',
+              color: tab === t.id ? 'white' : colors.textSub,
             }}>{t.label}</button>
           ))}
         </div>
@@ -249,6 +243,7 @@ export default function CharacterCustomizer() {
         <div style={CARD}>
           {tab === 'class'     && <ClassTab />}
           {tab === 'equipment' && <EquipmentTab selectedClass={store.selectedClass} displayLevel={displayLevel} />}
+          {tab === 'shop'      && <EquipmentShopTab selectedClass={store.selectedClass} displayLevel={displayLevel} />}
           {tab === 'stats'     && <StatsTab />}
         </div>
 
@@ -270,13 +265,14 @@ export default function CharacterCustomizer() {
 // ===== Sub-components =====
 
 function StatBar({ icon, label, value, max, color }: { icon: string; label: string; value: number; max: number; color: string }) {
+  const { colors } = useTheme();
   const pct = Math.min((value / max) * 100, 100);
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
         <span style={{ fontSize: 12 }}>{icon}</span>
-        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, width: 28 }}>{label}</span>
-        <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+        <span style={{ color: colors.textSub, fontSize: 12, width: 28 }}>{label}</span>
+        <div style={{ flex: 1, height: 6, background: colors.bgSurface, borderRadius: 3, overflow: 'hidden' }}>
           <div style={{ width: pct + '%', height: '100%', background: color, borderRadius: 3, transition: 'width 0.4s ease' }} />
         </div>
         <span style={{ color, fontWeight: 700, fontSize: 12, width: 28, textAlign: 'right' }}>{value}</span>
@@ -287,6 +283,7 @@ function StatBar({ icon, label, value, max, color }: { icon: string; label: stri
 
 function ClassTab() {
   const store = useCharacterStore();
+  const { colors } = useTheme();
   const ORDER: CharacterClass[] = ['knight', 'mage', 'rogue', 'barbarian'];
 
   return (
@@ -298,15 +295,15 @@ function ClassTab() {
         return (
           <button key={cls} onClick={() => store.setClass(cls)} style={{
             padding: 14, borderRadius: 12, cursor: 'pointer', textAlign: 'left',
-            background: selected ? `${info.tagColor}18` : 'rgba(255,255,255,0.03)',
-            border: selected ? `2px solid ${info.tagColor}` : '2px solid rgba(255,255,255,0.07)',
+            background: selected ? `${info.tagColor}18` : colors.bgSurface,
+            border: selected ? `2px solid ${info.tagColor}` : `2px solid ${colors.borderSubtle}`,
             transition: 'all 0.2s', display: 'flex', flexDirection: 'column', gap: 4,
           }}>
             {/* Icon + tag */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
               <span style={{ fontSize: 28 }}>{info.icon}</span>
               <div>
-                <p style={{ color: 'white', fontWeight: 800, fontSize: 14, margin: 0 }}>{info.label}</p>
+                <p style={{ color: colors.text, fontWeight: 800, fontSize: 14, margin: 0 }}>{info.label}</p>
                 <span style={{
                   background: info.tagColor + '30', color: info.tagColor,
                   fontSize: 8, fontWeight: 900, padding: '1px 6px', borderRadius: 4, letterSpacing: 0.5,
@@ -323,7 +320,7 @@ function ClassTab() {
             </div>
 
             {/* Lore */}
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, margin: '4px 0 0', lineHeight: 1.4 }}>
+            <p style={{ color: colors.textMuted, fontSize: 10, margin: '4px 0 0', lineHeight: 1.4 }}>
               {info.lore}
             </p>
 
@@ -340,10 +337,11 @@ function ClassTab() {
 }
 
 function MiniStatBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const { colors } = useTheme();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 8, width: 22 }}>{label}</span>
-      <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+      <span style={{ color: colors.textMuted, fontSize: 8, width: 22 }}>{label}</span>
+      <div style={{ flex: 1, height: 4, background: colors.bgSurface, borderRadius: 2, overflow: 'hidden' }}>
         <div style={{ width: Math.min((value / max) * 100, 100) + '%', height: '100%', background: color, borderRadius: 2 }} />
       </div>
       <span style={{ color, fontSize: 8, fontWeight: 700, width: 16, textAlign: 'right' }}>{value}</span>
@@ -351,115 +349,174 @@ function MiniStatBar({ label, value, max, color }: { label: string; value: numbe
   );
 }
 
+const RARITY_COLOR: Record<string, string> = {
+  common: '#94a3b8', uncommon: '#4ade80', rare: '#60a5fa', epic: '#a78bfa', legendary: '#fbbf24',
+};
+
 function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: CharacterClass; displayLevel: number }) {
   const store = useCharacterStore();
+  const shopStore = useShopStore();
+  const { colors } = useTheme();
+  const [flash, setFlash] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  function showFlash(msg: string, ok: boolean) {
+    setFlash({ msg, ok });
+    setTimeout(() => setFlash(null), 1800);
+  }
+
+  function buyItem(item: EquipmentItem) {
+    if (item.requiredLevel > displayLevel) { showFlash(`ต้องเป็น Lv.${item.requiredLevel} ก่อน`, false); return; }
+    const ok = shopStore.buyEquipment(item.id, item.cost);
+    if (ok) showFlash(`ซื้อ ${item.name} สำเร็จ!`, true);
+    else showFlash(`เงินไม่พอ! ต้องการ ${item.cost}g (มี ${shopStore.gold}g)`, false);
+  }
 
   const ALL_BY_SLOT = {
-    weapon:    WEAPONS,
-    armor:     ARMORS,
-    head:      HELMETS,
-    accessory: ACCESSORIES,
+    weapon: WEAPONS, armor: ARMORS, head: HELMETS, accessory: ACCESSORIES,
   } as const;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: 400, overflowY: 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 430, overflowY: 'auto' }}>
+      {/* Gold sticky bar */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '7px 12px', background: 'rgba(251,191,36,0.08)',
+        border: '1px solid rgba(251,191,36,0.2)', borderRadius: 10,
+        position: 'sticky', top: 0, zIndex: 1,
+      }}>
+        <span style={{ color: colors.textMuted, fontSize: 10 }}>ซื้อและใส่อุปกรณ์ได้ในที่เดียว</span>
+        <span style={{ color: '#fbbf24', fontSize: 15, fontWeight: 900 }}>💰 {shopStore.gold}g</span>
+      </div>
+
+      {flash && (
+        <div style={{
+          background: flash.ok ? 'rgba(22,163,74,0.15)' : 'rgba(239,68,68,0.15)',
+          border: `1px solid ${flash.ok ? '#16a34a' : '#ef4444'}88`,
+          borderRadius: 8, padding: '7px 14px',
+          color: flash.ok ? '#4ade80' : '#fca5a5', fontSize: 12, fontWeight: 600, textAlign: 'center',
+        }}>{flash.ok ? '✅ ' : '❌ '}{flash.msg}</div>
+      )}
+
       {(Object.entries(ALL_BY_SLOT) as [keyof typeof ALL_BY_SLOT, EquipmentItem[]][]).map(([slot, items]) => {
         const meta = SLOT_META[slot];
-
-        // Filter: only items usable by this class (allowedClasses empty = all)
         const classItems = (items as EquipmentItem[]).filter(
-          (item) => item.allowedClasses.length === 0 || (item.allowedClasses as string[]).includes(selectedClass)
+          (i) => i.allowedClasses.length === 0 || (i.allowedClasses as string[]).includes(selectedClass)
         );
 
-        // Best-in-slot = highest requiredLevel item that is unlocked right now
-        const bestId = getBestAvailable(classItems, selectedClass, displayLevel);
-
-        // Sort: available first (by level desc), then locked (by required level asc)
+        // All items for this slot — owned (purchased) ones first, then by level
         const sorted = [...classItems].sort((a, b) => {
-          const aLocked = a.requiredLevel > displayLevel ? 1 : 0;
-          const bLocked = b.requiredLevel > displayLevel ? 1 : 0;
-          if (aLocked !== bLocked) return aLocked - bLocked;
-          if (!aLocked) return b.requiredLevel - a.requiredLevel; // unlocked: best first
-          return a.requiredLevel - b.requiredLevel;               // locked: lowest level first
+          const aOwned = shopStore.hasEquipment(a.id) ? 0 : 1;
+          const bOwned = shopStore.hasEquipment(b.id) ? 0 : 1;
+          if (aOwned !== bOwned) return aOwned - bOwned;
+          return a.requiredLevel - b.requiredLevel;
         });
+
+        // Best equippable = highest-level owned item that is unlocked
+        const ownedUnlocked = classItems.filter((i) => shopStore.hasEquipment(i.id) && i.requiredLevel <= displayLevel);
+        const bestId = ownedUnlocked.length > 0
+          ? ownedUnlocked.reduce((b, i) => i.requiredLevel > b.requiredLevel ? i : b).id
+          : null;
 
         return (
           <div key={slot}>
-            {/* Slot header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 14 }}>{meta.icon}</span>
-              <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700, fontSize: 12 }}>{meta.label}</span>
+              <span style={{ color: colors.textSub, fontWeight: 700, fontSize: 12 }}>{meta.label}</span>
               {store.equipment[slot] && (
                 <span style={{ marginLeft: 'auto', color: '#e94560', fontSize: 10, cursor: 'pointer' }}
                   onClick={() => store.unequipItem(slot)}>✕ ถอด</span>
               )}
             </div>
 
-            {/* Items in slot */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {sorted.map((item) => {
-                const isEquipped = store.equipment[slot]?.id === item.id;
-                const isRec     = item.id === bestId && !isEquipped;
-                const isLocked  = item.requiredLevel > displayLevel;
+                const isPurchased = shopStore.hasEquipment(item.id);
+                const isEquipped  = store.equipment[slot]?.id === item.id;
+                const isLevelLock = item.requiredLevel > displayLevel;
+                const isRec       = item.id === bestId && !isEquipped;
+                const canAfford   = shopStore.gold >= item.cost;
 
                 return (
-                  <div key={item.id}
-                    onClick={() => {
-                      if (isLocked) return;
-                      isEquipped ? store.unequipItem(slot) : store.equipItem(item as EquipmentItem);
-                    }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '9px 12px', borderRadius: 8,
-                      cursor: isLocked ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.15s',
-                      opacity: isLocked ? 0.4 : 1,
-                      background: isEquipped ? 'rgba(233,69,96,0.12)' : isRec ? 'rgba(251,191,36,0.05)' : 'rgba(255,255,255,0.02)',
-                      border: isEquipped
-                        ? '1px solid rgba(233,69,96,0.5)'
-                        : isLocked
-                        ? '1px solid rgba(255,255,255,0.04)'
-                        : isRec
-                        ? '1px solid rgba(251,191,36,0.2)'
-                        : '1px solid rgba(255,255,255,0.06)',
-                    }}>
-
-                    {/* Left icon */}
-                    <div style={{ width: 28, textAlign: 'center', flexShrink: 0 }}>
-                      {isLocked
-                        ? <span style={{ fontSize: 13 }}>🔒</span>
-                        : isEquipped
-                        ? <span style={{ color: '#e94560', fontSize: 14 }}>✓</span>
-                        : isRec
-                        ? <span style={{ color: '#fbbf24', fontSize: 10, fontWeight: 900 }}>★</span>
-                        : <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: 12 }}>○</span>
-                      }
+                  <div key={item.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '9px 12px', borderRadius: 8,
+                    opacity: isLevelLock ? 0.4 : 1,
+                    background: isEquipped
+                      ? 'rgba(233,69,96,0.12)'
+                      : isRec ? 'rgba(251,191,36,0.05)'
+                      : colors.bgSurface,
+                    border: isEquipped
+                      ? '1px solid rgba(233,69,96,0.4)'
+                      : isRec ? '1px solid rgba(251,191,36,0.2)'
+                      : `1px solid ${colors.borderSubtle}`,
+                  }}>
+                    {/* Status icon */}
+                    <div style={{ width: 24, textAlign: 'center', flexShrink: 0 }}>
+                      {isLevelLock  ? <span style={{ fontSize: 12 }}>🔒</span>
+                        : isEquipped ? <span style={{ color: '#e94560', fontSize: 14 }}>✓</span>
+                        : isRec      ? <span style={{ color: '#fbbf24', fontSize: 10, fontWeight: 900 }}>★</span>
+                        : isPurchased ? <span style={{ color: colors.textMuted, fontSize: 11 }}>○</span>
+                        :               <span style={{ color: colors.textMuted, fontSize: 11 }}>·</span>}
                     </div>
 
+                    {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <span style={{ color: isLocked ? 'rgba(255,255,255,0.4)' : 'white', fontSize: 13, fontWeight: 600 }}>
-                          {item.name}
-                        </span>
-                        {isLocked && (
-                          <span style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 4 }}>
-                            Lv.{item.requiredLevel}
-                          </span>
-                        )}
-                        {!isLocked && isRec && !isEquipped && (
-                          <span style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 4 }}>REC</span>
-                        )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>{item.name}</span>
+                        <span style={{ color: RARITY_COLOR[item.rarity] ?? '#94a3b8', fontSize: 8, fontWeight: 800, textTransform: 'uppercase' }}>{item.rarity}</span>
+                        {isLevelLock && <span style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 4 }}>Lv.{item.requiredLevel}</span>}
+                        {!isLevelLock && isRec && <span style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 4 }}>REC</span>}
                       </div>
-                      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, margin: 0, textTransform: 'capitalize' }}>
-                        {item.rarity}{item.allowedClasses.length > 0 ? ` · ${selectedClass} only` : ''}
-                      </p>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                        {item.stats.attackBonus  > 0 && <span style={{ color: '#f87171', fontSize: 10 }}>+{item.stats.attackBonus}⚔️</span>}
+                        {item.stats.defenseBonus > 0 && <span style={{ color: '#60a5fa', fontSize: 10 }}>+{item.stats.defenseBonus}🛡️</span>}
+                        {item.stats.hpBonus      > 0 && <span style={{ color: '#4ade80', fontSize: 10 }}>+{item.stats.hpBonus}❤️</span>}
+                        {item.stats.speedBonus   > 0 && <span style={{ color: '#fbbf24', fontSize: 10 }}>+{item.stats.speedBonus}⚡</span>}
+                      </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, fontSize: 11, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      {item.stats.attackBonus  > 0 && <span style={{ color: '#f87171' }}>+{item.stats.attackBonus}⚔️</span>}
-                      {item.stats.defenseBonus > 0 && <span style={{ color: '#60a5fa' }}>+{item.stats.defenseBonus}🛡️</span>}
-                      {item.stats.hpBonus      > 0 && <span style={{ color: '#4ade80' }}>+{item.stats.hpBonus}❤️</span>}
-                      {item.stats.speedBonus   > 0 && <span style={{ color: '#fbbf24' }}>+{item.stats.speedBonus}⚡</span>}
+                    {/* Action button */}
+                    <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                      {!isPurchased && !isLevelLock && (
+                        <span style={{ color: '#fbbf24', fontSize: 11, fontWeight: 800 }}>
+                          {item.cost}g
+                        </span>
+                      )}
+                      {!isPurchased ? (
+                        <button
+                          onClick={() => buyItem(item)}
+                          disabled={isLevelLock || !canAfford}
+                          style={{
+                            padding: '6px 12px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700,
+                            whiteSpace: 'nowrap', cursor: isLevelLock ? 'default' : 'pointer',
+                            background: isLevelLock ? 'rgba(255,255,255,0.04)'
+                              : canAfford ? 'linear-gradient(135deg,#f59e0b,#d97706)'
+                              : 'rgba(239,68,68,0.12)',
+                            color: isLevelLock ? 'rgba(255,255,255,0.2)'
+                              : canAfford ? 'white'
+                              : '#fca5a5',
+                          }}
+                        >
+                          {isLevelLock ? `🔒 Lv.${item.requiredLevel}` : canAfford ? 'ซื้อ' : 'ไม่พอ'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => isLevelLock ? undefined : isEquipped ? store.unequipItem(slot) : store.equipItem(item as EquipmentItem)}
+                          disabled={isLevelLock}
+                          style={{
+                            padding: '6px 12px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700,
+                            whiteSpace: 'nowrap', cursor: isLevelLock ? 'default' : 'pointer',
+                            background: isEquipped ? 'rgba(233,69,96,0.2)'
+                              : isLevelLock ? 'rgba(255,255,255,0.04)'
+                              : 'rgba(124,58,237,0.2)',
+                            color: isEquipped ? '#f87171'
+                              : isLevelLock ? 'rgba(255,255,255,0.2)'
+                              : '#a78bfa',
+                          }}
+                        >
+                          {isLevelLock ? `🔒 Lv.${item.requiredLevel}` : isEquipped ? 'ถอด' : 'ใส่'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -472,10 +529,125 @@ function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: Characte
   );
 }
 
+// Consumable catalog (same data as ShopPage but defined locally)
+const CONSUMABLES = [
+  { id: 'potion',   icon: '🧪', label: 'Health Potion', desc: 'ฟื้นฟู 30 HP ระหว่างการสู้รบ', price: 30, max: 5, color: '#16a34a' },
+  { id: 'antidote', icon: '💊', label: 'Antidote',       desc: 'รักษาสถานะ Burn/Poison/Freeze', price: 20, max: 5, color: '#059669' },
+  { id: 'scroll',   icon: '📜', label: 'Attack Scroll',  desc: '+5 ATK สำหรับการสู้รบถัดไป',    price: 50, max: 3, color: '#c2410c' },
+];
+
+// ===== Items Tab (Consumables only) =====
+function EquipmentShopTab({ selectedClass: _selectedClass, displayLevel: _displayLevel }: { selectedClass: CharacterClass; displayLevel: number }) {
+  const shopStore = useShopStore();
+  const { colors } = useTheme();
+  const [flash, setFlash] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  function showFlash(msg: string, ok: boolean) {
+    setFlash({ msg, ok });
+    setTimeout(() => setFlash(null), 1800);
+  }
+
+  function getOwned(id: string) {
+    if (id === 'potion') return shopStore.potions;
+    if (id === 'antidote') return shopStore.antidotes;
+    if (id === 'scroll') return Math.round(shopStore.attackBonus / 5);
+    return 0;
+  }
+
+  function buyCon(c: typeof CONSUMABLES[0]) {
+    const owned = getOwned(c.id);
+    if (owned >= c.max) { showFlash(`ถือได้สูงสุด ${c.max} ชิ้น`, false); return; }
+    if (shopStore.gold < c.price) { showFlash(`เงินไม่พอ! ต้องการ ${c.price}g`, false); return; }
+    shopStore.spendGold(c.price);
+    if (c.id === 'potion')   shopStore.setPotions(shopStore.potions + 1);
+    if (c.id === 'antidote') shopStore.setAntidotes(shopStore.antidotes + 1);
+    if (c.id === 'scroll')   shopStore.setAttackBonus(shopStore.attackBonus + 5);
+    showFlash(`ซื้อ ${c.label} สำเร็จ!`, true);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Gold bar */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '8px 12px', background: 'rgba(251,191,36,0.08)',
+        border: '1px solid rgba(251,191,36,0.2)', borderRadius: 10,
+      }}>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>🧪 {shopStore.potions}</span>
+          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>💊 {shopStore.antidotes}</span>
+          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>📜 +{shopStore.attackBonus}ATK</span>
+        </div>
+        <span style={{ color: '#fbbf24', fontSize: 15, fontWeight: 900 }}>💰 {shopStore.gold}g</span>
+      </div>
+
+      {flash && (
+        <div style={{
+          background: flash.ok ? 'rgba(22,163,74,0.15)' : 'rgba(239,68,68,0.15)',
+          border: `1px solid ${flash.ok ? '#16a34a' : '#ef4444'}88`,
+          borderRadius: 8, padding: '7px 14px',
+          color: flash.ok ? '#4ade80' : '#fca5a5', fontSize: 12, fontWeight: 600, textAlign: 'center',
+        }}>{flash.ok ? '✅ ' : '❌ '}{flash.msg}</div>
+      )}
+
+      {CONSUMABLES.map((c) => {
+        const owned = getOwned(c.id);
+        const full = owned >= c.max;
+        const poor = shopStore.gold < c.price;
+        const canBuy = !full && !poor;
+        return (
+          <div key={c.id} style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '12px 14px', borderRadius: 10,
+            background: colors.bgSurface, border: `1px solid ${colors.borderSubtle}`,
+          }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+              background: `${c.color}22`, border: `1px solid ${c.color}44`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+            }}>{c.icon}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: colors.text, fontSize: 14, fontWeight: 700 }}>{c.label}</span>
+                <span style={{ color: '#fbbf24', fontSize: 12, fontWeight: 800 }}>{c.price}g</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                <span style={{ color: colors.textMuted, fontSize: 11 }}>{c.desc}</span>
+              </div>
+              {/* Stock dots */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 5 }}>
+                {Array.from({ length: c.max }).map((_, i) => (
+                  <div key={i} style={{ width: 7, height: 7, borderRadius: 2, background: i < owned ? c.color : 'rgba(255,255,255,0.1)' }} />
+                ))}
+                <span style={{ color: colors.textMuted, fontSize: 10, marginLeft: 4 }}>{owned}/{c.max}</span>
+              </div>
+            </div>
+            <button onClick={() => buyCon(c)} disabled={!canBuy} style={{
+              padding: '8px 18px', borderRadius: 9, border: 'none', fontSize: 12, fontWeight: 700,
+              whiteSpace: 'nowrap', cursor: canBuy ? 'pointer' : 'not-allowed',
+              background: canBuy ? `linear-gradient(135deg,${c.color},${c.color}cc)` : 'rgba(255,255,255,0.05)',
+              color: canBuy ? 'white' : 'rgba(255,255,255,0.25)',
+            }}>
+              {full ? 'เต็มแล้ว' : poor ? 'ไม่พอ' : 'ซื้อ'}
+            </button>
+          </div>
+        );
+      })}
+
+      <div style={{ padding: '8px 12px', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.15)', borderRadius: 8 }}>
+        <p style={{ color: 'rgba(96,165,250,0.7)', fontSize: 10, margin: 0 }}>
+          💡 ของใช้สิ้นเปลืองจะพกติดตัวเข้าสู้รบ ใช้ได้จาก Flowchart ด้วย block <b>use_potion</b> / <b>use_antidote</b>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 
 function StatsTab() {
   const store = useCharacterStore();
   const { character, player } = useGameStore();
+  const { colors } = useTheme();
   const stats = store.getCalculatedStats();
   const base = CLASS_BASE_STATS[store.selectedClass];
   const cls = store.selectedClass;
@@ -497,7 +669,7 @@ function StatsTab() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Base → Equip → Level → Final</span>
+        <span style={{ color: colors.textMuted, fontSize: 11 }}>Base → Equip → Level → Final</span>
         <span style={{ color: '#fbbf24', fontSize: 11, fontWeight: 700 }}>Lv.{displayLevel}</span>
       </div>
       {rows.map((r) => {
@@ -508,19 +680,19 @@ function StatsTab() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>{r.icon}</span>
-                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{r.label}</span>
+                <span style={{ color: colors.textSub, fontSize: 13 }}>{r.label}</span>
                 {r.gainPer > 0 && (
-                  <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9 }}>+{r.gainPer}/Lv</span>
+                  <span style={{ color: colors.textMuted, fontSize: 9 }}>+{r.gainPer}/Lv</span>
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>{r.base}</span>
+                <span style={{ color: colors.textMuted, fontSize: 11 }}>{r.base}</span>
                 {eqBonus > 0 && <span style={{ color: r.color + 'aa', fontSize: 11 }}>+{eqBonus}⚔️</span>}
                 {lvBonus > 0 && <span style={{ color: '#fbbf24', fontSize: 11 }}>+{lvBonus}★</span>}
                 <span style={{ color: r.color, fontWeight: 800, fontSize: 14 }}>{r.final}</span>
               </div>
             </div>
-            <div style={{ width: '100%', height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+            <div style={{ width: '100%', height: 8, background: colors.bgSurface, borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
               {/* Base bar */}
               <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: Math.min((r.base / r.max) * 100, 100) + '%', background: r.color + '33', borderRadius: 4 }} />
               {/* Base + equipment bar */}
@@ -545,17 +717,17 @@ function StatsTab() {
       </div>
 
       {/* Equipment summary */}
-      <div style={{ marginTop: 16, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 6px', letterSpacing: 1 }}>EQUIPPED</p>
+      <div style={{ marginTop: 16, padding: '10px 12px', background: colors.bgSurface, borderRadius: 10, border: `1px solid ${colors.borderSubtle}` }}>
+        <p style={{ color: colors.textMuted, fontSize: 11, margin: '0 0 6px', letterSpacing: 1 }}>EQUIPPED</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {(Object.entries(SLOT_META) as [keyof typeof SLOT_META, typeof SLOT_META[keyof typeof SLOT_META]][]).map(([slot, meta]) => {
             const eq = store.equipment[slot];
             return (
               <div key={slot} style={{
                 padding: '4px 10px', borderRadius: 8, fontSize: 11,
-                background: eq ? 'rgba(233,69,96,0.12)' : 'rgba(255,255,255,0.04)',
-                border: eq ? '1px solid rgba(233,69,96,0.3)' : '1px solid rgba(255,255,255,0.06)',
-                color: eq ? 'white' : 'rgba(255,255,255,0.25)',
+                background: eq ? 'rgba(233,69,96,0.12)' : colors.bgSurface,
+                border: eq ? '1px solid rgba(233,69,96,0.3)' : `1px solid ${colors.borderSubtle}`,
+                color: eq ? colors.text : colors.textMuted,
               }}>
                 {meta.icon} {eq ? eq.name : `No ${meta.label}`}
               </div>

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LEVELS } from '../../utils/constants';
+import { LEVELS, ENDLESS_LEVEL, getEndlessWaveEnemy } from '../../utils/constants';
 import { useBattle } from '../../hooks/useBattle';
 import { useGameStore } from '../../stores/gameStore';
 import { useFlowchartStore } from '../../stores/flowchartStore';
+import { useShopStore } from '../../stores/shopStore';
+import ShopScreen from '../Shop/ShopScreen';
 import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry } from '../../services/authService';
 import type { LevelBattleStats } from '../../services/authService';
 import { gainXP, levelProgressPct, xpToNextLevel, LEVEL_XP_TABLE, MAX_LEVEL } from '../../utils/levelSystem';
@@ -286,18 +288,106 @@ function parseLogAction(action: string) {
   return { heroAnim: null, enemyAnim: null, enemyDmg: null, heroDmg: null, healAmt: null };
 }
 
+// ===== Tutorial hints per level (1-5) =====
+const TUTORIAL_HINTS: Record<string, string[]> = {
+  level_1: [
+    '1/3 — คลิก "Attack" ในแผง Blocks (ซ้ายมือ) เพื่อเพิ่ม block',
+    '2/3 — ลากปลายลูกศรจาก Start ไปยัง Attack แล้วต่อ Attack → End',
+    '3/3 — กด ▶ Play แล้วดูผลการต่อสู้!',
+  ],
+  level_2: [
+    '1/2 — วาง Attack 2 ตัวต่อกัน: Start → Attack → Attack → End',
+    '2/2 — ลองกด Step เพื่อดูทีละขั้นตอน',
+  ],
+  level_3: [
+    '1/3 — วาง "Enemy Alive?" แล้วเชื่อม Start → Enemy Alive?',
+    '2/3 — ช่อง YES → Attack → กลับไปที่ Enemy Alive? (สร้าง loop!)',
+    '3/3 — ช่อง NO → End (ออกจาก loop เมื่อชนะ)',
+  ],
+  level_4: [
+    '1/3 — วาง "HP < 50?" ไว้หลัง loop',
+    '2/3 — YES → Heal → กลับไป check',
+    '3/3 — NO → Attack → กลับไป check',
+  ],
+  level_5: [
+    '1/2 — ผสม condition loop + heal — เช็ค HP ทุกรอบ',
+    '2/2 — ลอง HP < 50? → YES: Heal, NO: Attack',
+  ],
+};
+
+function TutorialOverlay({ levelId, onClose }: { levelId: string; onClose: () => void }) {
+  const hints = TUTORIAL_HINTS[levelId];
+  const [step, setStep] = useState(0);
+  if (!hints) return null;
+  return (
+    <div style={{
+      position: 'absolute', bottom: 8, left: 8, zIndex: 20,
+      background: 'rgba(15,15,40,0.95)', border: '1px solid rgba(251,191,36,0.4)',
+      borderRadius: 12, padding: '10px 14px', maxWidth: 260,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ color: '#fbbf24', fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>💡 TUTORIAL</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 12, padding: 0 }}>✕</button>
+      </div>
+      <p style={{ color: '#fde68a', fontSize: 11, margin: '0 0 8px', lineHeight: 1.5 }}>
+        {hints[step]}
+      </p>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {step > 0 && (
+          <button onClick={() => setStep(s => s - 1)} style={{
+            flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+            color: '#cbd5e1', fontSize: 10, padding: '4px 0', borderRadius: 6, cursor: 'pointer',
+          }}>← ก่อนหน้า</button>
+        )}
+        {step < hints.length - 1 ? (
+          <button onClick={() => setStep(s => s + 1)} style={{
+            flex: 1, background: 'linear-gradient(135deg,#d97706,#b45309)',
+            border: 'none', color: 'white', fontSize: 10, padding: '4px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 700,
+          }}>ถัดไป →</button>
+        ) : (
+          <button onClick={onClose} style={{
+            flex: 1, background: 'linear-gradient(135deg,#16a34a,#15803d)',
+            border: 'none', color: 'white', fontSize: 10, padding: '4px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 700,
+          }}>เข้าใจแล้ว ✓</button>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 6 }}>
+        {hints.map((_, i) => (
+          <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i === step ? '#fbbf24' : 'rgba(255,255,255,0.2)' }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ===== Main Component =====
 export default function BattleScreen() {
   const { colors, theme } = useTheme();
   const { levelId } = useParams<{ levelId: string }>();
   const navigate = useNavigate();
   const { character, player, setPlayer, setCharacter } = useGameStore();
-  const { status, heroHP, heroMaxHP, heroMana, heroMaxMana, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
+  const { status, heroHP, heroMaxHP, heroMana, heroMaxMana, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, heroBurnRounds, heroFreezeRounds, heroPoisonRounds, enemyStunnedRounds, healCharges, comboCount, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
+  const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold } = useShopStore();
   const { validationError, nodes: flowNodes, clearToStartEnd } = useFlowchartStore();
   const [speedIdx, setSpeedIdx] = useState(1);
   const progressSaved = useRef(false);
   const battleStartTime = useRef<number>(0);
-  const level = LEVELS.find((l) => l.id === levelId);
+
+  // Shop state
+  const [showShop, setShowShop] = useState(false);
+  const [goldEarned, setGoldEarned] = useState(0);
+
+  // Endless Wave state
+  const isEndless = levelId === 'level_endless';
+  const [waveNumber, setWaveNumber] = useState(1);
+  const [endlessScore, setEndlessScore] = useState(0);
+  const [showWaveClear, setShowWaveClear] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(true);
+
+  const level = (isEndless
+    ? { ...ENDLESS_LEVEL, enemy: getEndlessWaveEnemy(waveNumber) }
+    : LEVELS.find((l) => l.id === levelId)) as (typeof LEVELS)[0] | undefined;
 
   // Animation state
   const [heroAnimKey, setHeroAnimKey] = useState(0);
@@ -311,6 +401,7 @@ export default function BattleScreen() {
   const [levelUpData, setLevelUpData] = useState<LevelUpData | null>(null);
   const [xpGained, setXpGained] = useState(0);
   const [missingBlocks, setMissingBlocks] = useState<string[]>([]);
+  const [showSimPreview, setShowSimPreview] = useState(true);
 
   // Shield: enemy shielded when required blocks are missing
   const isEnemyShielded = useMemo(() => {
@@ -351,14 +442,30 @@ export default function BattleScreen() {
     heroAttack:  character?.stats.attack  ?? 12,
     heroDefense: character?.stats.defense ?? 8,
     heroParry: 10,
-    enemyAttack:  level?.enemy.stats.attack  ?? 8,
-    enemyDefense: level?.enemy.stats.defense ?? 3,
-    enemyArmor:    (level?.enemy.stats as any)?.armor ?? 0,
-    enemyParry:    (level?.enemy.stats as any)?.parry ?? 0,
-    enemyShielded: isEnemyShielded,
-    shieldReason:  shieldMissing,
+    enemyAttack:      level?.enemy.stats.attack  ?? 8,
+    enemyBaseAttack:  level?.enemy.stats.attack  ?? 8,
+    enemyDefense:     level?.enemy.stats.defense ?? 3,
+    enemyArmor:       (level?.enemy.stats as any)?.armor ?? 0,
+    enemyParry:       (level?.enemy.stats as any)?.parry ?? 0,
+    enemyShielded:    isEnemyShielded,
+    shieldReason:     shieldMissing,
+    enemyEnraged:     false,
+    enrageThreshold:  (level?.enemy.stats as any)?.enrageThreshold ?? 0,
+    healCharges:      3,
+    powerStrikeCooldown: 0,
+    lastActionType:   '',
+    comboCount:       0,
+    heroBurnRounds:   0,
+    heroFreezeRounds: 0,
+    heroPoisonRounds: 0,
+    enemyStunnedRounds: 0,
+    enemyAilmentType:   (level?.enemy.stats as any)?.ailmentType  ?? '',
+    enemyAilmentChance: (level?.enemy.stats as any)?.ailmentChance ?? 0,
+    antidotes: shopAntidotes,
+    potions:   shopPotions,
+    gold:      shopGold,
     round: 1,
-  }), [level, character, heroMaxHP, heroMana, heroMaxMana, isEnemyShielded, shieldMissing]);
+  }), [level, character, heroMaxHP, heroMana, heroMaxMana, isEnemyShielded, shieldMissing, shopAntidotes, shopPotions, shopGold]);
 
   const flowPreview = useMemo(() => {
     if (status !== 'waiting' || validationError) return [];
@@ -413,10 +520,23 @@ export default function BattleScreen() {
     return () => clearTimeout(t);
   }, [battleLog.length]);
 
+  // Endless wave: on victory, show wave-clear overlay instead of normal flow
+  useEffect(() => {
+    if (isEndless && status === 'victory' && !progressSaved.current) {
+      progressSaved.current = true;
+      const score = waveNumber * Math.round((heroHP / heroMaxHP) * 100);
+      setEndlessScore((prev) => prev + score);
+      setShowWaveClear(true);
+    }
+  }, [isEndless, status]);
+
   // Save progress + award XP on battle end
   useEffect(() => {
     if ((status === 'victory' || status === 'defeat') && !progressSaved.current && player && level) {
       progressSaved.current = true;
+
+      // Skip normal save logic for endless mode
+      if (isEndless) return;
 
       // Check required blocks — if any are missing, don't count as victory
       let won = status === 'victory';
@@ -444,6 +564,10 @@ export default function BattleScreen() {
 
       let savedChar = heroChar;
       if (won) {
+        // Award gold
+        const earnedGold = (level.rewards as any).gold ?? 0;
+        if (earnedGold > 0) setGoldEarned(earnedGold);
+
         const xp = level.rewards.experience;
         setXpGained(xp);
         const { newCharacter, leveledUp, oldLevel, newLevel } = gainXP(heroChar, xp);
@@ -483,10 +607,12 @@ export default function BattleScreen() {
 
       savePlayerProgress(player.id, level.id, won).then((updated) => {
         if (updated) {
-          setPlayer(updated);
+          // merge username จาก store เพราะ Firestore อาจไม่มี field นี้
+          const mergedPlayer = { ...updated, username: updated.username ?? player.username };
+          setPlayer(mergedPlayer);
           if (won) {
-            saveLeaderboardEntry(updated, savedChar, battleStats).catch((e) => console.error('[Leaderboard] overall save error:', e));
-            saveLevelLeaderboardEntry(updated, savedChar, battleStats).catch((e) => console.error('[Leaderboard] level save error:', e));
+            saveLeaderboardEntry(mergedPlayer, savedChar, battleStats).catch((e) => console.error('[Leaderboard] overall save error:', e));
+            saveLevelLeaderboardEntry(mergedPlayer, savedChar, battleStats).catch((e) => console.error('[Leaderboard] level save error:', e));
           }
         }
       }).catch(() => {});
@@ -654,6 +780,46 @@ export default function BattleScreen() {
               </div>
               <p style={{ color: '#60a5fa', fontSize: 9, margin: '1px 0 0' }}>{heroMana}/{heroMaxMana} MP</p>
 
+              {/* Heal charges + Combo */}
+              <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 3, flexWrap: 'wrap' }}>
+                <span style={{
+                  background: healCharges > 0 ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${healCharges > 0 ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                  color: healCharges > 0 ? '#4ade80' : 'rgba(255,255,255,0.3)',
+                  fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                }}>💊 {healCharges}/3</span>
+                {comboCount >= 2 && (
+                  <span style={{
+                    background: 'rgba(251,191,36,0.2)', border: '1px solid rgba(251,191,36,0.5)',
+                    color: '#fbbf24', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4,
+                  }}>⚡ Combo x{comboCount + 1}</span>
+                )}
+              </div>
+
+              {/* Ailment badges */}
+              {(heroBurnRounds > 0 || heroFreezeRounds > 0 || heroPoisonRounds > 0) && (
+                <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 3 }}>
+                  {heroBurnRounds > 0 && (
+                    <span title={`Burn: ${heroBurnRounds} turns`} style={{
+                      background: 'rgba(220,38,38,0.25)', border: '1px solid rgba(220,38,38,0.5)',
+                      color: '#fca5a5', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    }}>🔥{heroBurnRounds}</span>
+                  )}
+                  {heroFreezeRounds > 0 && (
+                    <span title={`Freeze: ${heroFreezeRounds} turns`} style={{
+                      background: 'rgba(37,99,235,0.25)', border: '1px solid rgba(37,99,235,0.5)',
+                      color: '#93c5fd', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    }}>❄️{heroFreezeRounds}</span>
+                  )}
+                  {heroPoisonRounds > 0 && (
+                    <span title={`Poison: ${heroPoisonRounds} turns`} style={{
+                      background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.5)',
+                      color: '#c4b5fd', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    }}>🟣{heroPoisonRounds}</span>
+                  )}
+                </div>
+              )}
+
               {/* XP bar */}
               <XPBar pct={xpPct} />
               <p style={{ color: colors.textMuted, fontSize: 9, marginTop: 2 }}>
@@ -754,6 +920,12 @@ export default function BattleScreen() {
               <p style={{ color: enemyHP < enemyMaxHP * 0.3 ? '#ef4444' : '#f87171', fontSize: 11, marginTop: 3, fontWeight: 600 }}>
                 {enemyHP} / {enemyMaxHP} HP
               </p>
+              {enemyStunnedRounds > 0 && (
+                <span style={{
+                  background: 'rgba(251,191,36,0.2)', border: '1px solid rgba(251,191,36,0.5)',
+                  color: '#fbbf24', fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginTop: 3, display: 'inline-block',
+                }}>⚡ Stunned {enemyStunnedRounds}</span>
+              )}
             </div>
 
             {/* Floating damage/heal numbers */}
@@ -788,6 +960,24 @@ export default function BattleScreen() {
             }
           </div>
           )}
+
+          {/* Tutorial overlay for levels 1–5 */}
+          {showTutorial && TUTORIAL_HINTS[levelId ?? ''] && status === 'waiting' && (
+            <TutorialOverlay levelId={levelId!} onClose={() => setShowTutorial(false)} />
+          )}
+
+          {/* Endless wave badge */}
+          {isEndless && (
+            <div style={{
+              position: 'absolute', top: 8, right: 12, zIndex: 10,
+              background: 'linear-gradient(135deg,rgba(124,58,237,0.8),rgba(239,68,68,0.8))',
+              border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10,
+              padding: '4px 12px', textAlign: 'center',
+            }}>
+              <p style={{ color: 'white', fontSize: 11, fontWeight: 800, margin: 0 }}>WAVE {waveNumber}</p>
+              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, margin: 0 }}>Score: {endlessScore}</p>
+            </div>
+          )}
         </div>
 
         {/* ===== FLOWCHART SECTION ===== */}
@@ -796,7 +986,7 @@ export default function BattleScreen() {
           {/* ===== FLOWCHART EDITOR ===== */}
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ flex: 1, overflow: 'hidden' }}>
-              <FlowchartEditor allowedBlocks={(level as any).allowedBlocks} />
+              <FlowchartEditor key={level.id} allowedBlocks={(level as any).allowedBlocks} />
             </div>
             {/* Reset flowchart to Start + End only */}
             <div style={{ flexShrink: 0, padding: '6px 10px', borderTop: `1px solid ${colors.borderSubtle}`, display: 'flex', justifyContent: 'flex-end' }}>
@@ -813,36 +1003,94 @@ export default function BattleScreen() {
 
           {/* ===== PREVIEW SIDEBAR (vertical, right) ===== */}
           {flowPreview.length > 1 && status === 'waiting' && (
-            <div style={{
-              width: 165, flexShrink: 0,
-              background: colors.bg,
-              borderLeft: `1px solid ${colors.borderSubtle}`,
-              display: 'flex', flexDirection: 'column',
-              overflowY: 'auto',
-            }}>
-              {/* Header */}
-              <div style={{
-                padding: '7px 8px 6px',
-                borderBottom: `1px solid ${colors.borderSubtle}`,
-                flexShrink: 0,
-              }}>
-                <p style={{ color: colors.textSub, fontSize: 9, fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase', margin: 0 }}>
-                  Sim Preview
-                </p>
-                <p style={{ color: colors.textMuted, fontSize: 8, margin: '2px 0 0' }}>ประมาณการก่อนกด Play</p>
-              </div>
+            <>
+              {/* Toggle tab — always visible */}
+              <button
+                onClick={() => setShowSimPreview((v) => !v)}
+                title={showSimPreview ? 'ซ่อน Sim Preview' : 'แสดง Sim Preview'}
+                style={{
+                  flexShrink: 0, width: 14, border: 'none', cursor: 'pointer',
+                  background: colors.bgSurface,
+                  borderLeft: `1px solid ${colors.borderSubtle}`,
+                  color: colors.textMuted, fontSize: 9,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                {showSimPreview ? '▶' : '◀'}
+              </button>
 
-              {/* Steps — recursive renderer handles conditions/loops with both branches */}
-              <div style={{ padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {renderPreviewSteps(flowPreview, previewState.heroMaxHP, previewState.enemyMaxHP, colors)}
-              </div>
-            </div>
+              {/* Content */}
+              {showSimPreview && (
+                <div style={{
+                  width: 165, flexShrink: 0,
+                  background: colors.bg,
+                  display: 'flex', flexDirection: 'column',
+                  overflowY: 'auto',
+                }}>
+                  <div style={{ padding: '7px 8px 6px', borderBottom: `1px solid ${colors.borderSubtle}`, flexShrink: 0 }}>
+                    <p style={{ color: colors.textSub, fontSize: 9, fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase', margin: 0 }}>
+                      Sim Preview
+                    </p>
+                    <p style={{ color: colors.textMuted, fontSize: 8, margin: '2px 0 0' }}>ประมาณการก่อนกด Play</p>
+                  </div>
+                  <div style={{ padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {renderPreviewSteps(flowPreview, previewState.heroMaxHP, previewState.enemyMaxHP, colors)}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
         </div>
 
+        {/* ===== Endless Wave Clear Overlay ===== */}
+        {isEndless && showWaveClear && (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)',
+            backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 50,
+          }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #1a1a3e, #12122a)',
+              border: '1px solid rgba(124,58,237,0.45)',
+              borderRadius: 24, padding: '36px 48px', textAlign: 'center',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 60px rgba(124,58,237,0.15)',
+              animation: 'bounceIn 0.4s ease', minWidth: 320,
+            }}>
+              <div style={{ fontSize: 64, marginBottom: 8 }}>⚔️</div>
+              <h2 style={{ fontSize: 28, fontWeight: 800, margin: '0 0 8px', color: '#c4b5fd' }}>
+                Wave {waveNumber} Clear!
+              </h2>
+              <p style={{ color: '#a78bfa', margin: '0 0 4px', fontSize: 15 }}>
+                +{waveNumber * Math.round((heroHP / heroMaxHP) * 100)} pts
+              </p>
+              <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 24px', fontSize: 13 }}>
+                Total Score: {endlessScore}
+              </p>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button
+                  onClick={() => navigate('/levels')}
+                  style={{ padding: '12px 24px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontWeight: 600 }}>
+                  ← หยุดเล่น
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWaveClear(false);
+                    progressSaved.current = false;
+                    const nextWave = waveNumber + 1;
+                    setWaveNumber(nextWave);
+                    restartBattle(heroChar, getEndlessWaveEnemy(nextWave) as any, 'level_endless');
+                  }}
+                  style={{ padding: '12px 24px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: 'white', cursor: 'pointer', fontWeight: 700, fontSize: 15 }}>
+                  Wave {waveNumber + 1} →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ===== Result Overlay ===== */}
-        {(status === 'victory' || status === 'defeat') && (
+        {!isEndless && (status === 'victory' || status === 'defeat') && (
           <div style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)',
             backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
@@ -889,7 +1137,12 @@ export default function BattleScreen() {
 
               {status === 'victory' && (
                 <>
-                  <p style={{ color: '#4ade80', margin: '0 0 12px', fontSize: 15 }}>+{xpGained} XP earned!</p>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 12 }}>
+                    <p style={{ color: '#4ade80', margin: 0, fontSize: 15 }}>+{xpGained} XP</p>
+                    {goldEarned > 0 && (
+                      <p style={{ color: '#fbbf24', margin: 0, fontSize: 15 }}>+{goldEarned}💰</p>
+                    )}
+                  </div>
 
                   {/* Level-up banner */}
                   {levelUpData && (
@@ -975,12 +1228,19 @@ export default function BattleScreen() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 16 }}>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
                 <button
                   onClick={() => { setLevelUpData(null); setXpGained(0); setMissingBlocks([]); progressSaved.current = false; restartBattle(heroChar, level.enemy as any, level.id); }}
-                  style={{ padding: '12px 24px', borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.bgSurfaceHover, color: colors.text, cursor: 'pointer', fontWeight: 600 }}>
+                  style={{ padding: '12px 20px', borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.bgSurfaceHover, color: colors.text, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
                   ↺ Retry
                 </button>
+                {isRealVictory && (
+                  <button
+                    onClick={() => setShowShop(true)}
+                    style={{ padding: '12px 20px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#d97706,#b45309)', color: 'white', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                    🏪 Shop {goldEarned > 0 ? `(+${goldEarned}💰)` : ''}
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     if (status === 'victory') {
@@ -991,7 +1251,7 @@ export default function BattleScreen() {
                       navigate('/levels');
                     }
                   }}
-                  style={{ padding: '12px 24px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#e94560,#7c3aed)', color: 'white', cursor: 'pointer', fontWeight: 700 }}>
+                  style={{ padding: '12px 20px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#e94560,#7c3aed)', color: 'white', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
                   {status === 'victory' ? 'Next Level →' : '← Levels'}
                 </button>
               </div>
@@ -999,6 +1259,21 @@ export default function BattleScreen() {
           </div>
         )}
       </div>
+
+      {/* ===== Shop Overlay ===== */}
+      {showShop && (
+        <ShopScreen
+          goldEarned={goldEarned}
+          onClose={() => {
+            setShowShop(false);
+            setGoldEarned(0);
+            // Navigate to next level after shop
+            const currentIdx = LEVELS.findIndex(l => l.id === levelId);
+            const nextLevel = LEVELS[currentIdx + 1];
+            navigate(nextLevel ? `/battle/${nextLevel.id}` : '/levels');
+          }}
+        />
+      )}
     </>
   );
 }

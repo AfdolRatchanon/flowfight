@@ -172,9 +172,20 @@ export interface Level {
 // ===========================
 
 export type FlowNodeType = 'start' | 'end' | 'action' | 'condition' | 'loop' | 'operator';
-export type ActionType = 'attack' | 'heal' | 'dodge' | 'cast_spell' | 'use_item' | 'power_strike';
-export type ConditionType = 'hp_greater' | 'hp_less' | 'enemy_alive' | 'enemy_close';
+export type ActionType =
+  | 'attack' | 'heal' | 'dodge' | 'cast_spell' | 'use_item' | 'power_strike'
+  // Battle consumables
+  | 'use_antidote' | 'use_potion'
+  // Shop actions
+  | 'buy_potion' | 'buy_antidote' | 'buy_scroll' | 'save_gold';
+export type ConditionType =
+  | 'hp_greater' | 'hp_less' | 'mana_greater' | 'mana_less' | 'enemy_alive' | 'enemy_close'
+  // Ailment conditions
+  | 'hero_burning' | 'hero_poisoned' | 'hero_frozen' | 'enemy_stunned'
+  // Shop conditions
+  | 'gold_greater' | 'gold_less';
 export type LoopType = 'repeat' | 'while_alive' | 'while_hp';
+export type AilmentType = 'burn' | 'freeze' | 'poison' | 'stun';
 
 export interface FlowNodeData {
   label: string;
@@ -212,6 +223,14 @@ export interface ExecutionStep {
   heroHP?: number;   // HP หลังจาก step นี้รัน (สำหรับ real-time update)
   enemyHP?: number;
   heroMana?: number; // Mana หลังจาก step นี้รัน
+  // Balance / ailment state per step (for UI display)
+  heroBurnRounds?: number;
+  heroFreezeRounds?: number;
+  heroPoisonRounds?: number;
+  enemyStunnedRounds?: number;
+  healCharges?: number;
+  comboCount?: number;
+  gold?: number;
 }
 
 export interface FlowchartData {

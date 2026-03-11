@@ -13,7 +13,6 @@ import type { Connection, Edge, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowchartStore } from '../../stores/flowchartStore';
 import type { FlowNode, FlowEdge, FlowNodeType } from '../../types/game.types';
-import BlockPalette from './BlockPalette';
 import StartNode from './CustomNodes/StartNode';
 import EndNode from './CustomNodes/EndNode';
 import ActionNode from './CustomNodes/ActionNode';
@@ -30,15 +29,47 @@ const nodeTypes = {
   loop: LoopNode,
 };
 
-const ALL_BLOCKS: { type: FlowNodeType; label: string; icon: string; data: Record<string, any>; color: string; description: string }[] = [
-  { type: 'action',    label: 'Attack',       icon: '⚔️', data: { actionType: 'attack' },                      color: '#3b82f6', description: 'โจมตีศัตรู' },
-  { type: 'action',    label: 'Heal',          icon: '💚', data: { actionType: 'heal' },                        color: '#22c55e', description: 'ฟื้นฟู HP' },
-  { type: 'action',    label: 'Dodge',         icon: '🌀', data: { actionType: 'dodge' },                       color: '#3b82f6', description: 'หลบการโจมตี' },
-  { type: 'action',    label: 'Cast Spell',    icon: '✨', data: { actionType: 'cast_spell' },                  color: '#3b82f6', description: 'เวทมนตร์ (25 Mana)' },
-  { type: 'action',    label: 'Power Strike',  icon: '💥', data: { actionType: 'power_strike' },                color: '#7c3aed', description: 'โจมตีหนัก 2x (20 Mana)' },
-  { type: 'condition', label: 'HP < 50?',      icon: '◇',  data: { conditionType: 'hp_less', threshold: 50 },  color: '#d97706', description: 'ตรวจ HP น้อยกว่า 50' },
-  { type: 'condition', label: 'HP > 50?',      icon: '◇',  data: { conditionType: 'hp_greater', threshold: 50 },color: '#d97706', description: 'ตรวจ HP มากกว่า 50' },
-  { type: 'condition', label: 'Enemy Alive?',  icon: '◇',  data: { conditionType: 'enemy_alive' },              color: '#d97706', description: 'ศัตรูยังมีชีวิตอยู่?' },
+// ── Submenu data ──────────────────────────────────────────────────────────────
+const ACTION_GROUPS = [
+  {
+    label: 'COMBAT',
+    items: [
+      { type: 'attack',       icon: '⚔️', label: 'Attack' },
+      { type: 'power_strike', icon: '💥', label: 'Power Strike' },
+      { type: 'dodge',        icon: '🌀', label: 'Dodge' },
+      { type: 'cast_spell',   icon: '✨', label: 'Cast Spell' },
+    ],
+  },
+  {
+    label: 'SUPPORT',
+    items: [
+      { type: 'heal',         icon: '💚', label: 'Heal' },
+      { type: 'use_potion',   icon: '🧪', label: 'Use Potion' },
+      { type: 'use_antidote', icon: '💊', label: 'Use Antidote' },
+    ],
+  },
+];
+
+const CONDITION_GROUPS = [
+  {
+    label: 'HP / MP',
+    items: [
+      { type: 'hp_less',      icon: '❤️',  label: 'HP < 50?',  conditionType: 'hp_less',      threshold: 50 },
+      { type: 'hp_greater',   icon: '❤️',  label: 'HP > 50?',  conditionType: 'hp_greater',   threshold: 50 },
+      { type: 'mana_less',    icon: '💙', label: 'MP < 25?',  conditionType: 'mana_less',    threshold: 25 },
+      { type: 'mana_greater', icon: '💙', label: 'MP > 25?',  conditionType: 'mana_greater', threshold: 25 },
+    ],
+  },
+  {
+    label: 'STATUS',
+    items: [
+      { type: 'enemy_alive',   icon: '☠️', label: 'Enemy Alive?',  conditionType: 'enemy_alive' },
+      { type: 'hero_burning',  icon: '🔥', label: 'Burning?',       conditionType: 'hero_burning' },
+      { type: 'hero_poisoned', icon: '🟣', label: 'Poisoned?',      conditionType: 'hero_poisoned' },
+      { type: 'hero_frozen',   icon: '❄️', label: 'Frozen?',        conditionType: 'hero_frozen' },
+      { type: 'enemy_stunned', icon: '⚡', label: 'Enemy Stunned?', conditionType: 'enemy_stunned' },
+    ],
+  },
 ];
 
 function getEdgeType(sourceHandle: string | null | undefined): string {
@@ -60,11 +91,15 @@ type CtxMenu = {
   x: number; y: number;
 } | null;
 
+type SubmenuKind = 'process' | 'decision' | 'change_action' | 'change_condition' | null;
+
+const MENU_W = 200; // main menu width
+
 interface FlowchartEditorProps {
   allowedBlocks?: string[];
 }
 
-export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps = {}) {
+export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: FlowchartEditorProps = {}) {
   const storeNodes = useFlowchartStore((s) => s.nodes);
   const storeEdges = useFlowchartStore((s) => s.edges);
   const store = useFlowchartStore();
@@ -73,7 +108,8 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
   const [nodes, setNodes, onNodesChange] = useNodesState(storeNodes as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges as Edge[]);
   const [ctxMenu, setCtxMenu] = useState<CtxMenu>(null);
-  const ctxRef = useRef<HTMLDivElement>(null);
+  const [submenu, setSubmenu] = useState<SubmenuKind>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rfInstance = useRef<any>(null);
 
@@ -83,14 +119,16 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
   // Close menu on outside click or Escape
   useEffect(() => {
     if (!ctxMenu) return;
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setCtxMenu(null); }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeAll(); }
     function onMouseDown(e: MouseEvent) {
-      if (ctxRef.current && !ctxRef.current.contains(e.target as HTMLElement)) setCtxMenu(null);
+      if (menuRef.current && !menuRef.current.contains(e.target as HTMLElement)) closeAll();
     }
     document.addEventListener('keydown', onKey);
     document.addEventListener('mousedown', onMouseDown);
     return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onMouseDown); };
   }, [ctxMenu]);
+
+  function closeAll() { setCtxMenu(null); setSubmenu(null); }
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -116,7 +154,7 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
         markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: strokeColor },
         style: { stroke: strokeColor, strokeWidth: 2 },
         labelStyle: { fill: strokeColor, fontWeight: 800, fontSize: 11 },
-        labelBgStyle: { fill: '#08080f', fillOpacity: 0.9 },
+        labelBgStyle: { fill: colors.rfBg, fillOpacity: 0.95 },
         labelBgPadding: [4, 2] as [number, number],
         labelBgBorderRadius: 4,
       };
@@ -124,11 +162,10 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
       const updatedEdges = addEdge(newEdge, storeEdges as Edge[]);
       store.setEdges(updatedEdges as FlowEdge[]);
     },
-    [storeEdges, store]
+    [storeEdges, store],
   );
 
   function onNodesChangeHandler(changes: any) {
-    // Block deletion of start/end nodes
     const filtered = changes.map((c: any) => {
       if (c.type === 'remove') {
         const node = storeNodes.find((n) => n.id === c.id);
@@ -162,63 +199,84 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
     }
   }
 
-  function addBlock(type: FlowNodeType, label: string, data: Record<string, any> = {}, screenPos?: { x: number; y: number }) {
+  // Add a brand-new node at the clicked position
+  function addBlock(type: FlowNodeType, data: Record<string, any>, screenPos?: { x: number; y: number }) {
     const id = `${type}_${Date.now()}`;
     let position = { x: 180 + Math.random() * 160, y: 80 + Math.random() * 140 };
     if (screenPos && rfInstance.current && wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect();
       position = rfInstance.current.project({ x: screenPos.x - rect.left, y: screenPos.y - rect.top });
     }
-    const newNode: FlowNode = { id, type, position, data: { label, ...data } } as FlowNode;
-    store.setNodes([...storeNodes, newNode]);
-    setCtxMenu(null);
+    store.setNodes([...storeNodes, { id, type, position, data } as FlowNode]);
+    closeAll();
+  }
+
+  // Change an existing node's action type
+  function changeAction(nodeId: string, actionType: string, label: string) {
+    store.setNodes(
+      storeNodes.map((n) =>
+        n.id !== nodeId ? n : { ...n, data: { ...n.data, actionType, label } },
+      ) as FlowNode[],
+    );
+    closeAll();
+  }
+
+  // Change an existing node's condition type
+  function changeCondition(nodeId: string, patch: Record<string, any>) {
+    store.setNodes(
+      storeNodes.map((n) =>
+        n.id !== nodeId ? n : { ...n, data: { ...n.data, ...patch } },
+      ) as FlowNode[],
+    );
+    closeAll();
   }
 
   function copyNode(id: string) {
     const src = storeNodes.find((n) => n.id === id);
     if (!src) return;
     const newId = `${src.type}_${Date.now()}`;
-    const copy: FlowNode = {
-      ...src,
-      id: newId,
-      position: { x: src.position.x + 40, y: src.position.y + 40 },
-      data: { ...src.data },
-    } as FlowNode;
-    store.setNodes([...storeNodes, copy]);
-    setCtxMenu(null);
+    store.setNodes([...storeNodes, { ...src, id: newId, position: { x: src.position.x + 40, y: src.position.y + 40 }, data: { ...src.data } } as FlowNode]);
+    closeAll();
   }
 
   function deleteNode(id: string) {
     store.setNodes(storeNodes.filter((n) => n.id !== id) as FlowNode[]);
     store.setEdges(storeEdges.filter((e) => e.source !== id && e.target !== id) as FlowEdge[]);
-    setCtxMenu(null);
+    closeAll();
   }
 
   function deleteEdge(id: string) {
     store.setEdges(storeEdges.filter((e) => e.id !== id) as FlowEdge[]);
-    setCtxMenu(null);
+    closeAll();
   }
 
-  const visibleBlocks = allowedBlocks && allowedBlocks.length > 0
-    ? ALL_BLOCKS.filter((b) => {
-        if (b.type === 'action') return allowedBlocks.includes(b.data?.actionType ?? '');
-        if (b.type === 'condition') return allowedBlocks.includes('condition');
-        return true;
-      })
-    : ALL_BLOCKS;
-
-  // Clamp popup position so it doesn't overflow viewport
-  function clamp(x: number, y: number, w: number, h: number) {
+  // Clamp so menu doesn't overflow viewport
+  function clampPos(x: number, y: number, w: number, h: number) {
     return {
       left: Math.min(x, window.innerWidth - w - 8),
       top:  Math.min(y, window.innerHeight - h - 8),
     };
   }
 
+  // Which node is selected (for change-action/condition)
+  const selectedNodeId = ctxMenu?.kind === 'node' ? ctxMenu.id : null;
+  const selectedNode = selectedNodeId ? storeNodes.find((n) => n.id === selectedNodeId) : null;
+  const isActionNode    = selectedNode?.type === 'action';
+  const isConditionNode = selectedNode?.type === 'condition';
+
+  // Submenu content
+  const showSubmenu = submenu !== null;
+  const submenuGroups =
+    submenu === 'process' || submenu === 'change_action'   ? ACTION_GROUPS
+    : submenu === 'decision' || submenu === 'change_condition' ? CONDITION_GROUPS
+    : null;
+
+  // Position the main menu
+  const menuX = ctxMenu ? ctxMenu.x + 6 : 0;
+  const menuY = ctxMenu ? ctxMenu.y + 6 : 0;
+
   return (
     <div style={{ display: 'flex', height: '100%' }}>
-      <BlockPalette onAddBlock={addBlock} allowedBlocks={allowedBlocks} />
-
       <div ref={wrapperRef} style={{ flex: 1, position: 'relative' }}>
         <ReactFlow
           onInit={(instance) => { rfInstance.current = instance; }}
@@ -228,6 +286,7 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
           onEdgesChange={onEdgesChangeHandler}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
+          proOptions={{ hideAttribution: true }}
           connectionLineType={ConnectionLineType.Step}
           connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 2, strokeDasharray: '5,3' }}
           fitView
@@ -237,97 +296,152 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
           deleteKeyCode="Delete"
           snapToGrid
           snapGrid={[16, 16]}
-          style={{ background: '#08080f' }}
+          style={{ background: colors.rfBg }}
           onNodeClick={(e, node) => {
             e.stopPropagation();
+            if ((e.target as HTMLElement).closest('button')) return;
+            setSubmenu(null);
             setCtxMenu({ kind: 'node', x: e.clientX, y: e.clientY, id: node.id, label: (node.data as any).label ?? node.type ?? '', nodeType: node.type ?? '' });
           }}
           onEdgeClick={(e, edge) => {
             e.stopPropagation();
+            setSubmenu(null);
             setCtxMenu({ kind: 'edge', x: e.clientX, y: e.clientY, id: edge.id });
           }}
           onPaneClick={(e) => {
-            if (ctxMenu) { setCtxMenu(null); return; }
+            if (ctxMenu) { closeAll(); return; }
             setCtxMenu({ kind: 'pane', x: e.clientX, y: e.clientY });
           }}
         >
-          <Background variant={BackgroundVariant.Lines} color="#111120" gap={16} />
+          <Background variant={BackgroundVariant.Lines} color={colors.border} gap={16} />
           <Controls style={{ background: '#1a1a3e', border: '1px solid rgba(255,255,255,0.1)' }} />
         </ReactFlow>
 
-        {/* Context Menu Popup */}
+        {/* ── Context Menu ─────────────────────────────────────────────────── */}
         {ctxMenu && (
-          <div
-            ref={ctxRef}
-            style={{
+          <div ref={menuRef} style={{ position: 'fixed', zIndex: 10000 }}>
+
+            {/* Main menu */}
+            <div style={{
               position: 'fixed',
-              ...clamp(
-                ctxMenu.x + 6,
-                ctxMenu.y + 6,
-                ctxMenu.kind === 'pane' ? 180 : 160,
-                ctxMenu.kind === 'pane' ? visibleBlocks.length * 38 + 48 : 120,
-              ),
-              zIndex: 10000,
+              ...clampPos(menuX, menuY, MENU_W, 200),
               background: colors.bgCard,
               border: `1px solid ${colors.border}`,
               borderRadius: 10,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
-              minWidth: ctxMenu.kind === 'pane' ? 180 : 160,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              minWidth: MENU_W,
               overflow: 'hidden',
-            }}
-          >
-            {/* Node menu */}
-            {ctxMenu.kind === 'node' && (
-              <>
-                <div style={{ padding: '8px 12px', borderBottom: `1px solid ${colors.borderSubtle}` }}>
-                  <p style={{ margin: 0, color: colors.textSub, fontSize: 11, fontWeight: 700 }}>{ctxMenu.label}</p>
-                </div>
-                {ctxMenu.nodeType !== 'start' && ctxMenu.nodeType !== 'end' && (
-                  <>
-                    <CtxButton label="📋 คัดลอก node นี้" color={colors.text} onClick={() => copyNode(ctxMenu.id)} colors={colors} />
-                    <CtxButton label="🗑 ลบ node นี้" color="#f87171" onClick={() => deleteNode(ctxMenu.id)} colors={colors} />
-                  </>
-                )}
-              </>
-            )}
+            }}>
+              {/* ── Pane menu ── */}
+              {ctxMenu.kind === 'pane' && (
+                <>
+                  <MenuHeader label="เพิ่ม Block" colors={colors} />
+                  <SubMenuItem
+                    icon="▭" label="Process" desc="โจมตี / ฮีล / หลบ" color="#3b82f6"
+                    active={submenu === 'process'}
+                    onEnter={() => setSubmenu('process')}
+                    colors={colors}
+                  />
+                  <SubMenuItem
+                    icon="◇" label="Decision" desc="เงื่อนไข YES / NO" color="#d97706"
+                    active={submenu === 'decision'}
+                    onEnter={() => setSubmenu('decision')}
+                    colors={colors}
+                  />
+                </>
+              )}
 
-            {/* Edge menu */}
-            {ctxMenu.kind === 'edge' && (
-              <>
-                <div style={{ padding: '8px 12px', borderBottom: `1px solid ${colors.borderSubtle}` }}>
-                  <p style={{ margin: 0, color: colors.textSub, fontSize: 11, fontWeight: 700 }}>เส้นเชื่อม</p>
-                </div>
-                <CtxButton label="🗑 ลบเส้นนี้" color="#f87171" onClick={() => deleteEdge(ctxMenu.id)} colors={colors} />
-              </>
-            )}
+              {/* ── Node menu ── */}
+              {ctxMenu.kind === 'node' && (
+                <>
+                  <MenuHeader label={ctxMenu.label} colors={colors} />
+                  {ctxMenu.nodeType !== 'start' && ctxMenu.nodeType !== 'end' && (
+                    <>
+                      {isActionNode && (
+                        <SubMenuItem
+                          icon="🔄" label="เปลี่ยน Action" color={colors.text}
+                          active={submenu === 'change_action'}
+                          onEnter={() => setSubmenu('change_action')}
+                          colors={colors}
+                        />
+                      )}
+                      {isConditionNode && (
+                        <SubMenuItem
+                          icon="🔄" label="เปลี่ยน Condition" color={colors.text}
+                          active={submenu === 'change_condition'}
+                          onEnter={() => setSubmenu('change_condition')}
+                          colors={colors}
+                        />
+                      )}
+                      <div style={{ height: 1, background: colors.borderSubtle, margin: '2px 0' }} />
+                      <PlainMenuItem label="📋 คัดลอก" color={colors.text} onClick={() => copyNode(ctxMenu.id)} onEnter={() => setSubmenu(null)} colors={colors} />
+                      <PlainMenuItem label="🗑 ลบ" color="#f87171" onClick={() => deleteNode(ctxMenu.id)} onEnter={() => setSubmenu(null)} colors={colors} />
+                    </>
+                  )}
+                </>
+              )}
 
-            {/* Pane menu — add blocks */}
-            {ctxMenu.kind === 'pane' && (
-              <>
-                <div style={{ padding: '8px 12px', borderBottom: `1px solid ${colors.borderSubtle}` }}>
-                  <p style={{ margin: 0, color: colors.textSub, fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>เพิ่ม Block</p>
-                </div>
-                {visibleBlocks.map((b, i) => (
-                  <button
-                    key={i}
-                    onClick={() => addBlock(b.type, b.label, b.data, { x: ctxMenu.x, y: ctxMenu.y })}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      width: '100%', padding: '7px 12px', border: 'none', background: 'transparent',
-                      cursor: 'pointer', textAlign: 'left',
-                    }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = colors.bgSurfaceHover; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-                  >
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: b.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 13 }}>{b.icon}</span>
-                    <div>
-                      <p style={{ margin: 0, color: colors.text, fontSize: 12, fontWeight: 600 }}>{b.label}</p>
-                      <p style={{ margin: 0, color: colors.textMuted, fontSize: 10 }}>{b.description}</p>
+              {/* ── Edge menu ── */}
+              {ctxMenu.kind === 'edge' && (
+                <>
+                  <MenuHeader label="เส้นเชื่อม" colors={colors} />
+                  <PlainMenuItem label="🗑 ลบเส้นนี้" color="#f87171" onClick={() => deleteEdge(ctxMenu.id)} onEnter={() => setSubmenu(null)} colors={colors} />
+                </>
+              )}
+            </div>
+
+            {/* ── Submenu panel ── */}
+            {showSubmenu && submenuGroups && (
+              <div style={{
+                position: 'fixed',
+                ...clampPos(menuX + MENU_W + 4, menuY, 200, 400),
+                background: colors.bgCard,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 10,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                minWidth: 200,
+                overflow: 'hidden',
+              }}>
+                {submenuGroups.map((group) => (
+                  <div key={group.label}>
+                    {/* Group header */}
+                    <div style={{ padding: '6px 12px 3px', fontSize: 9, fontWeight: 800, color: colors.textMuted, letterSpacing: 1 }}>
+                      {group.label}
                     </div>
-                  </button>
+                    {group.items.map((item) => (
+                      <button
+                        key={item.type}
+                        onClick={() => {
+                          if (submenu === 'process' && ctxMenu?.kind === 'pane') {
+                            addBlock('action', { actionType: item.type, label: item.label }, { x: ctxMenu.x, y: ctxMenu.y });
+                          } else if (submenu === 'decision' && ctxMenu?.kind === 'pane') {
+                            const cond = item as any;
+                            addBlock('condition', { conditionType: cond.conditionType, label: item.label, threshold: cond.threshold ?? 50 }, { x: ctxMenu.x, y: ctxMenu.y });
+                          } else if (submenu === 'change_action' && selectedNodeId) {
+                            changeAction(selectedNodeId, item.type, item.label);
+                          } else if (submenu === 'change_condition' && selectedNodeId) {
+                            const cond = item as any;
+                            changeCondition(selectedNodeId, { conditionType: cond.conditionType, label: item.label, threshold: cond.threshold ?? 50 });
+                          }
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          width: '100%', padding: '8px 14px',
+                          border: 'none', background: 'transparent',
+                          cursor: 'pointer', textAlign: 'left',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = colors.bgSurfaceHover; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                      >
+                        <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>{item.label}</span>
+                      </button>
+                    ))}
+                    {/* Group separator */}
+                    <div style={{ height: 1, background: colors.borderSubtle, margin: '2px 0' }} />
+                  </div>
                 ))}
-              </>
+              </div>
             )}
           </div>
         )}
@@ -336,8 +450,48 @@ export default function FlowchartEditor({ allowedBlocks }: FlowchartEditorProps 
   );
 }
 
-function CtxButton({ label, color, onClick, colors }: {
-  label: string; color: string; onClick: () => void; colors: ThemeColors;
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function MenuHeader({ label, colors }: { label: string; colors: ThemeColors }) {
+  return (
+    <div style={{ padding: '8px 12px', borderBottom: `1px solid ${colors.borderSubtle}` }}>
+      <p style={{ margin: 0, color: colors.textSub, fontSize: 11, fontWeight: 700 }}>{label}</p>
+    </div>
+  );
+}
+
+/** Menu item that opens a submenu on hover (shows › arrow) */
+function SubMenuItem({
+  icon, label, desc, color, active, onEnter, colors,
+}: {
+  icon: string; label: string; desc?: string; color: string;
+  active: boolean; onEnter: () => void; colors: ThemeColors;
+}) {
+  return (
+    <button
+      onMouseEnter={onEnter}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        width: '100%', padding: '9px 12px',
+        border: 'none', cursor: 'pointer', textAlign: 'left',
+        background: active ? colors.bgSurfaceHover : 'transparent',
+      }}
+    >
+      <span style={{ fontSize: 14, color, width: 18, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>{label}</div>
+        {desc && <div style={{ color: colors.textMuted, fontSize: 10 }}>{desc}</div>}
+      </div>
+      <span style={{ color: colors.textMuted, fontSize: 12 }}>›</span>
+    </button>
+  );
+}
+
+/** Simple menu item — no submenu */
+function PlainMenuItem({
+  label, color, onClick, onEnter, colors,
+}: {
+  label: string; color: string; onClick: () => void; onEnter: () => void; colors: ThemeColors;
 }) {
   return (
     <button
@@ -347,7 +501,7 @@ function CtxButton({ label, color, onClick, colors }: {
         border: 'none', background: 'transparent', cursor: 'pointer',
         textAlign: 'left', color, fontWeight: 600, fontSize: 13,
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = colors.bgSurfaceHover; }}
+      onMouseEnter={(e) => { onEnter(); (e.currentTarget as HTMLButtonElement).style.background = colors.bgSurfaceHover; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
     >
       {label}

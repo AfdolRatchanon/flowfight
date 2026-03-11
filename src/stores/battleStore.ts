@@ -16,6 +16,13 @@ interface BattleState {
   currentNodeId: string | null;
   /** Total raw damage taken from enemy (sum of every HP decrease, ignoring heals) */
   totalDamageTaken: number;
+  // Balance + ailment display state (updated per step during execution)
+  heroBurnRounds: number;
+  heroFreezeRounds: number;
+  heroPoisonRounds: number;
+  enemyStunnedRounds: number;
+  healCharges: number;
+  comboCount: number;
 
   initBattle: (character: Character, enemy: Enemy, levelId: string) => void;
   setBattle: (battle: Battle | null) => void;
@@ -28,6 +35,9 @@ interface BattleState {
   setCurrentNode: (nodeId: string | null) => void;
   incrementRound: () => void;
   setTotalDamageTaken: (dmg: number) => void;
+  setAilments: (a: { burn: number; freeze: number; poison: number; enemyStun: number }) => void;
+  setHealCharges: (n: number) => void;
+  setComboCount: (n: number) => void;
   resetBattle: () => void;
 }
 
@@ -45,6 +55,12 @@ export const useBattleStore = create<BattleState>((set) => ({
   isExecuting: false,
   currentNodeId: null,
   totalDamageTaken: 0,
+  heroBurnRounds: 0,
+  heroFreezeRounds: 0,
+  heroPoisonRounds: 0,
+  enemyStunnedRounds: 0,
+  healCharges: 3,
+  comboCount: 0,
 
   initBattle: (character, enemy, levelId) => {
     const newBattle: Battle = {
@@ -83,6 +99,9 @@ export const useBattleStore = create<BattleState>((set) => ({
   setExecuting: (isExecuting) => set({ isExecuting }),
   setCurrentNode: (currentNodeId) => set({ currentNodeId }),
   incrementRound: () => set((state) => ({ currentRound: state.currentRound + 1 })),
+  setAilments: (a) => set({ heroBurnRounds: a.burn, heroFreezeRounds: a.freeze, heroPoisonRounds: a.poison, enemyStunnedRounds: a.enemyStun }),
+  setHealCharges: (healCharges) => set({ healCharges }),
+  setComboCount: (comboCount) => set({ comboCount }),
 
   resetBattle: () => set({
     battle: null,
@@ -98,5 +117,11 @@ export const useBattleStore = create<BattleState>((set) => ({
     isExecuting: false,
     currentNodeId: null,
     totalDamageTaken: 0,
+    heroBurnRounds: 0,
+    heroFreezeRounds: 0,
+    heroPoisonRounds: 0,
+    enemyStunnedRounds: 0,
+    healCharges: 3,
+    comboCount: 0,
   }),
 }));

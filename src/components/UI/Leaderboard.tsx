@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../services/firebaseService';
 import { useGameStore } from '../../stores/gameStore';
+import { useTheme } from '../../contexts/ThemeContext';
 import type { LeaderboardEntry, LevelLeaderboardEntry } from '../../types/game.types';
 import { LEVELS } from '../../utils/constants';
 
@@ -34,17 +35,19 @@ function fmtTime(ms: number) {
 }
 
 function RankBadge({ rank }: { rank: number }) {
+  const { colors } = useTheme();
   if (rank === 1) return <span style={{ fontSize: 22 }}>🥇</span>;
   if (rank === 2) return <span style={{ fontSize: 22 }}>🥈</span>;
   if (rank === 3) return <span style={{ fontSize: 22 }}>🥉</span>;
-  return <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, fontSize: 15 }}>#{rank}</span>;
+  return <span style={{ color: colors.textMuted, fontWeight: 800, fontSize: 15 }}>#{rank}</span>;
 }
 
 function CharAvatar({ cls }: { cls: string }) {
+  const { colors } = useTheme();
   return (
     <div style={{
       width: 40, height: 40, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
-      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+      background: colors.bgSurface, border: `1px solid ${colors.border}`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <img src={`/characters/${cls}.png`} alt={cls}
@@ -73,6 +76,7 @@ const LEVEL_SORTS: { key: LevelSort; label: string; icon: string; asc: boolean }
 export default function Leaderboard() {
   const navigate = useNavigate();
   const { player } = useGameStore();
+  const { colors } = useTheme();
 
   // Tab: 'overall' | 'level'
   const [tab, setTab] = useState<'overall' | 'level'>('overall');
@@ -170,12 +174,12 @@ export default function Leaderboard() {
         {/* ===== Header ===== */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
           <button onClick={() => navigate('/')} style={{
-            background: 'rgba(255,255,255,0.06)', border: 'none',
-            color: 'white', width: 40, height: 40, borderRadius: 10, cursor: 'pointer', fontSize: 18,
+            background: colors.bgSurface, border: 'none',
+            color: colors.text, width: 40, height: 40, borderRadius: 10, cursor: 'pointer', fontSize: 18,
           }}>←</button>
           <div style={{ flex: 1 }}>
-            <h1 style={{ color: 'white', fontWeight: 800, fontSize: 24, margin: 0 }}>Leaderboard</h1>
-            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, margin: 0 }}>
+            <h1 style={{ color: colors.text, fontWeight: 800, fontSize: 24, margin: 0 }}>Leaderboard</h1>
+            <p style={{ color: colors.textMuted, fontSize: 12, margin: 0 }}>
               {LEVELS.length} levels · อัปเดตหลังจบแต่ละด่าน
             </p>
           </div>
@@ -190,8 +194,8 @@ export default function Leaderboard() {
               fontWeight: 700, fontSize: 13,
               background: tab === t
                 ? 'linear-gradient(135deg,#e94560,#7c3aed)'
-                : 'rgba(255,255,255,0.06)',
-              color: tab === t ? 'white' : 'rgba(255,255,255,0.45)',
+                : colors.bgSurface,
+              color: tab === t ? '#ffffff' : colors.textSub,
             }}>
               {t === 'overall' ? '🌐 ภาพรวมทุกด่าน' : '🗺️ แต่ละด่าน'}
             </button>
@@ -209,8 +213,8 @@ export default function Leaderboard() {
                   fontSize: 11, fontWeight: 700,
                   background: overallSort === s.key
                     ? 'rgba(233,69,96,0.25)'
-                    : 'rgba(255,255,255,0.06)',
-                  color: overallSort === s.key ? '#f87171' : 'rgba(255,255,255,0.4)',
+                    : colors.bgSurface,
+                  color: overallSort === s.key ? '#f87171' : colors.textSub,
                   outline: overallSort === s.key ? '1px solid rgba(233,69,96,0.5)' : 'none',
                 }}>
                   {s.icon} {s.label}
@@ -226,9 +230,9 @@ export default function Leaderboard() {
                 display: 'flex', alignItems: 'center', gap: 12,
               }}>
                 <span style={{ color: '#a78bfa', fontSize: 11, fontWeight: 700 }}>YOUR RANK</span>
-                <span style={{ color: 'white', fontWeight: 900, fontSize: 20 }}>#{myOverall.rank}</span>
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>·</span>
-                <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
+                <span style={{ color: colors.text, fontWeight: 900, fontSize: 20 }}>#{myOverall.rank}</span>
+                <span style={{ color: colors.textMuted, fontSize: 12 }}>·</span>
+                <span style={{ color: colors.textSub, fontSize: 12 }}>
                   {myOverall.levelsCompleted}/{LEVELS.length} ด่าน · Lv.{myOverall.characterLevel} · {myOverall.experience.toLocaleString()} XP
                 </span>
               </div>
@@ -270,8 +274,8 @@ export default function Leaderboard() {
                   fontSize: 11, fontWeight: 700,
                   background: selectedLevel === lv.id
                     ? 'rgba(124,58,237,0.3)'
-                    : 'rgba(255,255,255,0.06)',
-                  color: selectedLevel === lv.id ? '#c4b5fd' : 'rgba(255,255,255,0.35)',
+                    : colors.bgSurface,
+                  color: selectedLevel === lv.id ? '#c4b5fd' : colors.textMuted,
                   outline: selectedLevel === lv.id ? '1px solid rgba(124,58,237,0.5)' : 'none',
                 }}>
                   {lv.number}
@@ -290,8 +294,8 @@ export default function Leaderboard() {
                   background: 'rgba(124,58,237,0.3)', color: '#c4b5fd',
                   fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
                 }}>LEVEL {selLevel.number}</span>
-                <span style={{ color: 'white', fontWeight: 700, fontSize: 13 }}>{selLevel.name}</span>
-                <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>{selLevel.concept}</span>
+                <span style={{ color: colors.text, fontWeight: 700, fontSize: 13 }}>{selLevel.name}</span>
+                <span style={{ color: colors.textMuted, fontSize: 11 }}>{selLevel.concept}</span>
               </div>
             )}
 
@@ -303,8 +307,8 @@ export default function Leaderboard() {
                   fontSize: 11, fontWeight: 700,
                   background: levelSort === s.key
                     ? 'rgba(233,69,96,0.25)'
-                    : 'rgba(255,255,255,0.06)',
-                  color: levelSort === s.key ? '#f87171' : 'rgba(255,255,255,0.4)',
+                    : colors.bgSurface,
+                  color: levelSort === s.key ? '#f87171' : colors.textSub,
                   outline: levelSort === s.key ? '1px solid rgba(233,69,96,0.5)' : 'none',
                 }}>
                   {s.icon} {s.label}
@@ -320,7 +324,7 @@ export default function Leaderboard() {
                 display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
               }}>
                 <span style={{ color: '#a78bfa', fontSize: 11, fontWeight: 700 }}>YOUR RANK</span>
-                <span style={{ color: 'white', fontWeight: 900, fontSize: 20 }}>#{myLevel.rank}</span>
+                <span style={{ color: colors.text, fontWeight: 900, fontSize: 20 }}>#{myLevel.rank}</span>
                 <LevelStatChips entry={myLevel} />
               </div>
             )}
@@ -330,7 +334,7 @@ export default function Leaderboard() {
               sortedLevel.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40 }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>🏜️</div>
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>
+                  <p style={{ color: colors.textSub, fontSize: 14 }}>
                     ยังไม่มีใครผ่านด่านนี้!
                   </p>
                 </div>
@@ -365,8 +369,9 @@ function OverallRow({
 }: {
   entry: LeaderboardEntry; isTop3: boolean; isMe: boolean; sortKey: OverallSort; sortCfg: (typeof OVERALL_SORTS)[0];
 }) {
-  const bg     = isTop3 ? RANK_BG[entry.rank - 1]     : isMe ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.03)';
-  const border = isTop3 ? `1px solid ${RANK_BORDER[entry.rank - 1]}` : isMe ? '1px solid rgba(124,58,237,0.3)' : '1px solid rgba(255,255,255,0.06)';
+  const { colors } = useTheme();
+  const bg     = isTop3 ? RANK_BG[entry.rank - 1]     : isMe ? 'rgba(124,58,237,0.08)' : colors.bgSurface;
+  const border = isTop3 ? `1px solid ${RANK_BORDER[entry.rank - 1]}` : isMe ? '1px solid rgba(124,58,237,0.3)' : `1px solid ${colors.borderSubtle}`;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: bg, border, borderRadius: 14, padding: '10px 14px' }}>
@@ -376,12 +381,12 @@ function OverallRow({
       <CharAvatar cls={entry.characterClass} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <span style={{ color: 'white', fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ color: colors.text, fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {entry.playerName}
           </span>
           {isMe && <span style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>YOU</span>}
         </div>
-        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, textTransform: 'capitalize' }}>
+        <span style={{ color: colors.textMuted, fontSize: 10, textTransform: 'capitalize' }}>
           {entry.characterName} · {entry.characterClass}
         </span>
       </div>
@@ -424,8 +429,9 @@ function LevelRow({
 }: {
   entry: LevelLeaderboardEntry; isTop3: boolean; isMe: boolean; sortKey: LevelSort;
 }) {
-  const bg     = isTop3 ? RANK_BG[entry.rank - 1]     : isMe ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.03)';
-  const border = isTop3 ? `1px solid ${RANK_BORDER[entry.rank - 1]}` : isMe ? '1px solid rgba(124,58,237,0.3)' : '1px solid rgba(255,255,255,0.06)';
+  const { colors } = useTheme();
+  const bg     = isTop3 ? RANK_BG[entry.rank - 1]     : isMe ? 'rgba(124,58,237,0.08)' : colors.bgSurface;
+  const border = isTop3 ? `1px solid ${RANK_BORDER[entry.rank - 1]}` : isMe ? '1px solid rgba(124,58,237,0.3)' : `1px solid ${colors.borderSubtle}`;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: bg, border, borderRadius: 14, padding: '10px 14px' }}>
@@ -435,12 +441,12 @@ function LevelRow({
       <CharAvatar cls={entry.characterClass} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <span style={{ color: 'white', fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ color: colors.text, fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {entry.playerName}
           </span>
           {isMe && <span style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>YOU</span>}
         </div>
-        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, textTransform: 'capitalize' }}>
+        <span style={{ color: colors.textMuted, fontSize: 10, textTransform: 'capitalize' }}>
           {entry.characterName} · {entry.characterClass}
         </span>
       </div>
@@ -487,10 +493,11 @@ function LevelStatChips({ entry, exclude }: { entry: LevelLeaderboardEntry; excl
 
 // ===== Shared UI =====
 function LoadingState() {
+  const { colors } = useTheme();
   return (
     <div style={{ textAlign: 'center', padding: 60 }}>
       <div style={{ fontSize: 30, marginBottom: 10 }}>⏳</div>
-      <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 14 }}>Loading...</p>
+      <p style={{ color: colors.textMuted, fontSize: 14 }}>Loading...</p>
     </div>
   );
 }
@@ -505,11 +512,12 @@ function ErrorState({ msg }: { msg: string }) {
 }
 
 function EmptyState({ onPlay }: { onPlay: () => void }) {
+  const { colors } = useTheme();
   return (
     <div style={{ textAlign: 'center', padding: 60 }}>
       <div style={{ fontSize: 56, marginBottom: 14 }}>🏆</div>
-      <p style={{ color: 'white', fontWeight: 700, fontSize: 17, marginBottom: 6 }}>ยังไม่มีผู้เล่น!</p>
-      <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>ผ่านด่านแรกเพื่อเข้า Leaderboard</p>
+      <p style={{ color: colors.text, fontWeight: 700, fontSize: 17, marginBottom: 6 }}>ยังไม่มีผู้เล่น!</p>
+      <p style={{ color: colors.textMuted, fontSize: 13 }}>ผ่านด่านแรกเพื่อเข้า Leaderboard</p>
       <button onClick={onPlay} style={{
         marginTop: 22, padding: '11px 28px', borderRadius: 12, border: 'none',
         background: 'linear-gradient(135deg,#e94560,#7c3aed)',

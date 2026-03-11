@@ -14,6 +14,10 @@ export function useAuth() {
         try {
           const profile = await getPlayerProfile(user.uid);
           if (profile) {
+            // ถ้า Firestore ไม่มี username ให้ fallback จาก Firebase Auth
+            if (!profile.username) {
+              profile.username = user.displayName ?? user.email?.split('@')[0] ?? 'Player';
+            }
             setPlayer(profile);
             // Restore character progress (per-class map format)
             if (profile.characterProgress && profile.lastPlayedClass) {

@@ -5,7 +5,7 @@ export default function EndNode({ data }: { data: { label: string; isActive?: bo
   return (
     <div style={{
       position: 'relative',
-      width: 120, height: 46,
+      width: 180, height: 46,
       borderRadius: 23,
       background: active
         ? 'linear-gradient(135deg,#f87171,#dc2626)'

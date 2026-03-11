@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useBattleStore } from '../stores/battleStore';
 import { useFlowchartStore } from '../stores/flowchartStore';
+import { useShopStore } from '../stores/shopStore';
 import { FlowchartEngine } from '../engines/FlowchartEngine';
 import type { BattleState } from '../engines/FlowchartEngine';
 import { STEP_DELAY_MS } from '../utils/constants';
@@ -30,6 +31,7 @@ function checkShield(nodes: ReturnType<typeof useFlowchartStore.getState>['nodes
 export function useBattle() {
   const battleStore = useBattleStore();
   const flowchartStore = useFlowchartStore();
+  const shopStore = useShopStore();
   const stopRef = useRef(false);
 
   const startBattle = useCallback((character: Character, enemy: Enemy, levelId: string) => {
@@ -70,6 +72,7 @@ export function useBattle() {
     const charStats  = battleStore.battle?.character.stats;
     const enemyStats = battleStore.battle?.enemy.stats;
     const { shielded, reason } = checkShield(nodes, requiredBlocks);
+    const baseAtk = (enemyStats as any)?.attack ?? 8;
     const battleState: BattleState = {
       heroHP: battleStore.heroHP,
       heroMaxHP: battleStore.heroMaxHP,
@@ -78,15 +81,35 @@ export function useBattle() {
       manaRegen: 5,
       enemyHP: battleStore.enemyHP,
       enemyMaxHP: battleStore.enemyMaxHP,
-      heroAttack:  charStats?.attack  ?? 10,
+      heroAttack:  (charStats?.attack  ?? 10) + (shopStore.attackBonus ?? 0),
       heroDefense: charStats?.defense ?? 5,
       heroParry:   10,
-      enemyAttack:  enemyStats?.attack  ?? 8,
-      enemyDefense: enemyStats?.defense ?? 3,
-      enemyArmor:   enemyStats?.armor   ?? 0,
-      enemyParry:   enemyStats?.parry   ?? 0,
+      enemyAttack:  baseAtk,
+      enemyBaseAttack: baseAtk,
+      enemyDefense: (enemyStats as any)?.defense ?? 3,
+      enemyArmor:   (enemyStats as any)?.armor   ?? 0,
+      enemyParry:   (enemyStats as any)?.parry   ?? 0,
       enemyShielded: shielded,
       shieldReason:  reason,
+      enemyEnraged: false,
+      enrageThreshold: (enemyStats as any)?.enrageThreshold ?? 0,
+      // Balance
+      healCharges: 3,
+      powerStrikeCooldown: 0,
+      // Combo
+      lastActionType: '',
+      comboCount: 0,
+      // Ailments
+      heroBurnRounds: 0,
+      heroFreezeRounds: 0,
+      heroPoisonRounds: 0,
+      enemyStunnedRounds: 0,
+      enemyAilmentType:   (enemyStats as any)?.ailmentType   ?? '',
+      enemyAilmentChance: (enemyStats as any)?.ailmentChance ?? 0,
+      // Inventory from shop
+      antidotes: shopStore.antidotes,
+      potions:   shopStore.potions,
+      gold:      shopStore.gold,
       round: battleStore.currentRound,
     };
 
@@ -112,6 +135,17 @@ export function useBattle() {
       if (step.heroHP   !== undefined) battleStore.updateHeroHP(step.heroHP);
       if (step.enemyHP  !== undefined) battleStore.updateEnemyHP(step.enemyHP);
       if (step.heroMana !== undefined) battleStore.updateHeroMana(step.heroMana);
+      // Update ailment + balance display state
+      if (step.heroBurnRounds !== undefined || step.heroFreezeRounds !== undefined || step.heroPoisonRounds !== undefined || step.enemyStunnedRounds !== undefined) {
+        battleStore.setAilments({
+          burn:      step.heroBurnRounds      ?? 0,
+          freeze:    step.heroFreezeRounds    ?? 0,
+          poison:    step.heroPoisonRounds    ?? 0,
+          enemyStun: step.enemyStunnedRounds  ?? 0,
+        });
+      }
+      if (step.healCharges !== undefined) battleStore.setHealCharges(step.healCharges);
+      if (step.comboCount  !== undefined) battleStore.setComboCount(step.comboCount);
 
       await delay(speedMs);
     }
@@ -140,6 +174,9 @@ export function useBattle() {
     // Apply final state
     battleStore.updateHeroHP(result.finalState.heroHP);
     battleStore.updateEnemyHP(result.finalState.enemyHP);
+    // Sync remaining consumables back to shop store
+    shopStore.setPotions(result.finalState.potions);
+    shopStore.setAntidotes(result.finalState.antidotes);
 
     // Determine outcome
     if (result.finalState.enemyHP <= 0) {
@@ -169,6 +206,13 @@ export function useBattle() {
     battleLog: battleStore.battleLog,
     isExecuting: battleStore.isExecuting,
     totalDamageTaken: battleStore.totalDamageTaken,
+    // Ailment + balance display
+    heroBurnRounds:    battleStore.heroBurnRounds,
+    heroFreezeRounds:  battleStore.heroFreezeRounds,
+    heroPoisonRounds:  battleStore.heroPoisonRounds,
+    enemyStunnedRounds: battleStore.enemyStunnedRounds,
+    healCharges:       battleStore.healCharges,
+    comboCount:        battleStore.comboCount,
     startBattle,
     restartBattle,
     stopBattle,

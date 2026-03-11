@@ -9,6 +9,7 @@ import LevelSelect from './components/UI/LevelSelect';
 import BattleScreen from './components/Battle/BattleScreen';
 import CharacterCustomizer from './components/Character/CharacterCustomizer';
 import Leaderboard from './components/UI/Leaderboard';
+import ShopPage from './components/Shop/ShopPage';
 import ThemeToggle from './components/UI/ThemeToggle';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/battle/:levelId" element={<ProtectedRoute><BattleScreen /></ProtectedRoute>} />
         <Route path="/character" element={<ProtectedRoute><CharacterCustomizer /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+        <Route path="/shop" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

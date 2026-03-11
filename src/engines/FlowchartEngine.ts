@@ -12,11 +12,34 @@ export interface BattleState {
   heroDefense: number;
   heroParry: number;    // % chance (0-100) hero parries enemy counter
   enemyAttack: number;
+  enemyBaseAttack: number; // base attack before enrage
   enemyDefense: number; // enemy physical defense stat
   enemyArmor: number;   // extra armor — reduces physical damage (flat)
   enemyParry: number;   // % chance (0-100) enemy parries hero attack
   enemyShielded: boolean; // true when required blocks are missing → attacks blocked
   shieldReason: string;   // e.g. "ต้องใช้ Condition block"
+  enemyEnraged: boolean;  // true when enemy HP < enrageThreshold
+  enrageThreshold: number; // % HP threshold to trigger enrage (0 = disabled)
+  // Balance
+  healCharges: number;          // remaining heals this battle (max 3)
+  powerStrikeCooldown: number;  // steps remaining until PS available (0 = ready)
+  // Combo system
+  lastActionType: string;
+  comboCount: number;
+  // Ailments on hero
+  heroBurnRounds: number;
+  heroFreezeRounds: number;
+  heroPoisonRounds: number;
+  // Ailments on enemy
+  enemyStunnedRounds: number;
+  // Enemy ailment infliction
+  enemyAilmentType: string;   // 'burn'|'freeze'|'poison'|''
+  enemyAilmentChance: number; // 0-1 probability per hit
+  // Inventory (from shop)
+  antidotes: number;
+  potions: number;
+  // Gold (for shop conditions in shop flowchart)
+  gold: number;
   round: number;
 }
 
@@ -187,10 +210,17 @@ function buildPreviewTree(
     const branchBudget = Math.max(2, Math.floor((budget - 1) / 2));
     const yesBranch = yesEdge ? buildPreviewTree(yesEdge.target, state, nodeMap, edges, nextVisited, branchBudget) : [];
     const noBranch  = noEdge  ? buildPreviewTree(noEdge.target,  state, nodeMap, edges, nextVisited, branchBudget) : [];
+    // Annotate with what the condition checks (for preview display)
+    const ct = node.data.conditionType;
+    const th = node.data.threshold ?? 50;
+    let condNote = '';
+    if (ct === 'mana_greater') condNote = `Mana > ${th}`;
+    else if (ct === 'mana_less') condNote = `Mana < ${th}`;
     return [{
       nodeId, label: node.data.label, type: 'condition',
       heroDelta: 0, enemyDelta: 0,
       heroHPAfter: state.heroHP, enemyHPAfter: state.enemyHP,
+      note: condNote || undefined,
       yesBranch, noBranch,
     }];
   }
@@ -271,6 +301,23 @@ export class FlowchartEngine {
     }
     const loopCheck = this.detectInfiniteLoops();
     if (!loopCheck.valid) return loopCheck;
+
+    // Verify END node is actually reachable from START via BFS
+    const startNode = startNodes[0];
+    const reachable = new Set<string>();
+    const queue: string[] = [startNode.id];
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      if (reachable.has(cur)) continue;
+      reachable.add(cur);
+      for (const e of this.edges) {
+        if (e.source === cur && !reachable.has(e.target)) queue.push(e.target);
+      }
+    }
+    const endReachable = endNodes.some((n) => reachable.has(n.id));
+    if (!endReachable) {
+      return { valid: false, error: 'ต้องมีเส้นเชื่อมจาก Start ไปถึง End block' };
+    }
 
     return { valid: true };
   }
@@ -374,21 +421,85 @@ export class FlowchartEngine {
         break;
       }
 
+      // ===== Pre-action: ailment ticks + freeze skip (only on action nodes) =====
+      let preLog = '';
+      if (node.type === 'action') {
+        const ticks: string[] = [];
+
+        if (state.heroBurnRounds > 0) {
+          const dmg = 5;
+          state.heroHP = Math.max(0, state.heroHP - dmg);
+          state.heroBurnRounds--;
+          ticks.push(`🔥 Burn! -${dmg} HP (${state.heroBurnRounds} left)`);
+        }
+        if (state.heroPoisonRounds > 0) {
+          const dmg = 3;
+          state.heroHP = Math.max(0, state.heroHP - dmg);
+          state.heroPoisonRounds--;
+          ticks.push(`🟣 Poison! -${dmg} HP (${state.heroPoisonRounds} left)`);
+        }
+        if (ticks.length > 0) preLog = ticks.join(' | ') + ' → ';
+
+        // Freeze: skip hero's action this step
+        if (state.heroFreezeRounds > 0) {
+          state.heroFreezeRounds--;
+          const msg = preLog + `❄️ Frozen! Skipped action (${state.heroFreezeRounds} left)`;
+          log.push(msg);
+          step.battleLog = msg;
+          step.heroHP = state.heroHP;
+          step.enemyHP = state.enemyHP;
+          step.heroMana = state.heroMana;
+          step.heroBurnRounds = state.heroBurnRounds;
+          step.heroFreezeRounds = state.heroFreezeRounds;
+          step.heroPoisonRounds = state.heroPoisonRounds;
+          step.enemyStunnedRounds = state.enemyStunnedRounds;
+          step.healCharges = state.healCharges;
+          step.comboCount = state.comboCount;
+          steps.push(step);
+          if (state.heroHP <= 0) { log.push('Hero has fallen!'); break; }
+          currentNodeId = this.getNextNode(node.id, node.type, undefined);
+          continue;
+        }
+
+        // Decrement power strike cooldown each action step
+        if (state.powerStrikeCooldown > 0) state.powerStrikeCooldown--;
+        // Decrement enemy stun
+        if (state.enemyStunnedRounds > 0) state.enemyStunnedRounds--;
+      }
+
       const { nextNodeId, updatedState, logEntry, result } = this.executeNode(node, state);
       state = updatedState;
       step.result = result;
 
-      if (logEntry) {
-        log.push(logEntry);
-        step.battleLog = logEntry;
+      const fullLog = preLog + (logEntry ?? '');
+      if (fullLog) {
+        log.push(fullLog);
+        step.battleLog = fullLog;
       }
       if (node.type === 'action' && node.data.actionType) {
         step.action = node.data.actionType;
       }
 
+      // Enrage: enemy ATK ×1.5 when HP drops below threshold
+      if (state.enrageThreshold > 0 && !state.enemyEnraged) {
+        const hpPct = (state.enemyHP / state.enemyMaxHP) * 100;
+        if (hpPct <= state.enrageThreshold) {
+          state.enemyEnraged = true;
+          state.enemyAttack = Math.floor(state.enemyBaseAttack * 1.5);
+          log.push('💢 Enemy ENRAGES! ATK ×1.5!');
+          step.battleLog = (step.battleLog ?? '') + ' 💢 ENRAGE!';
+        }
+      }
+
       step.heroHP   = state.heroHP;
       step.enemyHP  = state.enemyHP;
       step.heroMana = state.heroMana;
+      step.heroBurnRounds = state.heroBurnRounds;
+      step.heroFreezeRounds = state.heroFreezeRounds;
+      step.heroPoisonRounds = state.heroPoisonRounds;
+      step.enemyStunnedRounds = state.enemyStunnedRounds;
+      step.healCharges = state.healCharges;
+      step.comboCount = state.comboCount;
       steps.push(step);
 
       if (state.heroHP <= 0) { log.push('Hero has fallen!'); break; }
@@ -432,11 +543,41 @@ export class FlowchartEngine {
     return { nextNodeId, updatedState: newState, logEntry, result: conditionResult };
   }
 
+  /** Returns combo damage multiplier and updates state.comboCount / lastActionType */
+  private applyCombo(action: string, state: BattleState): number {
+    const attackTypes = ['attack', 'cast_spell', 'power_strike'];
+    if (!attackTypes.includes(action)) {
+      // Non-attack: reset combo but remember for Counter Strike
+      state.lastActionType = action;
+      state.comboCount = 0;
+      return 1.0;
+    }
+    // Counter Strike: dodge → attack
+    if (action === 'attack' && state.lastActionType === 'dodge') {
+      state.lastActionType = action;
+      state.comboCount = 0;
+      return 1.75;
+    }
+    // Consecutive same-type attack
+    if (action === state.lastActionType) {
+      state.comboCount++;
+    } else {
+      state.comboCount = 0;
+    }
+    state.lastActionType = action;
+    if (state.comboCount >= 3) return 1.5;
+    if (state.comboCount === 2) return 1.25;
+    return 1.0;
+  }
+
   private executeAction(action: ActionType, state: BattleState): string {
     const variance = () => Math.floor(Math.random() * 5) - 2; // -2 to +2
 
     switch (action) {
       case 'attack': {
+        const comboMult = this.applyCombo('attack', state);
+        const comboTag = comboMult >= 1.75 ? ' ⚡ Counter Strike!' : comboMult >= 1.5 ? ' ⚡ Combo x3!' : comboMult >= 1.25 ? ' ⚡ Combo x2!' : '';
+
         // Shield check — blocked if required blocks are missing
         if (state.enemyShielded) {
           const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
@@ -447,40 +588,66 @@ export class FlowchartEngine {
           return `🛡️ Shield blocks the attack! (${state.shieldReason}) Enemy counters! Hero -${finalCounter} HP.`;
         }
 
-        // Physical damage: reduced by defense + armor
+        // Physical damage: reduced by defense + armor, boosted by combo
         const effectiveArmor = state.enemyDefense + state.enemyArmor;
-        const rawDmg = Math.max(1, state.heroAttack + variance() - Math.floor(effectiveArmor * 0.5));
+        const rawDmg = Math.max(1, Math.floor((state.heroAttack + variance()) * comboMult) - Math.floor(effectiveArmor * 0.5));
 
         // Enemy parry check
         const parried = Math.random() * 100 < state.enemyParry;
         const finalDmg = parried ? Math.max(1, Math.floor(rawDmg * 0.3)) : rawDmg;
         state.enemyHP = Math.max(0, state.enemyHP - finalDmg);
 
-        // Enemy counter-attack
-        const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
+        // Enemy counter-attack (skipped if stunned)
+        let finalCounter = 0;
+        let heroParried = false;
+        if (state.enemyStunnedRounds <= 0) {
+          const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
+          heroParried = Math.random() * 100 < state.heroParry;
+          finalCounter = heroParried ? 0 : counterDmg;
+          state.heroHP = Math.max(0, state.heroHP - finalCounter);
 
-        // Hero parry check
-        const heroParried = Math.random() * 100 < state.heroParry;
-        const finalCounter = heroParried ? 0 : counterDmg;
-        state.heroHP = Math.max(0, state.heroHP - finalCounter);
+          // Enemy ailment infliction on hit
+          if (state.enemyAilmentType && !heroParried && finalCounter > 0 && Math.random() < state.enemyAilmentChance) {
+            if (state.enemyAilmentType === 'burn')   { state.heroBurnRounds   = Math.max(state.heroBurnRounds, 3);   }
+            if (state.enemyAilmentType === 'freeze')  { state.heroFreezeRounds = Math.max(state.heroFreezeRounds, 2); }
+            if (state.enemyAilmentType === 'poison')  { state.heroPoisonRounds = Math.max(state.heroPoisonRounds, 5); }
+          }
+        }
         state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
 
-        let msg = `Hero attacks!`;
+        let msg = `Hero attacks!${comboTag}`;
         if (state.enemyArmor > 0) msg += ` [Armor]`;
         msg += parried ? ` Parried! Enemy -${finalDmg} HP.` : ` Enemy -${finalDmg} HP.`;
-        if (heroParried) msg += ` Hero parries counter!`;
-        else if (finalCounter > 0) msg += ` Enemy counters! Hero -${finalCounter} HP.`;
+        if (state.enemyStunnedRounds <= 0) {
+          if (heroParried) msg += ` Hero parries counter!`;
+          else if (finalCounter > 0) {
+            msg += ` Enemy counters! Hero -${finalCounter} HP.`;
+            if (state.enemyAilmentType && Math.random() < state.enemyAilmentChance) {
+              const ailMap: Record<string, string> = { burn: '🔥 Burn!', freeze: '❄️ Freeze!', poison: '🟣 Poison!' };
+              msg += ` ${ailMap[state.enemyAilmentType] ?? ''}`;
+            }
+          }
+        } else {
+          msg += ` Enemy stunned — no counter!`;
+        }
         return msg;
       }
 
       case 'heal': {
+        this.applyCombo('heal', state);
+        if (state.healCharges <= 0) {
+          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
+          return `💊 No Heal Charges left! (0/3)`;
+        }
+        state.healCharges--;
         const healAmt = 20 + variance();
         state.heroHP = Math.min(state.heroMaxHP, state.heroHP + healAmt);
         state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
-        return `Hero heals! +${healAmt} HP (${state.heroHP}/${state.heroMaxHP})`;
+        return `Hero heals! +${healAmt} HP (${state.heroHP}/${state.heroMaxHP}) [${state.healCharges} heals left]`;
       }
 
       case 'dodge': {
+        this.applyCombo('dodge', state);
         if (Math.random() < 0.65) {
           state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
           return `Hero dodges! Attack avoided completely.`;
@@ -493,6 +660,9 @@ export class FlowchartEngine {
       }
 
       case 'cast_spell': {
+        const spellCombo = this.applyCombo('cast_spell', state);
+        const spellComboTag = spellCombo >= 1.5 ? ' ⚡ Chain Magic!' : spellCombo >= 1.25 ? ' ⚡ Spell Combo!' : '';
+
         // Shield blocks magic too
         if (state.enemyShielded) {
           const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
@@ -504,59 +674,94 @@ export class FlowchartEngine {
         }
 
         if (state.heroMana < 25) {
-          // Low mana: 60% damage, no mana cost
-          const spellDmg = Math.max(3, Math.floor(Math.floor(state.heroAttack * 1.8) * 0.6) + variance() - Math.floor(state.enemyDefense * 0.25));
+          const spellDmg = Math.max(3, Math.floor(Math.floor(state.heroAttack * 1.8 * spellCombo) * 0.6) + variance() - Math.floor(state.enemyDefense * 0.25));
           state.enemyHP = Math.max(0, state.enemyHP - spellDmg);
-          // Mana regen still applies
           state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
-          return `⚠️ Low mana! Hero casts weak spell! Enemy -${spellDmg} HP. (reduced dmg)`;
+          return `⚠️ Low mana! Hero casts weak spell!${spellComboTag} Enemy -${spellDmg} HP. (reduced dmg)`;
         }
 
         // Spend 25 mana
         state.heroMana = Math.min(state.heroMaxMana, Math.max(0, state.heroMana - 25) + state.manaRegen);
 
-        // Magic ignores armor entirely, only partial defense
-        const spellDmg = Math.max(5, Math.floor(state.heroAttack * 1.8) + variance() - Math.floor(state.enemyDefense * 0.25));
+        // Magic ignores armor, boosted by combo
+        const spellDmg = Math.max(5, Math.floor(state.heroAttack * 1.8 * spellCombo) + variance() - Math.floor(state.enemyDefense * 0.25));
         state.enemyHP = Math.max(0, state.enemyHP - spellDmg);
 
-        // Counter 40% chance
-        if (Math.random() < 0.4) {
+        // Counter 40% chance (skipped if stunned)
+        const armorNote = state.enemyArmor > 0 ? ' [Magic bypasses armor!]' : '';
+        if (state.enemyStunnedRounds <= 0 && Math.random() < 0.4) {
           const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
           state.heroHP = Math.max(0, state.heroHP - counterDmg);
-          const armorNote = state.enemyArmor > 0 ? ' [Magic bypasses armor!]' : '';
-          return `Hero casts spell!${armorNote} Enemy -${spellDmg} HP. Enemy counters! Hero -${counterDmg} HP.`;
+          // Ailment infliction on counter
+          if (state.enemyAilmentType && counterDmg > 0 && Math.random() < state.enemyAilmentChance) {
+            if (state.enemyAilmentType === 'burn')   state.heroBurnRounds   = Math.max(state.heroBurnRounds, 3);
+            if (state.enemyAilmentType === 'freeze')  state.heroFreezeRounds = Math.max(state.heroFreezeRounds, 2);
+            if (state.enemyAilmentType === 'poison')  state.heroPoisonRounds = Math.max(state.heroPoisonRounds, 5);
+          }
+          return `Hero casts spell!${spellComboTag}${armorNote} Enemy -${spellDmg} HP. Enemy counters! Hero -${counterDmg} HP.`;
         }
-        const armorNote = state.enemyArmor > 0 ? ' [Magic bypasses armor!]' : '';
-        return `Hero casts spell!${armorNote} Enemy -${spellDmg} HP. (Enemy missed counter!)`;
+        return `Hero casts spell!${spellComboTag}${armorNote} Enemy -${spellDmg} HP.${state.enemyStunnedRounds > 0 ? ' Enemy stunned — no counter!' : ' (Enemy missed counter!)'}`;
       }
 
       case 'power_strike': {
+        // Cooldown check: if on cooldown, do a normal attack instead
+        if (state.powerStrikeCooldown > 0) {
+          const comboMult2 = this.applyCombo('attack', state);
+          const ea2 = state.enemyDefense + state.enemyArmor;
+          const rawDmg2 = Math.max(1, Math.floor((state.heroAttack + variance()) * comboMult2) - Math.floor(ea2 * 0.5));
+          const parried2 = Math.random() * 100 < state.enemyParry;
+          const finalDmg2 = parried2 ? Math.max(1, Math.floor(rawDmg2 * 0.3)) : rawDmg2;
+          state.enemyHP = Math.max(0, state.enemyHP - finalDmg2);
+          const cDmg2 = state.enemyStunnedRounds > 0 ? 0 : Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
+          state.heroHP = Math.max(0, state.heroHP - cDmg2);
+          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
+          return `⏳ Power Strike on cooldown (${state.powerStrikeCooldown} steps) → normal attack. Enemy -${finalDmg2} HP.`;
+        }
+
         if (state.heroMana >= 20) {
-          // Spend 20 mana, deal 2x damage
+          const comboMult = this.applyCombo('power_strike', state);
+          const comboTag = comboMult > 1 ? ` ⚡ Combo!` : '';
+          // Spend 20 mana, deal 2x damage + combo
           state.heroMana = Math.min(state.heroMaxMana, Math.max(0, state.heroMana - 20) + state.manaRegen);
+          state.powerStrikeCooldown = 4; // 4 steps cooldown
 
           const effectiveArmor = state.enemyDefense + state.enemyArmor;
-          const rawDmg = Math.max(1, state.heroAttack * 2 + variance() - Math.floor(effectiveArmor * 0.5));
+          const rawDmg = Math.max(1, Math.floor((state.heroAttack * 2 + variance()) * comboMult) - Math.floor(effectiveArmor * 0.5));
 
-          // Enemy parry check
           const parried = Math.random() * 100 < state.enemyParry;
           const finalDmg = parried ? Math.max(1, Math.floor(rawDmg * 0.3)) : rawDmg;
           state.enemyHP = Math.max(0, state.enemyHP - finalDmg);
 
-          // Enemy counter
-          const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
-          const heroParried = Math.random() * 100 < state.heroParry;
-          const finalCounter = heroParried ? 0 : counterDmg;
-          state.heroHP = Math.max(0, state.heroHP - finalCounter);
+          // 20% chance to stun enemy
+          if (Math.random() < 0.20) {
+            state.enemyStunnedRounds = Math.max(state.enemyStunnedRounds, 2);
+          }
 
-          let msg = `💥 Power Strike!`;
+          let finalCounter = 0;
+          let heroParried = false;
+          if (state.enemyStunnedRounds <= 0) {
+            const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
+            heroParried = Math.random() * 100 < state.heroParry;
+            finalCounter = heroParried ? 0 : counterDmg;
+            state.heroHP = Math.max(0, state.heroHP - finalCounter);
+            // Enemy ailment infliction
+            if (state.enemyAilmentType && !heroParried && finalCounter > 0 && Math.random() < state.enemyAilmentChance) {
+              if (state.enemyAilmentType === 'burn')   state.heroBurnRounds   = Math.max(state.heroBurnRounds, 3);
+              if (state.enemyAilmentType === 'freeze')  state.heroFreezeRounds = Math.max(state.heroFreezeRounds, 2);
+              if (state.enemyAilmentType === 'poison')  state.heroPoisonRounds = Math.max(state.heroPoisonRounds, 5);
+            }
+          }
+
+          let msg = `💥 Power Strike!${comboTag}`;
           msg += parried ? ` Parried! Enemy -${finalDmg} HP.` : ` Enemy -${finalDmg} HP.`;
-          if (heroParried) msg += ` Hero parries counter!`;
+          if (state.enemyStunnedRounds > 0) msg += ` ⚡ Enemy Stunned!`;
+          else if (heroParried) msg += ` Hero parries counter!`;
           else if (finalCounter > 0) msg += ` Enemy counters! Hero -${finalCounter} HP.`;
           return msg;
         }
 
         // Not enough mana — normal attack
+        this.applyCombo('attack', state);
         state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
 
         const effectiveArmor = state.enemyDefense + state.enemyArmor;
@@ -566,7 +771,7 @@ export class FlowchartEngine {
         const finalDmg = parried ? Math.max(1, Math.floor(rawDmg * 0.3)) : rawDmg;
         state.enemyHP = Math.max(0, state.enemyHP - finalDmg);
 
-        const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
+        const counterDmg = state.enemyStunnedRounds > 0 ? 0 : Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
         const heroParried = Math.random() * 100 < state.heroParry;
         const finalCounter = heroParried ? 0 : counterDmg;
         state.heroHP = Math.max(0, state.heroHP - finalCounter);
@@ -578,6 +783,34 @@ export class FlowchartEngine {
         return msg2;
       }
 
+      case 'use_antidote': {
+        this.applyCombo('use_antidote', state);
+        if (state.antidotes <= 0) {
+          return `💊 No Antidotes left!`;
+        }
+        state.antidotes--;
+        const cured: string[] = [];
+        if (state.heroBurnRounds > 0)   { state.heroBurnRounds   = 0; cured.push('🔥 Burn');   }
+        if (state.heroPoisonRounds > 0) { state.heroPoisonRounds = 0; cured.push('🟣 Poison');  }
+        if (state.heroFreezeRounds > 0) { state.heroFreezeRounds = 0; cured.push('❄️ Freeze');  }
+        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
+        return cured.length > 0
+          ? `💊 Antidote! Cured: ${cured.join(', ')} [${state.antidotes} left]`
+          : `💊 Antidote used — no ailments to cure [${state.antidotes} left]`;
+      }
+
+      case 'use_potion': {
+        this.applyCombo('use_potion', state);
+        if (state.potions <= 0) {
+          return `🧪 No Potions left!`;
+        }
+        state.potions--;
+        const potionHeal = 30;
+        state.heroHP = Math.min(state.heroMaxHP, state.heroHP + potionHeal);
+        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
+        return `🧪 Potion! +${potionHeal} HP (${state.heroHP}/${state.heroMaxHP}) [${state.potions} left]`;
+      }
+
       default:
         return `Hero uses ${action}`;
     }
@@ -586,11 +819,21 @@ export class FlowchartEngine {
   private evaluateCondition(node: FlowNode, state: BattleState): boolean {
     const threshold = node.data.threshold ?? 50;
     switch (node.data.conditionType) {
-      case 'hp_greater':  return state.heroHP > threshold;
-      case 'hp_less':     return state.heroHP < threshold;
-      case 'enemy_alive': return state.enemyHP > 0;
-      case 'enemy_close': return true;
-      default:            return true;
+      case 'hp_greater':    return state.heroHP > threshold;
+      case 'hp_less':       return state.heroHP < threshold;
+      case 'mana_greater':  return state.heroMana > threshold;
+      case 'mana_less':     return state.heroMana < threshold;
+      case 'enemy_alive':   return state.enemyHP > 0;
+      case 'enemy_close':   return true;
+      // Ailment conditions
+      case 'hero_burning':  return state.heroBurnRounds > 0;
+      case 'hero_poisoned': return state.heroPoisonRounds > 0;
+      case 'hero_frozen':   return state.heroFreezeRounds > 0;
+      case 'enemy_stunned': return state.enemyStunnedRounds > 0;
+      // Shop conditions
+      case 'gold_greater':  return state.gold > threshold;
+      case 'gold_less':     return state.gold < threshold;
+      default:              return true;
     }
   }
 

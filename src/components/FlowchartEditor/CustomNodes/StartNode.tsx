@@ -5,7 +5,7 @@ export default function StartNode({ data }: { data: { label: string; isActive?: 
   return (
     <div style={{
       position: 'relative',
-      width: 120, height: 46,
+      width: 180, height: 46,
       borderRadius: 23,
       background: active
         ? 'linear-gradient(135deg,#4ade80,#16a34a)'

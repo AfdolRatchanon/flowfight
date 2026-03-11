@@ -10,7 +10,7 @@ import {
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebaseService';
 import type { Player, Character } from '../types/game.types';
 
@@ -117,16 +117,15 @@ export async function savePlayerProgress(uid: string, levelId: string, won: bool
   if (won && !levelsCompleted.includes(levelId)) levelsCompleted.push(levelId);
 
   const levelNumber = parseInt(levelId.replace('level_', '')) || 1;
-  const updates = {
-    levelsCompleted,
-    'stats.totalKills': (data.stats?.totalKills ?? 0) + (won ? 1 : 0),
-    'stats.totalDefeats': (data.stats?.totalDefeats ?? 0) + (won ? 0 : 1),
-    'stats.levelReached': Math.max(data.stats?.levelReached ?? 1, levelNumber + (won ? 1 : 0)),
-    lastActive: Date.now(),
+  const newStats = {
+    totalKills:   (data.stats?.totalKills   ?? 0) + (won ? 1 : 0),
+    totalDefeats: (data.stats?.totalDefeats ?? 0) + (won ? 0 : 1),
+    levelReached: Math.max(data.stats?.levelReached ?? 1, levelNumber + (won ? 1 : 0)),
+    totalPlayTime: data.stats?.totalPlayTime ?? 0,
   };
-  await updateDoc(ref, updates);
+  await setDoc(ref, { levelsCompleted, stats: newStats, lastActive: Date.now() }, { merge: true });
 
-  return { ...data, id: uid, levelsCompleted, stats: { ...data.stats, totalKills: updates['stats.totalKills'], totalDefeats: updates['stats.totalDefeats'], levelReached: updates['stats.levelReached'] } };
+  return { ...data, id: uid, levelsCompleted, stats: newStats };
 }
 
 export async function saveCharacterProgress(uid: string, character: Character): Promise<void> {
@@ -170,11 +169,11 @@ export async function saveLeaderboardEntry(
 
   await setDoc(ref, {
     playerId: player.id,
-    playerName: player.username,
-    characterName: character.name,
-    characterClass: character.class,
-    characterLevel: character.level,
-    experience: character.experience,
+    playerName: player.username ?? player.email ?? 'Unknown',
+    characterName: character.name ?? 'Unknown',
+    characterClass: character.class ?? 'knight',
+    characterLevel: character.level ?? 1,
+    experience: character.experience ?? 0,
     levelReached: player.stats?.levelReached ?? 1,
     levelsCompleted: (player.levelsCompleted ?? []).length,
     totalKills: player.stats?.totalKills ?? 0,
@@ -210,13 +209,15 @@ export async function saveLevelLeaderboardEntry(
       );
       await setDoc(ref, {
         ...prev,
-        damageTaken:    newTaken,
-        damageDealt:    newDealt,
-        timeMs:         newTime,
+        playerName:      player.username ?? player.email ?? prev.playerName ?? 'Unknown',
+        characterName:   character.name ?? prev.characterName ?? 'Unknown',
+        damageTaken:     newTaken,
+        damageDealt:     newDealt,
+        timeMs:          newTime,
         heroHPRemaining: stats.heroHPRemaining,
-        heroHPPercent:  newHPPct,
-        characterLevel: character.level,
-        timestamp: Date.now(),
+        heroHPPercent:   newHPPct,
+        characterLevel:  character.level,
+        timestamp:       Date.now(),
       });
       return;
     }
@@ -224,8 +225,8 @@ export async function saveLevelLeaderboardEntry(
 
   await setDoc(ref, {
     playerId:       player.id,
-    playerName:     player.username,
-    characterName:  character.name,
+    playerName:     player.username ?? player.email ?? 'Unknown',
+    characterName:  character.name ?? 'Unknown',
     characterClass: character.class,
     characterLevel: character.level,
     levelId:        stats.levelId,
