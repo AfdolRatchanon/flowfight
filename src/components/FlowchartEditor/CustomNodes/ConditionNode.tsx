@@ -10,7 +10,7 @@ interface ConditionData {
 }
 
 const THRESHOLD_TYPES = new Set([
-  'hp_less', 'hp_greater', 'mana_less', 'mana_greater', 'gold_less', 'gold_greater',
+  'hp_less', 'hp_greater', 'gold_less', 'gold_greater', 'turn_gte',
 ]);
 
 export default function ConditionNode({
@@ -20,8 +20,10 @@ export default function ConditionNode({
   id: string;
   data: ConditionData;
 }) {
-  const { nodes, setNodes } = useFlowchartStore();
+  const { nodes, setNodes, visitedNodeIds, visitedConditionResults } = useFlowchartStore();
   const active = data.isActive;
+  const wasVisited = visitedNodeIds.includes(id);
+  const traceResult = wasVisited ? visitedConditionResults[id] : undefined; // true=YES, false=NO, undefined=not visited
   const W = 180, H = 80;
 
   const condType = data.conditionType ?? 'enemy_alive';
@@ -31,11 +33,15 @@ export default function ConditionNode({
   function adjustThreshold(delta: number) {
     const updated = nodes.map(n => {
       if (n.id !== id) return n;
-      const next = { ...n.data, threshold: Math.max(0, Math.min(999, threshold + delta)) };
-      // Rebuild label
-      const isGreater = condType.endsWith('_greater');
-      const subj = condType.startsWith('mana') ? 'MP' : condType.startsWith('gold') ? 'Gold' : 'HP';
-      next.label = `${subj} ${isGreater ? '>' : '<'} ${next.threshold}?`;
+      const next = { ...n.data, threshold: Math.max(1, Math.min(999, threshold + delta)) };
+      // Rebuild label based on condition type
+      if (condType === 'turn_gte') {
+        next.label = `Turn ≥ ${next.threshold}?`;
+      } else {
+        const isGreater = condType.endsWith('_greater');
+        const subj = condType.startsWith('gold') ? 'Gold' : 'HP';
+        next.label = `${subj} ${isGreater ? '>' : '<'} ${next.threshold}?`;
+      }
       return { ...n, data: next };
     });
     setNodes(updated as any);
@@ -49,13 +55,13 @@ export default function ConditionNode({
       <svg width={W} height={H} style={{ position: 'absolute', top: 0, left: 0 }}>
         <polygon
           points={`${W / 2},2 ${W - 2},${H / 2} ${W / 2},${H - 2} 2,${H / 2}`}
-          fill={active ? '#fbbf24' : '#d97706'}
-          stroke={active ? '#fff' : '#92400e'}
+          fill={active ? '#fbbf24' : wasVisited ? '#d97706' : '#d97706'}
+          stroke={active ? '#fff' : wasVisited ? 'rgba(74,222,128,0.8)' : '#92400e'}
           strokeWidth={2}
           style={{
             filter: active
               ? 'drop-shadow(0 0 12px rgba(251,191,36,0.8))'
-              : 'drop-shadow(0 3px 6px rgba(0,0,0,0.5))',
+              : wasVisited ? 'drop-shadow(0 0 8px rgba(74,222,128,0.5))' : 'drop-shadow(0 3px 6px rgba(0,0,0,0.5))',
           }}
         />
       </svg>
@@ -116,8 +122,20 @@ export default function ConditionNode({
         type="source" id="no" position={Position.Bottom}
         style={{ bottom: -4, left: '50%', transform: 'translateX(-50%)', background: '#f87171', border: '2px solid #fff', width: 10, height: 10 }}
       />
-      <span style={{ position: 'absolute', right: -28, top: '50%', transform: 'translateY(-50%)', fontSize: 9, fontWeight: 800, color: '#4ade80' }}>YES</span>
-      <span style={{ position: 'absolute', bottom: -18, left: '50%', transform: 'translateX(-50%)', fontSize: 9, fontWeight: 800, color: '#f87171' }}>NO</span>
+      <span style={{
+        position: 'absolute', right: -28, top: '50%', transform: 'translateY(-50%)',
+        fontSize: 9, fontWeight: 800,
+        color: traceResult === true ? '#fff' : '#4ade80',
+        background: traceResult === true ? '#16a34a' : 'transparent',
+        borderRadius: 3, padding: traceResult === true ? '1px 4px' : 0,
+      }}>YES</span>
+      <span style={{
+        position: 'absolute', bottom: -18, left: '50%', transform: 'translateX(-50%)',
+        fontSize: 9, fontWeight: 800,
+        color: traceResult === false ? '#fff' : '#f87171',
+        background: traceResult === false ? '#dc2626' : 'transparent',
+        borderRadius: 3, padding: traceResult === false ? '1px 4px' : 0,
+      }}>NO</span>
     </div>
   );
 }

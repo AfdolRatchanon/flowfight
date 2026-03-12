@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { User } from 'firebase/auth';
-import { onAuthChange, getPlayerProfile } from '../services/authService';
+import { onAuthChange, getPlayerProfile, ensurePlayerProfile } from '../services/authService';
 import { useGameStore } from '../stores/gameStore';
 import { useShopStore } from '../stores/shopStore';
 import type { Character } from '../types/game.types';
@@ -48,10 +48,12 @@ export function useAuth() {
               }
             }
           } else {
-            // Profile doesn't exist in Firestore yet — use Firebase Auth data as fallback
+            // Profile doesn't exist in Firestore yet — create it then set in store
+            const username = user.displayName ?? user.email?.split('@')[0] ?? 'Player';
+            await ensurePlayerProfile(user, { username, email: user.email ?? '', isAnonymous: user.isAnonymous });
             setPlayer({
               id: user.uid,
-              username: user.displayName ?? user.email?.split('@')[0] ?? 'Player',
+              username,
               email: user.email ?? '',
               levelsCompleted: [],
               createdAt: Date.now(),

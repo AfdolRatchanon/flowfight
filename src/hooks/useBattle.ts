@@ -38,13 +38,15 @@ export function useBattle() {
     stopRef.current = false;
     battleStore.initBattle(character, enemy, levelId);
     flowchartStore.resetFlowchart();
+    flowchartStore.clearTrace();
   }, []);
 
   // Retry — reset battle state only, keep flowchart as-is
   const restartBattle = useCallback((character: Character, enemy: Enemy, levelId: string) => {
     stopRef.current = false;
     battleStore.initBattle(character, enemy, levelId);
-  }, [battleStore]);
+    flowchartStore.clearTrace();
+  }, [battleStore, flowchartStore]);
 
   const stopBattle = useCallback(() => {
     stopRef.current = true;
@@ -54,7 +56,7 @@ export function useBattle() {
     flowchartStore.highlightNode(null);
   }, [battleStore, flowchartStore]);
 
-  const executeBattle = useCallback(async (speedMs: number = STEP_DELAY_MS, requiredBlocks: RequiredBlock[] = []) => {
+  const executeBattle = useCallback(async (speedMs: number = STEP_DELAY_MS, requiredBlocks: RequiredBlock[] = [], actionsMax: number = 3) => {
     stopRef.current = false;
     const { nodes, edges } = flowchartStore;
     const engine = new FlowchartEngine(nodes, edges);
@@ -62,6 +64,14 @@ export function useBattle() {
     const validation = engine.validate();
     if (!validation.valid) {
       flowchartStore.setValid(false, validation.error);
+      battleStore.addLog({
+        round: battleStore.currentRound,
+        action: `❌ Flowchart Error: ${validation.error ?? 'Invalid flowchart'}`,
+        actor: 'hero',
+        timestamp: Date.now(),
+      });
+      // Signal BattleScreen that execution never started (so it can reset battlePhase)
+      battleStore.setExecuting(false);
       return;
     }
 
@@ -76,9 +86,6 @@ export function useBattle() {
     const battleState: BattleState = {
       heroHP: battleStore.heroHP,
       heroMaxHP: battleStore.heroMaxHP,
-      heroMana: battleStore.heroMana,
-      heroMaxMana: battleStore.heroMaxMana,
-      manaRegen: 5,
       enemyHP: battleStore.enemyHP,
       enemyMaxHP: battleStore.enemyMaxHP,
       heroAttack:  (charStats?.attack  ?? 10) + (shopStore.attackBonus ?? 0),
@@ -104,6 +111,9 @@ export function useBattle() {
       heroFreezeRounds: 0,
       heroPoisonRounds: 0,
       enemyStunnedRounds: 0,
+      enemyBurnRounds: 0,
+      enemyFreezeRounds: 0,
+      enemyPoisonRounds: 0,
       enemyAilmentType:   (enemyStats as any)?.ailmentType   ?? '',
       enemyAilmentChance: (enemyStats as any)?.ailmentChance ?? 0,
       // Inventory from shop
@@ -111,6 +121,15 @@ export function useBattle() {
       potions:   shopStore.potions,
       gold:      shopStore.gold,
       round: battleStore.currentRound,
+      // Turn-based fields (initialized with defaults for compatibility)
+      currentTurn: 1,
+      turnManaMax: actionsMax,
+      heroIsEvading: false,
+      conditionBonus: false,
+      heroBerserkRounds: 0,
+      // Phase 4: Virus state
+      virusTurnWasted: false,
+      manaDebuff: 0,
     };
 
     const result = engine.execute(battleState);
@@ -134,7 +153,6 @@ export function useBattle() {
       // Update HP/Mana immediately after each action step (not wait for end)
       if (step.heroHP   !== undefined) battleStore.updateHeroHP(step.heroHP);
       if (step.enemyHP  !== undefined) battleStore.updateEnemyHP(step.enemyHP);
-      if (step.heroMana !== undefined) battleStore.updateHeroMana(step.heroMana);
       // Update ailment + balance display state
       if (step.heroBurnRounds !== undefined || step.heroFreezeRounds !== undefined || step.heroPoisonRounds !== undefined || step.enemyStunnedRounds !== undefined) {
         battleStore.setAilments({
@@ -174,6 +192,17 @@ export function useBattle() {
     // Apply final state
     battleStore.updateHeroHP(result.finalState.heroHP);
     battleStore.updateEnemyHP(result.finalState.enemyHP);
+    // Sync enemy status and berserk rounds from final state
+    battleStore.setAilments({
+      burn: result.finalState.heroBurnRounds,
+      freeze: result.finalState.heroFreezeRounds,
+      poison: result.finalState.heroPoisonRounds,
+      enemyStun: result.finalState.enemyStunnedRounds,
+      enemyBurn: result.finalState.enemyBurnRounds,
+      enemyFreeze: result.finalState.enemyFreezeRounds,
+      enemyPoison: result.finalState.enemyPoisonRounds,
+      heroBerserk: result.finalState.heroBerserkRounds,
+    });
     // Sync remaining consumables back to shop store
     shopStore.setPotions(result.finalState.potions);
     shopStore.setAntidotes(result.finalState.antidotes);
@@ -192,6 +221,14 @@ export function useBattle() {
     battleStore.setCurrentNode(null);
     flowchartStore.highlightNode(null);
     flowchartStore.setExecutionLog(result.steps);
+
+    // Build execution trace for post-run visualization
+    const visitedNodeIds = result.steps.map((s) => s.nodeId);
+    const visitedConditionResults: Record<string, boolean> = {};
+    for (const s of result.steps) {
+      if (s.result !== undefined) visitedConditionResults[s.nodeId] = s.result;
+    }
+    flowchartStore.setVisitedTrace(visitedNodeIds, visitedConditionResults);
   }, [battleStore, flowchartStore]);
 
   return {
@@ -199,8 +236,6 @@ export function useBattle() {
     status: battleStore.status,
     heroHP: battleStore.heroHP,
     heroMaxHP: battleStore.heroMaxHP,
-    heroMana: battleStore.heroMana,
-    heroMaxMana: battleStore.heroMaxMana,
     enemyHP: battleStore.enemyHP,
     enemyMaxHP: battleStore.enemyMaxHP,
     battleLog: battleStore.battleLog,
@@ -211,12 +246,16 @@ export function useBattle() {
     heroFreezeRounds:  battleStore.heroFreezeRounds,
     heroPoisonRounds:  battleStore.heroPoisonRounds,
     enemyStunnedRounds: battleStore.enemyStunnedRounds,
+    enemyBurnRounds:   battleStore.enemyBurnRounds,
+    enemyFreezeRounds: battleStore.enemyFreezeRounds,
+    enemyPoisonRounds: battleStore.enemyPoisonRounds,
+    heroBerserkRounds: battleStore.heroBerserkRounds,
     healCharges:       battleStore.healCharges,
     comboCount:        battleStore.comboCount,
     startBattle,
     restartBattle,
     stopBattle,
-    executeBattle: (speedMs?: number, requiredBlocks?: RequiredBlock[]) => executeBattle(speedMs, requiredBlocks),
+    executeBattle: (speedMs?: number, requiredBlocks?: RequiredBlock[], actionsMax?: number) => executeBattle(speedMs, requiredBlocks, actionsMax),
     resetBattle: battleStore.resetBattle,
   };
 }

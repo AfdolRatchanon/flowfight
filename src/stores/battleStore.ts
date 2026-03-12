@@ -6,8 +6,6 @@ interface BattleState {
   status: BattleStatus;
   heroHP: number;
   heroMaxHP: number;
-  heroMana: number;
-  heroMaxMana: number;
   enemyHP: number;
   enemyMaxHP: number;
   currentRound: number;
@@ -21,6 +19,10 @@ interface BattleState {
   heroFreezeRounds: number;
   heroPoisonRounds: number;
   enemyStunnedRounds: number;
+  enemyBurnRounds: number;
+  enemyFreezeRounds: number;
+  enemyPoisonRounds: number;
+  heroBerserkRounds: number;
   healCharges: number;
   comboCount: number;
 
@@ -29,13 +31,12 @@ interface BattleState {
   setStatus: (status: BattleStatus) => void;
   updateHeroHP: (hp: number) => void;
   updateEnemyHP: (hp: number) => void;
-  updateHeroMana: (mana: number) => void;
   addLog: (log: BattleLog) => void;
   setExecuting: (executing: boolean) => void;
   setCurrentNode: (nodeId: string | null) => void;
   incrementRound: () => void;
   setTotalDamageTaken: (dmg: number) => void;
-  setAilments: (a: { burn: number; freeze: number; poison: number; enemyStun: number }) => void;
+  setAilments: (a: { burn: number; freeze: number; poison: number; enemyStun: number; enemyBurn?: number; enemyFreeze?: number; enemyPoison?: number; heroBerserk?: number }) => void;
   setHealCharges: (n: number) => void;
   setComboCount: (n: number) => void;
   resetBattle: () => void;
@@ -46,8 +47,6 @@ export const useBattleStore = create<BattleState>((set) => ({
   status: 'waiting',
   heroHP: 100,
   heroMaxHP: 100,
-  heroMana: 50,
-  heroMaxMana: 50,
   enemyHP: 80,
   enemyMaxHP: 80,
   currentRound: 1,
@@ -59,6 +58,10 @@ export const useBattleStore = create<BattleState>((set) => ({
   heroFreezeRounds: 0,
   heroPoisonRounds: 0,
   enemyStunnedRounds: 0,
+  enemyBurnRounds: 0,
+  enemyFreezeRounds: 0,
+  enemyPoisonRounds: 0,
+  heroBerserkRounds: 0,
   healCharges: 3,
   comboCount: 0,
 
@@ -80,12 +83,21 @@ export const useBattleStore = create<BattleState>((set) => ({
       status: 'waiting',
       heroHP: character.stats.currentHP,
       heroMaxHP: character.stats.maxHP,
-      heroMana: character.stats.currentMana ?? character.stats.maxMana ?? 50,
-      heroMaxMana: character.stats.maxMana ?? 50,
       enemyHP: enemy.stats.currentHP,
       enemyMaxHP: enemy.stats.maxHP,
       currentRound: 1,
       battleLog: [],
+      heroBurnRounds: 0,
+      heroFreezeRounds: 0,
+      heroPoisonRounds: 0,
+      enemyStunnedRounds: 0,
+      enemyBurnRounds: 0,
+      enemyFreezeRounds: 0,
+      enemyPoisonRounds: 0,
+      heroBerserkRounds: 0,
+      healCharges: 3,
+      comboCount: 0,
+      totalDamageTaken: 0,
     });
   },
 
@@ -94,12 +106,20 @@ export const useBattleStore = create<BattleState>((set) => ({
   setTotalDamageTaken: (totalDamageTaken) => set({ totalDamageTaken }),
   updateHeroHP: (hp) => set({ heroHP: Math.max(0, hp) }),
   updateEnemyHP: (hp) => set({ enemyHP: Math.max(0, hp) }),
-  updateHeroMana: (mana) => set({ heroMana: Math.max(0, mana) }),
   addLog: (log) => set((state) => ({ battleLog: [...state.battleLog, log] })),
   setExecuting: (isExecuting) => set({ isExecuting }),
   setCurrentNode: (currentNodeId) => set({ currentNodeId }),
   incrementRound: () => set((state) => ({ currentRound: state.currentRound + 1 })),
-  setAilments: (a) => set({ heroBurnRounds: a.burn, heroFreezeRounds: a.freeze, heroPoisonRounds: a.poison, enemyStunnedRounds: a.enemyStun }),
+  setAilments: (a) => set({
+    heroBurnRounds: a.burn,
+    heroFreezeRounds: a.freeze,
+    heroPoisonRounds: a.poison,
+    enemyStunnedRounds: a.enemyStun,
+    ...(a.enemyBurn !== undefined ? { enemyBurnRounds: a.enemyBurn } : {}),
+    ...(a.enemyFreeze !== undefined ? { enemyFreezeRounds: a.enemyFreeze } : {}),
+    ...(a.enemyPoison !== undefined ? { enemyPoisonRounds: a.enemyPoison } : {}),
+    ...(a.heroBerserk !== undefined ? { heroBerserkRounds: a.heroBerserk } : {}),
+  }),
   setHealCharges: (healCharges) => set({ healCharges }),
   setComboCount: (comboCount) => set({ comboCount }),
 
@@ -108,8 +128,6 @@ export const useBattleStore = create<BattleState>((set) => ({
     status: 'waiting',
     heroHP: 100,
     heroMaxHP: 100,
-    heroMana: 50,
-    heroMaxMana: 50,
     enemyHP: 80,
     enemyMaxHP: 80,
     currentRound: 1,
@@ -121,6 +139,10 @@ export const useBattleStore = create<BattleState>((set) => ({
     heroFreezeRounds: 0,
     heroPoisonRounds: 0,
     enemyStunnedRounds: 0,
+    enemyBurnRounds: 0,
+    enemyFreezeRounds: 0,
+    enemyPoisonRounds: 0,
+    heroBerserkRounds: 0,
     healCharges: 3,
     comboCount: 0,
   }),

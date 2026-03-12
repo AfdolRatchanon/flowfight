@@ -78,6 +78,10 @@ interface ProfileFields {
   isAnonymous?: boolean;
 }
 
+export async function ensurePlayerProfile(user: User, fields: ProfileFields): Promise<void> {
+  return createPlayerProfile(user, fields);
+}
+
 async function createPlayerProfile(user: User, fields: ProfileFields): Promise<void> {
   const playerRef = doc(db, 'users', user.uid);
   const existing = await getDoc(playerRef);
@@ -109,25 +113,30 @@ export async function getPlayerProfile(uid: string): Promise<Player | null> {
   return null;
 }
 
-export async function savePlayerProgress(uid: string, levelId: string, won: boolean): Promise<Player | null> {
+export async function savePlayerProgress(uid: string, levelId: string, won: boolean, username?: string): Promise<Player | null> {
   const ref = doc(db, 'users', uid);
   const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
 
-  const data = snap.data() as Player;
-  const levelsCompleted: string[] = [...(data.levelsCompleted ?? [])];
+  // ถ้า doc ยังไม่มีใน Firestore ให้ upsert แทนที่จะ return null
+  const data: Partial<Player> = snap.exists() ? (snap.data() as Player) : {};
+  const levelsCompleted: string[] = [...((data.levelsCompleted ?? []) as string[])];
   if (won && !levelsCompleted.includes(levelId)) levelsCompleted.push(levelId);
 
   const levelNumber = parseInt(levelId.replace('level_', '')) || 1;
+  const prevStats = data.stats ?? { totalKills: 0, totalDefeats: 0, levelReached: 1, totalPlayTime: 0 };
   const newStats = {
-    totalKills:   (data.stats?.totalKills   ?? 0) + (won ? 1 : 0),
-    totalDefeats: (data.stats?.totalDefeats ?? 0) + (won ? 0 : 1),
-    levelReached: Math.max(data.stats?.levelReached ?? 1, levelNumber + (won ? 1 : 0)),
-    totalPlayTime: data.stats?.totalPlayTime ?? 0,
+    totalKills:   (prevStats.totalKills   ?? 0) + (won ? 1 : 0),
+    totalDefeats: (prevStats.totalDefeats ?? 0) + (won ? 0 : 1),
+    levelReached: Math.max(prevStats.levelReached ?? 1, levelNumber + (won ? 1 : 0)),
+    totalPlayTime: prevStats.totalPlayTime ?? 0,
   };
-  await setDoc(ref, { levelsCompleted, stats: newStats, lastActive: Date.now() }, { merge: true });
 
-  return { ...data, id: uid, levelsCompleted, stats: newStats };
+  const payload: Record<string, unknown> = { levelsCompleted, stats: newStats, lastActive: Date.now() };
+  if (username) payload.username = username;
+
+  await setDoc(ref, payload, { merge: true });
+
+  return { ...data, id: uid, levelsCompleted, stats: newStats } as Player;
 }
 
 export async function saveCharacterProgress(uid: string, character: Character): Promise<void> {

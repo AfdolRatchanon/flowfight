@@ -102,8 +102,6 @@ export interface CharacterStats {
   speed: number;
   armor?: number;  // Physical damage reduction (flat)
   parry?: number;  // % chance to parry incoming attack (0-100)
-  maxMana?: number;
-  currentMana?: number;
 }
 
 export interface Character {
@@ -177,17 +175,33 @@ export interface Level {
 
 export type FlowNodeType = 'start' | 'end' | 'action' | 'condition' | 'loop' | 'operator';
 export type ActionType =
-  | 'attack' | 'heal' | 'dodge' | 'cast_spell' | 'use_item' | 'power_strike'
+  | 'attack' | 'heal' | 'dodge' | 'cast_spell' | 'use_item' | 'power_strike' | 'berserk'
+  // Knight skills
+  | 'shield' | 'counter' | 'war_cry'
+  // Mage skills
+  | 'fireball' | 'frost_nova' | 'arcane_surge'
+  // Rogue skills
+  | 'backstab' | 'poison_strike' | 'shadow_step'
+  // Barbarian skills
+  | 'whirlwind' | 'bloodthirst' | 'battle_cry'
   // Battle consumables
   | 'use_antidote' | 'use_potion'
   // Shop actions
-  | 'buy_potion' | 'buy_antidote' | 'buy_scroll' | 'save_gold';
+  | 'buy_potion' | 'buy_antidote' | 'buy_scroll' | 'save_gold'
+  // Phase 4: Debug block
+  | 'debug_block';
 export type ConditionType =
-  | 'hp_greater' | 'hp_less' | 'mana_greater' | 'mana_less' | 'enemy_alive' | 'enemy_close'
+  | 'hp_greater' | 'hp_less' | 'enemy_alive' | 'enemy_close'
   // Ailment conditions
   | 'hero_burning' | 'hero_poisoned' | 'hero_frozen' | 'enemy_stunned'
+  // Enemy status conditions
+  | 'enemy_burning' | 'enemy_frozen' | 'enemy_poisoned'
   // Shop conditions
-  | 'gold_greater' | 'gold_less';
+  | 'gold_greater' | 'gold_less'
+  // Turn counter — teaches loop counting concept (threshold = min turn number)
+  | 'turn_gte'
+  // Phase 4: Virus conditions
+  | 'is_corrupted';
 export type LoopType = 'repeat' | 'while_alive' | 'while_hp';
 export type AilmentType = 'burn' | 'freeze' | 'poison' | 'stun';
 
@@ -200,6 +214,8 @@ export interface FlowNodeData {
   threshold?: number; // For HP conditions
   isActive?: boolean; // Highlighted during execution
   result?: boolean; // Result of condition (for coloring edges)
+  isVirus?: boolean;       // Phase 4: true if this is a virus/bug block
+  virusEffect?: string;    // Phase 4: 'drain_hp' | 'waste_turn' | 'scramble'
 }
 
 export interface FlowNode {
@@ -226,7 +242,6 @@ export interface ExecutionStep {
   timestamp: number;
   heroHP?: number;   // HP หลังจาก step นี้รัน (สำหรับ real-time update)
   enemyHP?: number;
-  heroMana?: number; // Mana หลังจาก step นี้รัน
   // Balance / ailment state per step (for UI display)
   heroBurnRounds?: number;
   heroFreezeRounds?: number;

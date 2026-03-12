@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LEVELS, ENDLESS_LEVEL, getEndlessWaveEnemy } from '../../utils/constants';
+import { LEVELS, ENDLESS_LEVEL, getEndlessWaveEnemy, PASSIVE_BONUSES } from '../../utils/constants';
 import { useBattle } from '../../hooks/useBattle';
+import { useBattleStore } from '../../stores/battleStore';
 import { useGameStore } from '../../stores/gameStore';
 import { useFlowchartStore } from '../../stores/flowchartStore';
 import { useShopStore } from '../../stores/shopStore';
@@ -10,7 +11,7 @@ import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLe
 import type { LevelBattleStats } from '../../services/authService';
 import { gainXP, levelProgressPct, xpToNextLevel, LEVEL_XP_TABLE, MAX_LEVEL } from '../../utils/levelSystem';
 import FlowchartEditor from '../FlowchartEditor/FlowchartEditor';
-import { previewFlowchart } from '../../engines/FlowchartEngine';
+import { previewFlowchart, calcFlowchartManaCost, calcTurnManaMax, executeEnemyAction, resolveHeroStatuses } from '../../engines/FlowchartEngine';
 import type { BattleState, PreviewStep } from '../../engines/FlowchartEngine';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ThemeColors } from '../../contexts/ThemeContext';
@@ -288,30 +289,52 @@ function parseLogAction(action: string) {
   return { heroAnim: null, enemyAnim: null, enemyDmg: null, heroDmg: null, healAmt: null };
 }
 
-// ===== Tutorial hints per level (1-5) =====
+// ===== Tutorial hints per level =====
 const TUTORIAL_HINTS: Record<string, string[]> = {
+  // Level 1: Sequence
   level_1: [
-    '1/3 — คลิก "Attack" ในแผง Blocks (ซ้ายมือ) เพื่อเพิ่ม block',
+    '1/3 — คลิก "Attack" ในแผง Blocks (ซ้ายมือ) เพื่อเพิ่ม block ลงใน canvas',
     '2/3 — ลากปลายลูกศรจาก Start ไปยัง Attack แล้วต่อ Attack → End',
-    '3/3 — กด ▶ Play แล้วดูผลการต่อสู้!',
+    '3/3 — กด ▶ Play แล้วดูผลการต่อสู้! นี่คือ Sequence — ทำงานตามลำดับจากบนลงล่าง',
   ],
+  // Level 2: Sequence (longer)
   level_2: [
-    '1/2 — วาง Attack 2 ตัวต่อกัน: Start → Attack → Attack → End',
-    '2/2 — ลองกด Step เพื่อดูทีละขั้นตอน',
+    '1/3 — วาง Attack หลายตัวต่อกัน: Start → Attack → Attack → Attack → End',
+    '2/3 — ยิ่งวาง Attack มาก ยิ่งโจมตีได้มากครั้งต่อรอบ',
+    '3/3 — กด Step เพื่อดูทีละขั้นตอน แล้วสังเกตลำดับการทำงาน',
   ],
+  // Level 3: While Loop
   level_3: [
-    '1/3 — วาง "Enemy Alive?" แล้วเชื่อม Start → Enemy Alive?',
-    '2/3 — ช่อง YES → Attack → กลับไปที่ Enemy Alive? (สร้าง loop!)',
-    '3/3 — ช่อง NO → End (ออกจาก loop เมื่อชนะ)',
+    '1/4 — วาง "Enemy Alive?" (Condition) แล้วเชื่อม Start → Enemy Alive?',
+    '2/4 — จาก YES → Attack → ลูกศรกลับไปที่ Enemy Alive? (สร้าง loop!)',
+    '3/4 — จาก NO → End (ออกจาก loop เมื่อศัตรูตาย)',
+    '4/4 — นี่คือ While Loop: "ทำซ้ำ ตราบที่ศัตรูยังมีชีวิต"',
   ],
+  // Level 4: If/Else
   level_4: [
-    '1/3 — วาง "HP < 50?" ไว้หลัง loop',
-    '2/3 — YES → Heal → กลับไป check',
-    '3/3 — NO → Attack → กลับไป check',
+    '1/4 — สร้าง While Loop ก่อน: Enemy Alive? → YES: ... → กลับไป, NO: End',
+    '2/4 — ใน YES branch วาง "HP < 50?" แล้วแยก 2 ทาง',
+    '3/4 — YES (HP ต่ำ) → Heal, NO (HP ปกติ) → Attack',
+    '4/4 — นี่คือ If/Else: ตัดสินใจ 2 ทางตามเงื่อนไข',
   ],
+  // Level 5: Nested If
   level_5: [
-    '1/2 — ผสม condition loop + heal — เช็ค HP ทุกรอบ',
-    '2/2 — ลอง HP < 50? → YES: Heal, NO: Attack',
+    '1/4 — วาง While Loop (Enemy Alive?) ก่อน',
+    '2/4 — ใน YES branch: วาง "HP < 30?" → YES: Dodge, NO: ต่อ',
+    '3/4 — ต่อจาก NO: วาง "HP < 60?" → YES: Heal, NO: Attack',
+    '4/4 — Nested If = Condition ซ้อนใน Condition — ตรวจหลายระดับ!',
+  ],
+  // Level 6: Counter Loop
+  level_6: [
+    '1/3 — วาง While Loop (Enemy Alive?) ก่อน',
+    '2/3 — ใน YES branch: วาง "Turn ≥ 4?" → YES: Power Strike, NO: Attack',
+    '3/3 — Turn ≥ N เหมือน for-loop counter — นับรอบ แล้วทำท่าพิเศษเมื่อถึง!',
+  ],
+  // Level 7: Resource Management
+  level_7: [
+    '1/3 — วาง While Loop (Enemy Alive?) ก่อน',
+    '2/3 — ใน YES branch: วาง "MP > 25?" → YES: Cast Spell, NO: Attack',
+    '3/3 — ตรวจ resource ก่อนใช้ — เหมือน if (mana >= cost) useSpell() ใน code!',
   ],
 };
 
@@ -367,12 +390,26 @@ export default function BattleScreen() {
   const { levelId } = useParams<{ levelId: string }>();
   const navigate = useNavigate();
   const { character, player, setPlayer, setCharacter } = useGameStore();
-  const { status, heroHP, heroMaxHP, heroMana, heroMaxMana, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, heroBurnRounds, heroFreezeRounds, heroPoisonRounds, enemyStunnedRounds, healCharges, comboCount, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
+  const { status, heroHP, heroMaxHP, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, heroBurnRounds, heroFreezeRounds, heroPoisonRounds, enemyStunnedRounds, enemyBurnRounds, enemyFreezeRounds, enemyPoisonRounds, heroBerserkRounds, healCharges, comboCount, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
   const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold, addGold, purchasedEquipment } = useShopStore();
   const { validationError, nodes: flowNodes, clearToStartEnd } = useFlowchartStore();
   const [speedIdx, setSpeedIdx] = useState(1);
   const progressSaved = useRef(false);
   const battleStartTime = useRef<number>(0);
+
+  // Turn-based state
+  const [currentTurn, setCurrentTurn] = useState(1);
+  const [battlePhase, setBattlePhase] = useState<'planning' | 'running' | 'enemy_turn' | 'resolution'>('planning');
+  const [enemyBehaviorIdx, setEnemyBehaviorIdx] = useState(0);
+  // Phase 4: extra action-budget debuff carried over from virus effect
+  const [extraManaDebuff, setExtraManaDebuff] = useState(0);
+
+  // Action budget per turn
+  const turnManaMax  = Math.max(1, calcTurnManaMax(currentTurn) - extraManaDebuff);
+  const turnManaUsed = useMemo(() => calcFlowchartManaCost(flowNodes), [flowNodes]);
+
+  // Live battle state ref for enemy turn
+  const liveBattleStateRef = useRef<BattleState | null>(null);
 
   // Shop state
   const [showShop, setShowShop] = useState(false);
@@ -388,6 +425,15 @@ export default function BattleScreen() {
   const level = (isEndless
     ? { ...ENDLESS_LEVEL, enemy: getEndlessWaveEnemy(waveNumber) }
     : LEVELS.find((l) => l.id === levelId)) as (typeof LEVELS)[0] | undefined;
+
+  // Enemy intention (needs level to be defined first)
+  const enemyIntention = level?.enemy.behaviors?.[enemyBehaviorIdx % (level?.enemy.behaviors?.length ?? 1)] ?? 'attack';
+  const intentionLabel: Record<string, string> = {
+    attack: '🗡️ โจมตี',
+    heal: '💚 ฟื้นฟู',
+    cast_spell: '✨ ใช้สเปล',
+  };
+  const enemyIntentionLabel = intentionLabel[enemyIntention] ?? '👁️ เฝ้าดู';
 
   // Animation state
   const [heroAnimKey, setHeroAnimKey] = useState(0);
@@ -434,9 +480,6 @@ export default function BattleScreen() {
   const previewState = useMemo<BattleState>(() => ({
     heroHP: level?.enemy ? heroMaxHP : 100,
     heroMaxHP,
-    heroMana,
-    heroMaxMana: heroMaxMana ?? 50,
-    manaRegen: 5,
     enemyHP: level?.enemy.stats.maxHP ?? 100,
     enemyMaxHP: level?.enemy.stats.maxHP ?? 100,
     heroAttack:  character?.stats.attack  ?? 12,
@@ -459,13 +502,24 @@ export default function BattleScreen() {
     heroFreezeRounds: 0,
     heroPoisonRounds: 0,
     enemyStunnedRounds: 0,
+    enemyBurnRounds: 0,
+    enemyFreezeRounds: 0,
+    enemyPoisonRounds: 0,
     enemyAilmentType:   (level?.enemy.stats as any)?.ailmentType  ?? '',
     enemyAilmentChance: (level?.enemy.stats as any)?.ailmentChance ?? 0,
     antidotes: shopAntidotes,
     potions:   shopPotions,
     gold:      shopGold,
     round: 1,
-  }), [level, character, heroMaxHP, heroMana, heroMaxMana, isEnemyShielded, shieldMissing, shopAntidotes, shopPotions, shopGold]);
+    currentTurn: 1,
+    turnManaMax: 3,
+    heroIsEvading: false,
+    conditionBonus: false,
+    heroBerserkRounds: 0,
+    // Phase 4
+    virusTurnWasted: false,
+    manaDebuff: 0,
+  }), [level, character, heroMaxHP, isEnemyShielded, shieldMissing, shopAntidotes, shopPotions, shopGold]);
 
   const flowPreview = useMemo(() => {
     if (status !== 'waiting' || validationError) return [];
@@ -486,6 +540,39 @@ export default function BattleScreen() {
     createdAt: Date.now(), lastModified: Date.now(),
   };
 
+  // Compute passive bonuses for heroChar based on class + level
+  const passiveBonusSummary = (() => {
+    const passives = PASSIVE_BONUSES.filter(p => p.class === heroChar.class && p.requiredLevel <= heroChar.level);
+    return passives.reduce((acc, p) => ({
+      atkBonus:   acc.atkBonus   + p.atkBonus,
+      defBonus:   acc.defBonus   + p.defBonus,
+      hpBonus:    acc.hpBonus    + p.hpBonus,
+      speedBonus: acc.speedBonus + p.speedBonus,
+    }), { atkBonus: 0, defBonus: 0, hpBonus: 0, speedBonus: 0 });
+  })();
+
+  const getBoostedChar = () => {
+    const passives = PASSIVE_BONUSES.filter(p => p.class === heroChar.class && p.requiredLevel <= heroChar.level);
+    const totalPassive = passives.reduce((acc, p) => ({
+      atkBonus:   acc.atkBonus   + p.atkBonus,
+      defBonus:   acc.defBonus   + p.defBonus,
+      hpBonus:    acc.hpBonus    + p.hpBonus,
+      speedBonus: acc.speedBonus + p.speedBonus,
+    }), { atkBonus: 0, defBonus: 0, hpBonus: 0, speedBonus: 0 });
+
+    return {
+      ...heroChar,
+      stats: {
+        ...heroChar.stats,
+        attack:    heroChar.stats.attack    + totalPassive.atkBonus,
+        defense:   heroChar.stats.defense   + totalPassive.defBonus,
+        maxHP:     heroChar.stats.maxHP     + totalPassive.hpBonus,
+        currentHP: heroChar.stats.maxHP     + totalPassive.hpBonus,
+        speed:     heroChar.stats.speed     + totalPassive.speedBonus,
+      },
+    };
+  };
+
   // Init battle on level change
   useEffect(() => {
     if (level) {
@@ -493,7 +580,11 @@ export default function BattleScreen() {
       setLevelUpData(null);
       setXpGained(0);
       setMissingBlocks([]);
-      startBattle(heroChar, level.enemy as any, level.id);
+      setCurrentTurn(1);
+      setBattlePhase('planning');
+      setEnemyBehaviorIdx(0);
+      liveBattleStateRef.current = null;
+      startBattle(getBoostedChar() as any, level.enemy as any, level.id);
     }
   }, [levelId]);
 
@@ -520,6 +611,119 @@ export default function BattleScreen() {
     return () => clearTimeout(t);
   }, [battleLog.length]);
 
+  // After hero's flowchart finishes in turn-based mode, trigger enemy turn
+  useEffect(() => {
+    // When battlePhase is 'running' and execution finishes:
+    // - victory (enemy died) or hero died → leave as-is (useBattle already set status)
+    // - flowchart ended, enemy still alive → useBattle sets 'defeat' — we override to enemy turn
+    if (battlePhase === 'running' && !isExecuting) {
+      if (status === 'victory') {
+        // enemy died — stay as victory
+        setBattlePhase('planning');
+        return;
+      }
+      if (heroHP <= 0) {
+        // hero died — stay as defeat
+        setBattlePhase('planning');
+        return;
+      }
+      // Fallback: validation failed — execution never started, reset phase so button works again
+      if (status === 'waiting' || status === 'running') {
+        setBattlePhase('planning');
+        return;
+      }
+      if (status === 'defeat' && enemyHP > 0 && heroHP > 0) {
+        // Flowchart ended, enemy still alive — go to enemy turn
+        // Override status back to 'waiting' so we can continue
+        battleStore.setStatus('waiting');
+
+        // Phase 4: check if any debug_block was executed — remove virus nodes
+        const execLog = useFlowchartStore.getState().executionLog;
+        const hasDebug = execLog.some((s) => s.action === 'debug_block');
+        if (hasDebug) {
+          useFlowchartStore.getState().removeVirusNodes();
+        }
+
+        const charStats  = useBattleStore.getState().battle?.character.stats;
+        const enemyStats = useBattleStore.getState().battle?.enemy.stats;
+        const store = useBattleStore.getState();
+
+        // Phase 4: handle virusTurnWasted and manaDebuff from final engine state
+        const virusTurnWasted = liveBattleStateRef.current?.virusTurnWasted ?? false;
+        const manaDebuffVal   = liveBattleStateRef.current?.manaDebuff ?? 0;
+        if (manaDebuffVal > 0) {
+          setExtraManaDebuff((prev) => prev + manaDebuffVal);
+        }
+
+        // Carry enemy enrage state: check if HP dropped below threshold during hero turn
+        const baseEnemyAtk = (enemyStats as any)?.attack ?? 8;
+        const enrageThresholdPct = (enemyStats as any)?.enrageThreshold ?? 0;
+        const isEnemyEnragedNow = enrageThresholdPct > 0 &&
+          store.enemyMaxHP > 0 &&
+          (store.enemyHP / store.enemyMaxHP) * 100 <= enrageThresholdPct;
+        const enragedAtk = isEnemyEnragedNow ? Math.floor(baseEnemyAtk * 1.5) : baseEnemyAtk;
+
+        const stateSnap: BattleState = {
+          heroHP: store.heroHP,
+          heroMaxHP: store.heroMaxHP,
+          enemyHP: store.enemyHP,
+          enemyMaxHP: store.enemyMaxHP,
+          heroAttack:  (charStats?.attack ?? 10),
+          heroDefense: charStats?.defense ?? 5,
+          heroParry: 10,
+          enemyAttack:  enragedAtk,
+          enemyBaseAttack: baseEnemyAtk,
+          enemyDefense: (enemyStats as any)?.defense ?? 3,
+          enemyArmor:   (enemyStats as any)?.armor ?? 0,
+          enemyParry:   (enemyStats as any)?.parry ?? 0,
+          enemyShielded: false,
+          shieldReason: '',
+          enemyEnraged: isEnemyEnragedNow,
+          enrageThreshold: enrageThresholdPct,
+          healCharges: store.healCharges,
+          powerStrikeCooldown: 0,
+          lastActionType: '',
+          comboCount: store.comboCount,
+          heroBurnRounds: store.heroBurnRounds,
+          heroFreezeRounds: store.heroFreezeRounds,
+          heroPoisonRounds: store.heroPoisonRounds,
+          enemyStunnedRounds: store.enemyStunnedRounds,
+          enemyBurnRounds: liveBattleStateRef.current?.enemyBurnRounds ?? 0,
+          enemyFreezeRounds: liveBattleStateRef.current?.enemyFreezeRounds ?? 0,
+          enemyPoisonRounds: liveBattleStateRef.current?.enemyPoisonRounds ?? 0,
+          enemyAilmentType: (enemyStats as any)?.ailmentType ?? '',
+          enemyAilmentChance: (enemyStats as any)?.ailmentChance ?? 0,
+          antidotes: 0,
+          potions: 0,
+          gold: 0,
+          round: currentTurn,
+          currentTurn,
+          turnManaMax,
+          heroIsEvading: liveBattleStateRef.current?.heroIsEvading ?? false,
+          conditionBonus: false,
+          heroBerserkRounds: liveBattleStateRef.current?.heroBerserkRounds ?? 0,
+          // Phase 4
+          virusTurnWasted: false,
+          manaDebuff: 0,
+        };
+        liveBattleStateRef.current = stateSnap;
+
+        // Phase 4: if virus wasted the turn, enemy gets a free extra attack immediately
+        if (virusTurnWasted) {
+          battleStore.addLog({ round: currentTurn, action: '☠️ Virus wasted your turn! Enemy attacks for free!', actor: 'enemy', timestamp: Date.now() });
+          const { newState: extraState, log: extraLog } = executeEnemyAction(enemyIntention, stateSnap);
+          battleStore.addLog({ round: currentTurn, action: extraLog, actor: 'enemy', timestamp: Date.now() });
+          battleStore.updateHeroHP(extraState.heroHP);
+          battleStore.updateEnemyHP(extraState.enemyHP);
+          liveBattleStateRef.current = { ...extraState, virusTurnWasted: false, manaDebuff: 0 };
+          handleEnemyTurn(liveBattleStateRef.current);
+        } else {
+          handleEnemyTurn(stateSnap);
+        }
+      }
+    }
+  }, [isExecuting, battlePhase, status]);
+
   // Endless wave: on victory, show wave-clear overlay instead of normal flow
   useEffect(() => {
     if (isEndless && status === 'victory' && !progressSaved.current) {
@@ -533,6 +737,10 @@ export default function BattleScreen() {
   // Save progress + award XP on battle end
   useEffect(() => {
     if ((status === 'victory' || status === 'defeat') && !progressSaved.current && player && level) {
+      // Turn-based: 'defeat' while both still alive = hero flowchart ended this turn, NOT a final loss
+      // Don't save progress yet — wait for the real final outcome (victory or hero HP = 0)
+      if (status === 'defeat' && heroHP > 0 && enemyHP > 0) return;
+
       progressSaved.current = true;
 
       // Skip normal save logic for endless mode
@@ -610,7 +818,7 @@ export default function BattleScreen() {
         heroMaxHP:       heroMaxHP,
       };
 
-      savePlayerProgress(player.id, level.id, won).then((updated) => {
+      savePlayerProgress(player.id, level.id, won, player.username ?? undefined).then((updated) => {
         if (updated) {
           // merge username จาก store เพราะ Firestore อาจไม่มี field นี้
           const mergedPlayer = { ...updated, username: updated.username ?? player.username };
@@ -623,6 +831,107 @@ export default function BattleScreen() {
       }).catch(() => {});
     }
   }, [status]);
+
+  // ===== Turn-based helper functions =====
+  const battleStore = useBattleStore();
+
+  function handleResolution(stateAfterEnemy: BattleState) {
+    // Use resolveHeroStatuses for hero ailment/berserk ticks
+    const { newState: s, logs: ticks } = resolveHeroStatuses(stateAfterEnemy);
+    if (ticks.length > 0) {
+      battleStore.addLog({ round: currentTurn, action: ticks.join(' | '), actor: 'hero', timestamp: Date.now() });
+    }
+    // Sync HP/ailments back
+    battleStore.updateHeroHP(s.heroHP);
+    battleStore.updateEnemyHP(s.enemyHP);
+    battleStore.setAilments({
+      burn: s.heroBurnRounds, freeze: s.heroFreezeRounds, poison: s.heroPoisonRounds, enemyStun: s.enemyStunnedRounds,
+      enemyBurn: s.enemyBurnRounds, enemyFreeze: s.enemyFreezeRounds, enemyPoison: s.enemyPoisonRounds, heroBerserk: s.heroBerserkRounds,
+    });
+    liveBattleStateRef.current = s;
+
+    // Check end conditions
+    if (s.enemyHP <= 0) { battleStore.setStatus('victory'); setBattlePhase('planning'); return; }
+    if (s.heroHP <= 0)  { battleStore.setStatus('defeat');  setBattlePhase('planning'); return; }
+
+    // Advance turn
+    setCurrentTurn(t => t + 1);
+    setBattlePhase('planning');
+  }
+
+  function handleEnemyTurn(stateAfterHero: BattleState) {
+    setBattlePhase('enemy_turn');
+    const speedMs = SPEED_LEVELS[speedIdx].ms;
+    setTimeout(() => {
+      const { newState, log } = executeEnemyAction(enemyIntention, stateAfterHero);
+      battleStore.addLog({ round: currentTurn, action: log, actor: 'enemy', timestamp: Date.now() });
+
+      // Phase 4: Boss virus injection (levels 11+) — 35% chance each turn
+      if (level && level.number >= 11 && newState.enemyHP > 0) {
+        if (Math.random() < 0.35) {
+          const { nodes: vNodes, edges: vEdges, injectVirusNode: injectVirus } = useFlowchartStore.getState();
+          const validEdges = vEdges.filter((e) => {
+            const src = vNodes.find((n) => n.id === e.source);
+            const tgt = vNodes.find((n) => n.id === e.target);
+            return src?.type !== 'start' && tgt?.type !== 'end'
+              && !src?.data.isVirus && !tgt?.data.isVirus;
+          });
+          if (validEdges.length > 0) {
+            const randomEdge = validEdges[Math.floor(Math.random() * validEdges.length)];
+            const effects = ['drain_hp', 'waste_turn', 'mana_drain', 'scramble'] as const;
+            const effect = effects[Math.floor(Math.random() * effects.length)];
+            const effectLabels: Record<string, string> = {
+              drain_hp: '☠️ Drain HP', waste_turn: '☠️ Waste Turn',
+              mana_drain: '☠️ Mana Drain', scramble: '☠️ Scramble',
+            };
+            const srcNode = vNodes.find((n) => n.id === randomEdge.source);
+            const tgtNode = vNodes.find((n) => n.id === randomEdge.target);
+            const midX = ((srcNode?.position.x ?? 0) + (tgtNode?.position.x ?? 0)) / 2;
+            const midY = ((srcNode?.position.y ?? 0) + (tgtNode?.position.y ?? 0)) / 2 + 10;
+            const virusNode = {
+              id: `virus_${Date.now()}`,
+              type: 'action' as const,
+              position: { x: midX, y: midY },
+              data: {
+                label: effectLabels[effect],
+                actionType: 'debug_block' as const,
+                isVirus: true,
+                virusEffect: effect,
+              },
+            };
+            injectVirus(virusNode, randomEdge.id);
+            battleStore.addLog({ round: currentTurn, action: `☠️ Enemy injected a VIRUS into your flowchart! Place Debug Block to remove it.`, actor: 'enemy', timestamp: Date.now() });
+          }
+        }
+      }
+
+      // Animate enemy
+      setEnemyAnim('enemyHit');
+      setEnemyAnimKey(k => k + 1);
+      // Parse floating numbers
+      const heroDmgMatch = log.match(/Hero -(\d+)/i);
+      if (heroDmgMatch) {
+        const f = { id: ++floatId.current, text: `-${heroDmgMatch[1]}`, color: '#fda4af', side: 'hero' as const };
+        setFloats(p => [...p, f]);
+        setTimeout(() => setFloats(p => p.filter(x => x.id !== f.id)), 900);
+      }
+      setTimeout(() => { setEnemyAnim(''); }, 560);
+      // Update HP immediately
+      battleStore.updateHeroHP(newState.heroHP);
+      battleStore.updateEnemyHP(newState.enemyHP);
+      battleStore.setAilments({
+        burn: newState.heroBurnRounds, freeze: newState.heroFreezeRounds, poison: newState.heroPoisonRounds, enemyStun: newState.enemyStunnedRounds,
+        enemyBurn: newState.enemyBurnRounds, enemyFreeze: newState.enemyFreezeRounds, enemyPoison: newState.enemyPoisonRounds, heroBerserk: newState.heroBerserkRounds,
+      });
+      // Advance enemy behavior
+      setEnemyBehaviorIdx(i => i + 1);
+      // Resolution after another delay
+      setBattlePhase('resolution');
+      setTimeout(() => {
+        handleResolution(newState);
+      }, speedMs);
+    }, speedMs);
+  }
 
   if (!level) return (
     <div style={{ minHeight: '100vh', background: colors.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -758,6 +1067,25 @@ export default function BattleScreen() {
                 <span style={{ color: colors.text, fontWeight: 700, fontSize: 12 }}>{heroChar.name}</span>
               </div>
 
+              {/* Passive bonus indicator */}
+              {(passiveBonusSummary.atkBonus > 0 || passiveBonusSummary.defBonus > 0 || passiveBonusSummary.hpBonus > 0 || passiveBonusSummary.speedBonus > 0) && (
+                <div style={{
+                  display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 2, marginBottom: 3,
+                }}>
+                  <span style={{
+                    background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.4)',
+                    color: '#c084fc', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                  }}>
+                    Passive: {[
+                      passiveBonusSummary.atkBonus > 0 && `ATK+${passiveBonusSummary.atkBonus}`,
+                      passiveBonusSummary.defBonus > 0 && `DEF+${passiveBonusSummary.defBonus}`,
+                      passiveBonusSummary.hpBonus > 0 && `HP+${passiveBonusSummary.hpBonus}`,
+                      passiveBonusSummary.speedBonus > 0 && `SPD+${passiveBonusSummary.speedBonus}`,
+                    ].filter(Boolean).join(' ')}
+                  </span>
+                </div>
+              )}
+
               {/* Animated hero icon */}
               <div
                 key={`hero-${heroAnimKey}`}
@@ -779,13 +1107,7 @@ export default function BattleScreen() {
                 {heroHP} / {heroMaxHP} HP
               </p>
 
-              {/* Mana bar */}
-              <div style={{ width: '100%', height: 5, background: colors.bgSurface, borderRadius: 3, marginTop: 2, overflow: 'hidden' }}>
-                <div style={{ width: (heroMana / heroMaxMana * 100) + '%', height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, #3b82f6, #6366f1)', transition: 'width 0.3s' }} />
-              </div>
-              <p style={{ color: '#60a5fa', fontSize: 9, margin: '1px 0 0' }}>{heroMana}/{heroMaxMana} MP</p>
-
-              {/* Heal charges + Combo */}
+              {/* Heal charges + Combo + Berserk */}
               <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 3, flexWrap: 'wrap' }}>
                 <span style={{
                   background: healCharges > 0 ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.05)',
@@ -798,6 +1120,12 @@ export default function BattleScreen() {
                     background: 'rgba(251,191,36,0.2)', border: '1px solid rgba(251,191,36,0.5)',
                     color: '#fbbf24', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4,
                   }}>⚡ Combo x{comboCount + 1}</span>
+                )}
+                {heroBerserkRounds > 0 && (
+                  <span title={`Berserk: ${heroBerserkRounds} turns`} style={{
+                    background: 'rgba(220,38,38,0.25)', border: '1px solid rgba(220,38,38,0.6)',
+                    color: '#fca5a5', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4,
+                  }}>💢 Berserk {heroBerserkRounds}</span>
                 )}
               </div>
 
@@ -836,20 +1164,44 @@ export default function BattleScreen() {
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
               <span style={{ color: colors.textSub, fontWeight: 800, fontSize: 12 }}>VS</span>
 
+              {/* Turn counter */}
+              <div style={{
+                background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.4)',
+                borderRadius: 8, padding: '2px 10px', textAlign: 'center',
+              }}>
+                <span style={{ color: '#c4b5fd', fontSize: 11, fontWeight: 800 }}>Turn {currentTurn}</span>
+              </div>
+
+              {/* Phase 4: Virus warning banner */}
+              {flowNodes.some((n) => n.data.isVirus) && (
+                <div style={{
+                  background: 'rgba(150,0,30,0.8)', border: '1px solid rgba(220,0,80,0.6)',
+                  borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700,
+                  color: '#ff4070', textAlign: 'center',
+                }}>
+                  ☠️ VIRUS DETECTED in flowchart! Place Debug Block to remove.
+                </div>
+              )}
+
               {/* Play / Stop */}
               <div style={{ display: 'flex', gap: 6 }}>
                 <button
-                  onClick={() => { battleStartTime.current = Date.now(); executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as any); }}
-                  disabled={isExecuting || status === 'victory' || status === 'defeat'}
+                  onClick={() => {
+                    battleStartTime.current = Date.now();
+                    setBattlePhase('running');
+                    executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as any, turnManaMax);
+                  }}
+                  disabled={isExecuting || status === 'victory' || status === 'defeat' || battlePhase !== 'planning'}
                   style={{
                     background: isExecuting ? 'rgba(74,222,128,0.15)' : 'linear-gradient(135deg, #16a34a, #15803d)',
-                    border: 'none', color: 'white', padding: '9px 16px', borderRadius: 10,
-                    cursor: isExecuting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 14,
+                    border: 'none',
+                    color: 'white', padding: '9px 16px', borderRadius: 10,
+                    cursor: (isExecuting || battlePhase !== 'planning') ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 14,
                     opacity: status === 'victory' || status === 'defeat' ? 0.4 : 1,
                     boxShadow: isExecuting ? 'none' : '0 4px 15px rgba(22,163,74,0.4)',
                     minWidth: 76,
                   }}>
-                  {isExecuting ? '⏳' : '▶ Play'}
+                  {isExecuting ? '⏳' : battlePhase === 'enemy_turn' ? '👹 Enemy...' : battlePhase === 'resolution' ? '⚙️...' : '▶ Execute Turn'}
                 </button>
                 <button
                   onClick={stopBattle}
@@ -896,7 +1248,7 @@ export default function BattleScreen() {
                 <span style={{ color: colors.text, fontWeight: 700, fontSize: 12 }}>{level.enemy.name}</span>
               </div>
 
-              {/* Shield indicator */}
+              {/* Shield indicator — above icon */}
               {isEnemyShielded && status === 'waiting' && (
                 <div style={{
                   background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.5)',
@@ -925,11 +1277,43 @@ export default function BattleScreen() {
               <p style={{ color: enemyHP < enemyMaxHP * 0.3 ? '#ef4444' : '#f87171', fontSize: 11, marginTop: 3, fontWeight: 600 }}>
                 {enemyHP} / {enemyMaxHP} HP
               </p>
-              {enemyStunnedRounds > 0 && (
-                <span style={{
-                  background: 'rgba(251,191,36,0.2)', border: '1px solid rgba(251,191,36,0.5)',
-                  color: '#fbbf24', fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, marginTop: 3, display: 'inline-block',
-                }}>⚡ Stunned {enemyStunnedRounds}</span>
+              {(enemyStunnedRounds > 0 || enemyBurnRounds > 0 || enemyFreezeRounds > 0 || enemyPoisonRounds > 0) && (
+                <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 3, flexWrap: 'wrap' }}>
+                  {enemyStunnedRounds > 0 && (
+                    <span title={`Stunned: ${enemyStunnedRounds} turns`} style={{
+                      background: 'rgba(251,191,36,0.2)', border: '1px solid rgba(251,191,36,0.5)',
+                      color: '#fbbf24', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    }}>⚡ {enemyStunnedRounds}</span>
+                  )}
+                  {enemyBurnRounds > 0 && (
+                    <span title={`Enemy Burn: ${enemyBurnRounds} turns`} style={{
+                      background: 'rgba(220,38,38,0.25)', border: '1px solid rgba(220,38,38,0.5)',
+                      color: '#fca5a5', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    }}>🔥 {enemyBurnRounds}</span>
+                  )}
+                  {enemyFreezeRounds > 0 && (
+                    <span title={`Enemy Freeze: ${enemyFreezeRounds} turns`} style={{
+                      background: 'rgba(37,99,235,0.25)', border: '1px solid rgba(37,99,235,0.5)',
+                      color: '#93c5fd', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    }}>❄️ {enemyFreezeRounds}</span>
+                  )}
+                  {enemyPoisonRounds > 0 && (
+                    <span title={`Enemy Poison: ${enemyPoisonRounds} turns`} style={{
+                      background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.5)',
+                      color: '#c4b5fd', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    }}>🟣 {enemyPoisonRounds}</span>
+                  )}
+                </div>
+              )}
+
+              {/* Enemy intention — below HP and status effects */}
+              {level?.enemy.behaviors && status !== 'victory' && status !== 'defeat' && (
+                <div style={{
+                  background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+                  borderRadius: 8, padding: '3px 8px', marginTop: 4, display: 'inline-block',
+                }}>
+                  <span style={{ color: '#fca5a5', fontSize: 9, fontWeight: 700 }}>ท่าต่อไป: {enemyIntentionLabel}</span>
+                </div>
               )}
             </div>
 
@@ -991,12 +1375,19 @@ export default function BattleScreen() {
           {/* ===== FLOWCHART EDITOR ===== */}
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ flex: 1, overflow: 'hidden' }}>
-              <FlowchartEditor key={level.id} allowedBlocks={(level as any).allowedBlocks} />
+              <FlowchartEditor key={level.id} allowedBlocks={(level as any).allowedBlocks} turnManaMax={turnManaMax} turnManaUsed={turnManaUsed} characterClass={heroChar.class} characterLevel={heroChar.level} />
             </div>
             {/* Reset flowchart to Start + End only */}
             <div style={{ flexShrink: 0, padding: '6px 10px', borderTop: `1px solid ${colors.borderSubtle}`, display: 'flex', justifyContent: 'flex-end' }}>
               <button
-                onClick={() => { setLevelUpData(null); setXpGained(0); setMissingBlocks([]); progressSaved.current = false; clearToStartEnd(); restartBattle(heroChar, level.enemy as any, level.id); }}
+                onClick={() => {
+                  setLevelUpData(null); setXpGained(0); setMissingBlocks([]);
+                  progressSaved.current = false;
+                  setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
+                  liveBattleStateRef.current = null;
+                  clearToStartEnd();
+                  restartBattle(getBoostedChar() as any, level.enemy as any, level.id);
+                }}
                 disabled={isExecuting}
                 style={{
                   background: colors.bgSurface, border: `1px solid ${colors.border}`,
@@ -1084,10 +1475,63 @@ export default function BattleScreen() {
                     progressSaved.current = false;
                     const nextWave = waveNumber + 1;
                     setWaveNumber(nextWave);
-                    restartBattle(heroChar, getEndlessWaveEnemy(nextWave) as any, 'level_endless');
+                    setCurrentTurn(1);
+                    setEnemyBehaviorIdx(0);
+                    setExtraManaDebuff(0);
+                    liveBattleStateRef.current = null;
+                    restartBattle(getBoostedChar() as any, getEndlessWaveEnemy(nextWave) as any, 'level_endless');
                   }}
                   style={{ padding: '12px 24px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: 'white', cursor: 'pointer', fontWeight: 700, fontSize: 15 }}>
                   Wave {waveNumber + 1} →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== Endless Game Over Overlay ===== */}
+        {isEndless && status === 'defeat' && (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 50,
+          }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #1a1a2e, #12122a)',
+              border: '1px solid rgba(239,68,68,0.45)',
+              borderRadius: 24, padding: '36px 48px', textAlign: 'center',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 60px rgba(239,68,68,0.12)',
+              animation: 'bounceIn 0.4s ease', minWidth: 320,
+            }}>
+              <div style={{ fontSize: 64, marginBottom: 8 }}>💀</div>
+              <h2 style={{ fontSize: 28, fontWeight: 800, margin: '0 0 8px', color: '#f87171' }}>
+                GAME OVER
+              </h2>
+              <p style={{ color: '#fca5a5', margin: '0 0 4px', fontSize: 15 }}>
+                Survived Wave {waveNumber}
+              </p>
+              <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 24px', fontSize: 13 }}>
+                Final Score: {endlessScore}
+              </p>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button
+                  onClick={() => navigate('/levels')}
+                  style={{ padding: '12px 24px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontWeight: 600 }}>
+                  ← หน้าหลัก
+                </button>
+                <button
+                  onClick={() => {
+                    progressSaved.current = false;
+                    setWaveNumber(1);
+                    setEndlessScore(0);
+                    setCurrentTurn(1);
+                    setEnemyBehaviorIdx(0);
+                    setExtraManaDebuff(0);
+                    liveBattleStateRef.current = null;
+                    restartBattle(getBoostedChar() as any, getEndlessWaveEnemy(1) as any, 'level_endless');
+                  }}
+                  style={{ padding: '12px 24px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', color: 'white', cursor: 'pointer', fontWeight: 700, fontSize: 15 }}>
+                  ▶ เล่นใหม่
                 </button>
               </div>
             </div>
@@ -1235,7 +1679,13 @@ export default function BattleScreen() {
 
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
                 <button
-                  onClick={() => { setLevelUpData(null); setXpGained(0); setMissingBlocks([]); progressSaved.current = false; restartBattle(heroChar, level.enemy as any, level.id); }}
+                  onClick={() => {
+                    setLevelUpData(null); setXpGained(0); setMissingBlocks([]);
+                    progressSaved.current = false;
+                    setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
+                    liveBattleStateRef.current = null;
+                    restartBattle(getBoostedChar() as any, level.enemy as any, level.id);
+                  }}
                   style={{ padding: '12px 20px', borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.bgSurfaceHover, color: colors.text, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
                   ↺ Retry
                 </button>
@@ -1278,7 +1728,9 @@ export default function BattleScreen() {
             setXpGained(0);
             setMissingBlocks([]);
             progressSaved.current = false;
-            restartBattle(heroChar, level.enemy as any, level.id);
+            setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
+            liveBattleStateRef.current = null;
+            restartBattle(getBoostedChar() as any, level.enemy as any, level.id);
           }}
           onClose={() => {
             setShowShop(false);

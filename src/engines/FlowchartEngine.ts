@@ -3,9 +3,6 @@ import type { FlowNode, FlowEdge, ExecutionStep, ActionType } from '../types/gam
 export interface BattleState {
   heroHP: number;
   heroMaxHP: number;
-  heroMana: number;
-  heroMaxMana: number;
-  manaRegen: number;
   enemyHP: number;
   enemyMaxHP: number;
   heroAttack: number;
@@ -32,6 +29,9 @@ export interface BattleState {
   heroPoisonRounds: number;
   // Ailments on enemy
   enemyStunnedRounds: number;
+  enemyBurnRounds: number;
+  enemyFreezeRounds: number;
+  enemyPoisonRounds: number;
   // Enemy ailment infliction
   enemyAilmentType: string;   // 'burn'|'freeze'|'poison'|''
   enemyAilmentChance: number; // 0-1 probability per hit
@@ -41,12 +41,50 @@ export interface BattleState {
   // Gold (for shop conditions in shop flowchart)
   gold: number;
   round: number;
+  // Turn-based fields
+  currentTurn: number;   // which turn we're on (starts at 1)
+  turnManaMax: number;   // mana budget for placing blocks this turn
+  heroIsEvading: boolean; // set true by dodge; consumed on enemy's turn
+  // Condition bonus — set true when condition evaluates YES → next damage action gets 1.5x
+  conditionBonus: boolean;
+  // Hero berserk buff — +50% DMG, -20% damage taken for N turns
+  heroBerserkRounds: number;
+  // Phase 4: Virus effects
+  virusTurnWasted: boolean;  // if true, enemy gets a free attack next resolution
+  manaDebuff: number;        // legacy — kept for virus scramble compat (unused)
+}
+
+/** Action cost per block type — used for turn action budget (1 = normal, 2 = heavy) */
+const ACTION_COST: Record<string, number> = {
+  attack: 1, heal: 1, dodge: 1, cast_spell: 2, power_strike: 2,
+  berserk: 1, use_potion: 0, use_antidote: 0,
+  shield: 1, counter: 2, war_cry: 2,
+  fireball: 2, frost_nova: 2, arcane_surge: 3,
+  backstab: 2, poison_strike: 1, shadow_step: 2,
+  whirlwind: 2, bloodthirst: 2, battle_cry: 3,
+  debug_block: 2,
+};
+
+// Keep export for ActionNode badge display (shows action weight, not mana)
+export const BLOCK_MANA_COST = ACTION_COST;
+
+/** Sum of action costs for all action nodes in the flowchart (used for budget display) */
+export function calcFlowchartManaCost(nodes: FlowNode[]): number {
+  return nodes
+    .filter((n) => n.type === 'action')
+    .reduce((sum, n) => sum + (ACTION_COST[n.data.actionType ?? ''] ?? 1), 0);
+}
+
+/** Max action budget per turn (fixed at 3 action points) */
+export function calcTurnManaMax(_turn: number): number {
+  return 3;
 }
 
 export interface ExecutionResult {
   steps: ExecutionStep[];
   finalState: BattleState;
   log: string[];
+  actionsUsed: number; // how many action-points were spent this turn
 }
 
 // ===== Preview system =====
@@ -69,86 +107,44 @@ export interface PreviewStep {
 }
 
 /** Deterministic (no random) combat calculator for preview panel */
-function calcAction(action: ActionType, state: BattleState): { heroDelta: number; enemyDelta: number; note: string; manaCost: number } {
+function calcAction(action: ActionType, state: BattleState): { heroDelta: number; enemyDelta: number; note: string } {
   switch (action) {
     case 'attack': {
       if (state.enemyShielded) {
         const counterDmg = Math.max(0, state.enemyAttack - Math.floor(state.heroDefense * 0.5));
-        return { heroDelta: -counterDmg, enemyDelta: 0, note: `🛡️ ${state.shieldReason}`, manaCost: 0 };
+        return { heroDelta: -counterDmg, enemyDelta: 0, note: `🛡️ ${state.shieldReason}` };
       }
-      // Hero hits: reduced by defense + armor
       const effectiveArmor = state.enemyDefense + state.enemyArmor;
       const rawDmg = Math.max(1, state.heroAttack - Math.floor(effectiveArmor * 0.5));
       const armorNote = state.enemyArmor > 0 ? `Armor -${Math.floor(state.enemyArmor * 0.5)}` : '';
-      // Parry: show "if parried" note only
       const parryNote = state.enemyParry > 0 ? `${state.enemyParry}% parry chance` : '';
-      // Enemy counter
       const counterDmg = Math.max(0, state.enemyAttack - Math.floor(state.heroDefense * 0.5));
       const parts = [armorNote, parryNote].filter(Boolean).join(', ');
-      return {
-        heroDelta: -counterDmg,
-        enemyDelta: -rawDmg,
-        note: parts ? `[${parts}]` : '',
-        manaCost: 0,
-      };
+      return { heroDelta: -counterDmg, enemyDelta: -rawDmg, note: parts ? `[${parts}]` : '' };
     }
     case 'heal': {
       const healAmt = Math.min(20, state.heroMaxHP - state.heroHP);
-      return { heroDelta: healAmt, enemyDelta: 0, note: '+20 HP', manaCost: 0 };
+      return { heroDelta: healAmt, enemyDelta: 0, note: '+20 HP' };
     }
     case 'dodge': {
-      // Best case: no damage
-      return { heroDelta: 0, enemyDelta: 0, note: '65% dodge chance', manaCost: 0 };
+      return { heroDelta: 0, enemyDelta: 0, note: '65% dodge chance' };
     }
     case 'cast_spell': {
       if (state.enemyShielded) {
         const counterDmg = Math.max(0, state.enemyAttack - Math.floor(state.heroDefense * 0.5));
-        return { heroDelta: -counterDmg, enemyDelta: 0, note: `🛡️ ${state.shieldReason}`, manaCost: 25 };
+        return { heroDelta: -counterDmg, enemyDelta: 0, note: `🛡️ ${state.shieldReason}` };
       }
-      if (state.heroMana < 25) {
-        // Low mana: 60% damage
-        const spellDmg = Math.max(3, Math.floor(Math.floor(state.heroAttack * 1.8) * 0.6) - Math.floor(state.enemyDefense * 0.25));
-        return {
-          heroDelta: 0,
-          enemyDelta: -spellDmg,
-          note: '⚠️ Low mana! (reduced dmg)',
-          manaCost: 25,
-        };
-      }
-      // Spell ignores armor, only half defense
       const spellDmg = Math.max(5, Math.floor(state.heroAttack * 1.8) - Math.floor(state.enemyDefense * 0.25));
-      return {
-        heroDelta: 0,
-        enemyDelta: -spellDmg,
-        note: state.enemyArmor > 0 ? 'Magic bypasses armor (25 MP)' : 'High damage (25 MP)',
-        manaCost: 25,
-      };
+      return { heroDelta: 0, enemyDelta: -spellDmg, note: state.enemyArmor > 0 ? 'Magic bypasses armor' : 'High damage spell' };
     }
     case 'power_strike': {
-      if (state.heroMana >= 20) {
-        const effectiveArmor = state.enemyDefense + state.enemyArmor;
-        const rawDmg = Math.max(1, state.heroAttack * 2 - Math.floor(effectiveArmor * 0.5));
-        const counterDmg = Math.max(0, state.enemyAttack - Math.floor(state.heroDefense * 0.5));
-        return {
-          heroDelta: -counterDmg,
-          enemyDelta: -rawDmg,
-          note: '💥 Power Strike! (20 MP)',
-          manaCost: 20,
-        };
-      }
-      // Not enough mana: normal attack
       const effectiveArmor = state.enemyDefense + state.enemyArmor;
-      const rawDmg = Math.max(1, state.heroAttack - Math.floor(effectiveArmor * 0.5));
+      const rawDmg = Math.max(1, state.heroAttack * 2 - Math.floor(effectiveArmor * 0.5));
       const counterDmg = Math.max(0, state.enemyAttack - Math.floor(state.heroDefense * 0.5));
-      return {
-        heroDelta: -counterDmg,
-        enemyDelta: -rawDmg,
-        note: '⚠️ Not enough mana → normal attack',
-        manaCost: 0,
-      };
+      return { heroDelta: -counterDmg, enemyDelta: -rawDmg, note: '💥 Power Strike!' };
     }
     default:
-      return { heroDelta: 0, enemyDelta: 0, note: '', manaCost: 0 };
+      return { heroDelta: 0, enemyDelta: 0, note: '' };
   }
 }
 
@@ -185,20 +181,17 @@ function buildPreviewTree(
 
   if (node.type === 'action') {
     const action = node.data.actionType as ActionType;
-    const { heroDelta, enemyDelta, note, manaCost } = calcAction(action, state);
-    const newMana = Math.min(state.heroMaxMana, Math.max(0, state.heroMana - manaCost) + state.manaRegen);
+    const { heroDelta, enemyDelta, note: actionNote } = calcAction(action, state);
     const newState = {
       ...state,
       heroHP: Math.max(0, Math.min(state.heroMaxHP, state.heroHP + heroDelta)),
       enemyHP: Math.max(0, state.enemyHP + enemyDelta),
-      heroMana: newMana,
     };
-    const manaNote = manaCost > 0 ? `${note ? note + ' ' : ''}-${manaCost} MP` : note;
     const step: PreviewStep = {
       nodeId, label: node.data.label, type: 'action', actionType: action,
       heroDelta, enemyDelta,
       heroHPAfter: newState.heroHP, enemyHPAfter: newState.enemyHP,
-      note: manaNote,
+      note: actionNote,
     };
     if (newState.heroHP <= 0 || newState.enemyHP <= 0) return [step];
     return [step, ...buildPreviewTree(outgoing[0]?.target ?? null, newState, nodeMap, edges, nextVisited, budget - 1)];
@@ -213,9 +206,8 @@ function buildPreviewTree(
     // Annotate with what the condition checks (for preview display)
     const ct = node.data.conditionType;
     const th = node.data.threshold ?? 50;
-    let condNote = '';
-    if (ct === 'mana_greater') condNote = `Mana > ${th}`;
-    else if (ct === 'mana_less') condNote = `Mana < ${th}`;
+    const condNote = '';
+    void ct; void th; // used only for display annotation
     return [{
       nodeId, label: node.data.label, type: 'condition',
       heroDelta: 0, enemyDelta: 0,
@@ -402,10 +394,13 @@ export class FlowchartEngine {
     const log: string[] = [];
     let state = { ...battleState };
     let stepCount = 0;
+    // Execution budget: turnManaMax = max action-points per hero turn (0 = unlimited)
+    let actionsRemaining = state.turnManaMax > 0 ? state.turnManaMax : 999;
+    let actionsUsed = 0;
     this.loopCounters.clear();
 
     const startNode = Array.from(this.nodes.values()).find((n) => n.type === 'start');
-    if (!startNode) return { steps, finalState: state, log: ['No start node found'] };
+    if (!startNode) return { steps, finalState: state, log: ['No start node found'], actionsUsed: 0 };
 
     let currentNodeId: string | null = startNode.id;
 
@@ -421,9 +416,18 @@ export class FlowchartEngine {
         break;
       }
 
-      // ===== Pre-action: ailment ticks + freeze skip (only on action nodes) =====
+      // ===== Pre-action: budget check + ailment ticks + freeze skip =====
       let preLog = '';
       if (node.type === 'action') {
+        // Check execution budget — stops loop from running indefinitely
+        if (actionsRemaining <= 0) {
+          log.push('⏰ Action budget ใช้หมด — จบ turn ของ Hero');
+          break;
+        }
+        const actionCost = BLOCK_MANA_COST[node.data.actionType ?? ''] ?? 1;
+        actionsRemaining -= actionCost;
+        actionsUsed += actionCost;
+
         const ticks: string[] = [];
 
         if (state.heroBurnRounds > 0) {
@@ -448,8 +452,7 @@ export class FlowchartEngine {
           step.battleLog = msg;
           step.heroHP = state.heroHP;
           step.enemyHP = state.enemyHP;
-          step.heroMana = state.heroMana;
-          step.heroBurnRounds = state.heroBurnRounds;
+              step.heroBurnRounds = state.heroBurnRounds;
           step.heroFreezeRounds = state.heroFreezeRounds;
           step.heroPoisonRounds = state.heroPoisonRounds;
           step.enemyStunnedRounds = state.enemyStunnedRounds;
@@ -493,7 +496,6 @@ export class FlowchartEngine {
 
       step.heroHP   = state.heroHP;
       step.enemyHP  = state.enemyHP;
-      step.heroMana = state.heroMana;
       step.heroBurnRounds = state.heroBurnRounds;
       step.heroFreezeRounds = state.heroFreezeRounds;
       step.heroPoisonRounds = state.heroPoisonRounds;
@@ -512,7 +514,7 @@ export class FlowchartEngine {
       log.push('Warning: Flowchart ran too many steps (possible infinite loop)');
     }
 
-    return { steps, finalState: state, log };
+    return { steps, finalState: state, log, actionsUsed };
   }
 
   private executeNode(
@@ -523,6 +525,23 @@ export class FlowchartEngine {
     let logEntry: string | undefined;
     let conditionResult: boolean | undefined;
 
+    // Phase 4: Virus node effect — apply before normal execution
+    if (node.data.isVirus && node.type === 'action') {
+      const effect = node.data.virusEffect ?? 'drain_hp';
+      if (effect === 'drain_hp') {
+        newState.heroHP = Math.max(0, newState.heroHP - 15);
+        logEntry = '☠️ VIRUS: Drained 15 HP!';
+      } else if (effect === 'waste_turn') {
+        newState.virusTurnWasted = true;
+        logEntry = '☠️ VIRUS: Turn wasted! Enemy gets free attack!';
+      } else if (effect === 'scramble') {
+        newState.heroAttack = Math.floor(newState.heroAttack * 0.7);
+        logEntry = '☠️ VIRUS: Scrambled! ATK -30% this turn!';
+      }
+      const nextNodeId = this.getNextNode(node.id, node.type, undefined);
+      return { nextNodeId, updatedState: newState, logEntry, result: undefined };
+    }
+
     switch (node.type) {
       case 'action': {
         const action = node.data.actionType as ActionType;
@@ -531,6 +550,7 @@ export class FlowchartEngine {
       }
       case 'condition': {
         conditionResult = this.evaluateCondition(node, state);
+        newState.conditionBonus = conditionResult === true;
         break;
       }
       case 'loop': {
@@ -573,214 +593,145 @@ export class FlowchartEngine {
   private executeAction(action: ActionType, state: BattleState): string {
     const variance = () => Math.floor(Math.random() * 5) - 2; // -2 to +2
 
+    // Global shield check — all damage-dealing actions are blocked when shielded
+    const SHIELDED_BLOCKED: Set<string> = new Set([
+      'attack', 'cast_spell', 'power_strike',
+      'fireball', 'frost_nova', 'arcane_surge',
+      'backstab', 'poison_strike', 'shadow_step',
+      'whirlwind', 'bloodthirst',
+    ]);
+    if (state.enemyShielded && SHIELDED_BLOCKED.has(action)) {
+      this.applyCombo(action, state);
+      state.conditionBonus = false;
+      return `🛡️ Shield blocks ${action}! (${state.shieldReason})`;
+    }
+
     switch (action) {
       case 'attack': {
         const comboMult = this.applyCombo('attack', state);
         const comboTag = comboMult >= 1.75 ? ' ⚡ Counter Strike!' : comboMult >= 1.5 ? ' ⚡ Combo x3!' : comboMult >= 1.25 ? ' ⚡ Combo x2!' : '';
 
-        // Shield check — blocked if required blocks are missing
-        if (state.enemyShielded) {
-          const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
-          const heroParried = Math.random() * 100 < state.heroParry;
-          const finalCounter = heroParried ? 0 : counterDmg;
-          state.heroHP = Math.max(0, state.heroHP - finalCounter);
-          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
-          return `🛡️ Shield blocks the attack! (${state.shieldReason}) Enemy counters! Hero -${finalCounter} HP.`;
-        }
-
-        // Physical damage: reduced by defense + armor, boosted by combo
         const effectiveArmor = state.enemyDefense + state.enemyArmor;
-        const rawDmg = Math.max(1, Math.floor((state.heroAttack + variance()) * comboMult) - Math.floor(effectiveArmor * 0.5));
+        let rawDmg = Math.max(1, Math.floor((state.heroAttack + variance()) * comboMult) - Math.floor(effectiveArmor * 0.5));
+
+        // Apply bonus multipliers
+        const tags: string[] = [];
+        let bonusMult = 1.0;
+        if (state.conditionBonus) { bonusMult *= 1.5; tags.push('⚡ Condition Bonus!'); }
+        if (state.heroBerserkRounds > 0) { bonusMult *= 1.5; tags.push('💢 Berserk!'); }
+        if (state.enemyBurnRounds > 0) { bonusMult *= 1.3; tags.push('🔥 Burn Amplified!'); }
+        if (bonusMult > 1.0) rawDmg = Math.max(1, Math.floor(rawDmg * bonusMult));
+        state.conditionBonus = false;
+        const bonusTag = tags.length > 0 ? ' ' + tags.join(' ') : '';
 
         // Enemy parry check
         const parried = Math.random() * 100 < state.enemyParry;
         const finalDmg = parried ? Math.max(1, Math.floor(rawDmg * 0.3)) : rawDmg;
         state.enemyHP = Math.max(0, state.enemyHP - finalDmg);
 
-        // Enemy counter-attack (skipped if stunned)
-        let finalCounter = 0;
-        let heroParried = false;
-        if (state.enemyStunnedRounds <= 0) {
-          const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
-          heroParried = Math.random() * 100 < state.heroParry;
-          finalCounter = heroParried ? 0 : counterDmg;
-          state.heroHP = Math.max(0, state.heroHP - finalCounter);
-
-          // Enemy ailment infliction on hit
-          if (state.enemyAilmentType && !heroParried && finalCounter > 0 && Math.random() < state.enemyAilmentChance) {
-            if (state.enemyAilmentType === 'burn')   { state.heroBurnRounds   = Math.max(state.heroBurnRounds, 3);   }
-            if (state.enemyAilmentType === 'freeze')  { state.heroFreezeRounds = Math.max(state.heroFreezeRounds, 2); }
-            if (state.enemyAilmentType === 'poison')  { state.heroPoisonRounds = Math.max(state.heroPoisonRounds, 5); }
-          }
-        }
-        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
-
-        let msg = `Hero attacks!${comboTag}`;
+        let msg = `Hero attacks!${comboTag}${bonusTag}`;
         if (state.enemyArmor > 0) msg += ` [Armor]`;
         msg += parried ? ` Parried! Enemy -${finalDmg} HP.` : ` Enemy -${finalDmg} HP.`;
-        if (state.enemyStunnedRounds <= 0) {
-          if (heroParried) msg += ` Hero parries counter!`;
-          else if (finalCounter > 0) {
-            msg += ` Enemy counters! Hero -${finalCounter} HP.`;
-            if (state.enemyAilmentType && Math.random() < state.enemyAilmentChance) {
-              const ailMap: Record<string, string> = { burn: '🔥 Burn!', freeze: '❄️ Freeze!', poison: '🟣 Poison!' };
-              msg += ` ${ailMap[state.enemyAilmentType] ?? ''}`;
-            }
-          }
-        } else {
-          msg += ` Enemy stunned — no counter!`;
-        }
+        if (state.enemyStunnedRounds > 0) msg += ` Enemy stunned!`;
         return msg;
       }
 
       case 'heal': {
         this.applyCombo('heal', state);
         if (state.healCharges <= 0) {
-          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
           return `💊 No Heal Charges left! (0/3)`;
         }
         state.healCharges--;
         const healAmt = 20 + variance();
         state.heroHP = Math.min(state.heroMaxHP, state.heroHP + healAmt);
-        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
         return `Hero heals! +${healAmt} HP (${state.heroHP}/${state.heroMaxHP}) [${state.healCharges} heals left]`;
       }
 
       case 'dodge': {
         this.applyCombo('dodge', state);
-        if (Math.random() < 0.65) {
-          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
-          return `Hero dodges! Attack avoided completely.`;
-        }
-        // Dodge failed — take full attack (no defense reduction)
-        const dmg = Math.max(1, state.enemyAttack + variance());
-        state.heroHP = Math.max(0, state.heroHP - dmg);
-        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
-        return `Dodge failed! Hero takes full attack -${dmg} HP.`;
+        state.heroIsEvading = true;
+        return `Hero prepares to evade! (65% chance to reduce next enemy attack)`;
       }
 
       case 'cast_spell': {
         const spellCombo = this.applyCombo('cast_spell', state);
         const spellComboTag = spellCombo >= 1.5 ? ' ⚡ Chain Magic!' : spellCombo >= 1.25 ? ' ⚡ Spell Combo!' : '';
 
-        // Shield blocks magic too
-        if (state.enemyShielded) {
-          const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
-          const heroParried = Math.random() * 100 < state.heroParry;
-          const finalCounter = heroParried ? 0 : counterDmg;
-          state.heroHP = Math.max(0, state.heroHP - finalCounter);
-          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
-          return `🛡️ Shield absorbs the spell! (${state.shieldReason}) Enemy counters! Hero -${finalCounter} HP.`;
-        }
+        // Magic ignores armor, only half defense
+        let spellDmg = Math.max(5, Math.floor(state.heroAttack * 1.8) + variance() - Math.floor(state.enemyDefense * 0.25));
 
-        if (state.heroMana < 25) {
-          const spellDmg = Math.max(3, Math.floor(Math.floor(state.heroAttack * 1.8 * spellCombo) * 0.6) + variance() - Math.floor(state.enemyDefense * 0.25));
-          state.enemyHP = Math.max(0, state.enemyHP - spellDmg);
-          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
-          return `⚠️ Low mana! Hero casts weak spell!${spellComboTag} Enemy -${spellDmg} HP. (reduced dmg)`;
-        }
+        // Apply bonus multipliers
+        const spellTags: string[] = [];
+        let spellBonusMult = 1.0;
+        if (state.conditionBonus) { spellBonusMult *= 1.5; spellTags.push('⚡ Condition Bonus!'); }
+        if (state.heroBerserkRounds > 0) { spellBonusMult *= 1.5; spellTags.push('💢 Berserk!'); }
+        if (state.enemyBurnRounds > 0) { spellBonusMult *= 1.3; spellTags.push('🔥 Burn Amplified!'); }
+        if (spellBonusMult > 1.0) spellDmg = Math.max(5, Math.floor(spellDmg * spellBonusMult));
+        state.conditionBonus = false;
+        const spellBonusTag = spellTags.length > 0 ? ' ' + spellTags.join(' ') : '';
 
-        // Spend 25 mana
-        state.heroMana = Math.min(state.heroMaxMana, Math.max(0, state.heroMana - 25) + state.manaRegen);
-
-        // Magic ignores armor, boosted by combo
-        const spellDmg = Math.max(5, Math.floor(state.heroAttack * 1.8 * spellCombo) + variance() - Math.floor(state.enemyDefense * 0.25));
-        state.enemyHP = Math.max(0, state.enemyHP - spellDmg);
-
-        // Counter 40% chance (skipped if stunned)
-        const armorNote = state.enemyArmor > 0 ? ' [Magic bypasses armor!]' : '';
-        if (state.enemyStunnedRounds <= 0 && Math.random() < 0.4) {
-          const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
-          state.heroHP = Math.max(0, state.heroHP - counterDmg);
-          // Ailment infliction on counter
-          if (state.enemyAilmentType && counterDmg > 0 && Math.random() < state.enemyAilmentChance) {
-            if (state.enemyAilmentType === 'burn')   state.heroBurnRounds   = Math.max(state.heroBurnRounds, 3);
-            if (state.enemyAilmentType === 'freeze')  state.heroFreezeRounds = Math.max(state.heroFreezeRounds, 2);
-            if (state.enemyAilmentType === 'poison')  state.heroPoisonRounds = Math.max(state.heroPoisonRounds, 5);
+        // 35% chance to inflict freeze or poison on enemy
+        const spellStatusTag: string[] = [];
+        if (Math.random() < 0.35) {
+          if (state.enemyFreezeRounds <= 0) {
+            state.enemyFreezeRounds = Math.max(state.enemyFreezeRounds, 1);
+            spellStatusTag.push('❄️ Enemy Frozen!');
+          } else {
+            state.enemyPoisonRounds = Math.max(state.enemyPoisonRounds, 3);
+            spellStatusTag.push('🟣 Enemy Poisoned!');
           }
-          return `Hero casts spell!${spellComboTag}${armorNote} Enemy -${spellDmg} HP. Enemy counters! Hero -${counterDmg} HP.`;
         }
-        return `Hero casts spell!${spellComboTag}${armorNote} Enemy -${spellDmg} HP.${state.enemyStunnedRounds > 0 ? ' Enemy stunned — no counter!' : ' (Enemy missed counter!)'}`;
+
+        state.enemyHP = Math.max(0, state.enemyHP - spellDmg);
+        const armorNote = state.enemyArmor > 0 ? ' [Magic bypasses armor!]' : '';
+        const statusNote = spellStatusTag.length > 0 ? ' ' + spellStatusTag.join(' ') : '';
+        return `Hero casts spell!${spellComboTag}${spellBonusTag}${armorNote} Enemy -${spellDmg} HP.${statusNote}`;
       }
 
       case 'power_strike': {
-        // Cooldown check: if on cooldown, do a normal attack instead
-        if (state.powerStrikeCooldown > 0) {
-          const comboMult2 = this.applyCombo('attack', state);
-          const ea2 = state.enemyDefense + state.enemyArmor;
-          const rawDmg2 = Math.max(1, Math.floor((state.heroAttack + variance()) * comboMult2) - Math.floor(ea2 * 0.5));
-          const parried2 = Math.random() * 100 < state.enemyParry;
-          const finalDmg2 = parried2 ? Math.max(1, Math.floor(rawDmg2 * 0.3)) : rawDmg2;
-          state.enemyHP = Math.max(0, state.enemyHP - finalDmg2);
-          const cDmg2 = state.enemyStunnedRounds > 0 ? 0 : Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
-          state.heroHP = Math.max(0, state.heroHP - cDmg2);
-          state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
-          return `⏳ Power Strike on cooldown (${state.powerStrikeCooldown} steps) → normal attack. Enemy -${finalDmg2} HP.`;
+        this.applyCombo('power_strike', state);
+
+        const effectiveArmorPS = state.enemyDefense + state.enemyArmor;
+        let rawDmgPS = Math.max(1, Math.floor(state.heroAttack * 2 + variance()) - Math.floor(effectiveArmorPS * 0.5));
+
+        // Apply bonus multipliers
+        const psTags: string[] = [];
+        let psBonusMult = 1.0;
+        if (state.conditionBonus) { psBonusMult *= 1.5; psTags.push('⚡ Condition Bonus!'); }
+        if (state.heroBerserkRounds > 0) { psBonusMult *= 1.5; psTags.push('💢 Berserk!'); }
+        if (state.enemyBurnRounds > 0) { psBonusMult *= 1.3; psTags.push('🔥 Burn Amplified!'); }
+        if (psBonusMult > 1.0) rawDmgPS = Math.max(1, Math.floor(rawDmgPS * psBonusMult));
+        state.conditionBonus = false;
+        const psBonusTag = psTags.length > 0 ? ' ' + psTags.join(' ') : '';
+
+        const parriedPS = Math.random() * 100 < state.enemyParry;
+        const finalDmgPS = parriedPS ? Math.max(1, Math.floor(rawDmgPS * 0.3)) : rawDmgPS;
+        state.enemyHP = Math.max(0, state.enemyHP - finalDmgPS);
+
+        // 20% chance to stun enemy
+        if (Math.random() < 0.20) {
+          state.enemyStunnedRounds = Math.max(state.enemyStunnedRounds, 2);
         }
 
-        if (state.heroMana >= 20) {
-          const comboMult = this.applyCombo('power_strike', state);
-          const comboTag = comboMult > 1 ? ` ⚡ Combo!` : '';
-          // Spend 20 mana, deal 2x damage + combo
-          state.heroMana = Math.min(state.heroMaxMana, Math.max(0, state.heroMana - 20) + state.manaRegen);
-          state.powerStrikeCooldown = 4; // 4 steps cooldown
-
-          const effectiveArmor = state.enemyDefense + state.enemyArmor;
-          const rawDmg = Math.max(1, Math.floor((state.heroAttack * 2 + variance()) * comboMult) - Math.floor(effectiveArmor * 0.5));
-
-          const parried = Math.random() * 100 < state.enemyParry;
-          const finalDmg = parried ? Math.max(1, Math.floor(rawDmg * 0.3)) : rawDmg;
-          state.enemyHP = Math.max(0, state.enemyHP - finalDmg);
-
-          // 20% chance to stun enemy
-          if (Math.random() < 0.20) {
-            state.enemyStunnedRounds = Math.max(state.enemyStunnedRounds, 2);
-          }
-
-          let finalCounter = 0;
-          let heroParried = false;
-          if (state.enemyStunnedRounds <= 0) {
-            const counterDmg = Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
-            heroParried = Math.random() * 100 < state.heroParry;
-            finalCounter = heroParried ? 0 : counterDmg;
-            state.heroHP = Math.max(0, state.heroHP - finalCounter);
-            // Enemy ailment infliction
-            if (state.enemyAilmentType && !heroParried && finalCounter > 0 && Math.random() < state.enemyAilmentChance) {
-              if (state.enemyAilmentType === 'burn')   state.heroBurnRounds   = Math.max(state.heroBurnRounds, 3);
-              if (state.enemyAilmentType === 'freeze')  state.heroFreezeRounds = Math.max(state.heroFreezeRounds, 2);
-              if (state.enemyAilmentType === 'poison')  state.heroPoisonRounds = Math.max(state.heroPoisonRounds, 5);
-            }
-          }
-
-          let msg = `💥 Power Strike!${comboTag}`;
-          msg += parried ? ` Parried! Enemy -${finalDmg} HP.` : ` Enemy -${finalDmg} HP.`;
-          if (state.enemyStunnedRounds > 0) msg += ` ⚡ Enemy Stunned!`;
-          else if (heroParried) msg += ` Hero parries counter!`;
-          else if (finalCounter > 0) msg += ` Enemy counters! Hero -${finalCounter} HP.`;
-          return msg;
+        // 30% chance to inflict burn on enemy
+        const psStatusTag: string[] = [];
+        if (Math.random() < 0.30) {
+          state.enemyBurnRounds = Math.max(state.enemyBurnRounds, 2);
+          psStatusTag.push('🔥 Burn!');
         }
 
-        // Not enough mana — normal attack
-        this.applyCombo('attack', state);
-        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
+        let msg = `💥 Power Strike!${psBonusTag}`;
+        msg += parriedPS ? ` Parried! Enemy -${finalDmgPS} HP.` : ` Enemy -${finalDmgPS} HP.`;
+        if (state.enemyStunnedRounds > 0) msg += ` ⚡ Enemy Stunned!`;
+        if (psStatusTag.length > 0) msg += ' ' + psStatusTag.join(' ');
+        return msg;
+      }
 
-        const effectiveArmor = state.enemyDefense + state.enemyArmor;
-        const rawDmg = Math.max(1, state.heroAttack + variance() - Math.floor(effectiveArmor * 0.5));
-
-        const parried = Math.random() * 100 < state.enemyParry;
-        const finalDmg = parried ? Math.max(1, Math.floor(rawDmg * 0.3)) : rawDmg;
-        state.enemyHP = Math.max(0, state.enemyHP - finalDmg);
-
-        const counterDmg = state.enemyStunnedRounds > 0 ? 0 : Math.max(0, state.enemyAttack + variance() - Math.floor(state.heroDefense * 0.5));
-        const heroParried = Math.random() * 100 < state.heroParry;
-        const finalCounter = heroParried ? 0 : counterDmg;
-        state.heroHP = Math.max(0, state.heroHP - finalCounter);
-
-        let msg2 = `⚠️ Not enough mana → normal attack!`;
-        msg2 += parried ? ` Parried! Enemy -${finalDmg} HP.` : ` Enemy -${finalDmg} HP.`;
-        if (heroParried) msg2 += ` Hero parries counter!`;
-        else if (finalCounter > 0) msg2 += ` Enemy counters! Hero -${finalCounter} HP.`;
-        return msg2;
+      case 'berserk': {
+        this.applyCombo('berserk', state);
+        state.heroBerserkRounds = 2;
+        state.conditionBonus = false;
+        return '💢 Hero enters BERSERK! DMG +50%, DEF -20% for 2 turns.';
       }
 
       case 'use_antidote': {
@@ -793,7 +744,6 @@ export class FlowchartEngine {
         if (state.heroBurnRounds > 0)   { state.heroBurnRounds   = 0; cured.push('🔥 Burn');   }
         if (state.heroPoisonRounds > 0) { state.heroPoisonRounds = 0; cured.push('🟣 Poison');  }
         if (state.heroFreezeRounds > 0) { state.heroFreezeRounds = 0; cured.push('❄️ Freeze');  }
-        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
         return cured.length > 0
           ? `💊 Antidote! Cured: ${cured.join(', ')} [${state.antidotes} left]`
           : `💊 Antidote used — no ailments to cure [${state.antidotes} left]`;
@@ -807,8 +757,147 @@ export class FlowchartEngine {
         state.potions--;
         const potionHeal = 30;
         state.heroHP = Math.min(state.heroMaxHP, state.heroHP + potionHeal);
-        state.heroMana = Math.min(state.heroMaxMana, state.heroMana + state.manaRegen);
         return `🧪 Potion! +${potionHeal} HP (${state.heroHP}/${state.heroMaxHP}) [${state.potions} left]`;
+      }
+
+      // ── KNIGHT SKILLS ─────────────────────────────────────────────
+      case 'shield': {
+        this.applyCombo('shield', state);
+        state.conditionBonus = false;
+        state.heroParry = Math.min(state.heroParry + 50, 90);
+        return '🛡️ Iron Shield raised! Damage taken -50% this turn.';
+      }
+      case 'counter': {
+        this.applyCombo('counter', state);
+        state.conditionBonus = false;
+        state.heroIsEvading = true;
+        return '⚔️ Counter stance! Will reflect 40% of enemy damage.';
+      }
+      case 'war_cry': {
+        this.applyCombo('war_cry', state);
+        state.conditionBonus = false;
+        state.heroBerserkRounds = Math.max(state.heroBerserkRounds, 2);
+        return '📣 War Cry! ATK+40%, DEF-15% for 2 turns. Team is inspired!';
+      }
+
+      // ── MAGE SKILLS ────────────────────────────────────────────────
+      case 'fireball': {
+        const fbCombo = this.applyCombo('fireball', state);
+        const fbCondMult = state.conditionBonus ? 1.5 : 1.0;
+        const fbBerserkMult = state.heroBerserkRounds > 0 ? 1.5 : 1.0;
+        const fbBurnMult = state.enemyBurnRounds > 0 ? 1.3 : 1.0;
+        state.conditionBonus = false;
+        const fbBaseDmg = Math.max(5, Math.floor(state.heroAttack * 1.6) + variance() - Math.floor(state.enemyDefense * 0.25));
+        const fbFinalDmg = Math.floor(fbBaseDmg * fbCombo * fbCondMult * fbBerserkMult * fbBurnMult);
+        state.enemyHP = Math.max(0, state.enemyHP - fbFinalDmg);
+        if (Math.random() < 0.40) {
+          state.enemyBurnRounds = Math.max(state.enemyBurnRounds, 3);
+          return `🔥 Fireball! Enemy -${fbFinalDmg} HP. 🔥 Enemy ignited! (3 turns)`;
+        }
+        return `🔥 Fireball! Enemy -${fbFinalDmg} HP.`;
+      }
+      case 'frost_nova': {
+        const fnCombo = this.applyCombo('frost_nova', state);
+        const fnCondMult = state.conditionBonus ? 1.5 : 1.0;
+        const fnBerserkMult = state.heroBerserkRounds > 0 ? 1.5 : 1.0;
+        state.conditionBonus = false;
+        const fnBaseDmg = Math.max(4, Math.floor(state.heroAttack * 1.4) + variance() - Math.floor(state.enemyDefense * 0.2));
+        const fnFinalDmg = Math.floor(fnBaseDmg * fnCombo * fnCondMult * fnBerserkMult);
+        state.enemyHP = Math.max(0, state.enemyHP - fnFinalDmg);
+        state.enemyFreezeRounds = Math.max(state.enemyFreezeRounds, 1);
+        return `❄️ Frost Nova! Enemy -${fnFinalDmg} HP. ❄️ Enemy Frozen 1 turn!`;
+      }
+      case 'arcane_surge': {
+        const asCombo = this.applyCombo('arcane_surge', state);
+        const asCondMult = state.conditionBonus ? 1.5 : 1.0;
+        const asBerserkMult = state.heroBerserkRounds > 0 ? 1.5 : 1.0;
+        state.conditionBonus = false;
+        const asBaseDmg = Math.max(10, Math.floor(state.heroAttack * 2.5) + variance());
+        const asFinalDmg = Math.floor(asBaseDmg * asCombo * asCondMult * asBerserkMult);
+        state.enemyHP = Math.max(0, state.enemyHP - asFinalDmg);
+        return `✨ Arcane Surge! Pure magic burst! Enemy -${asFinalDmg} HP. [Ignores all armor!]`;
+      }
+
+      // ── ROGUE SKILLS ───────────────────────────────────────────────
+      case 'backstab': {
+        const bsCombo = this.applyCombo('backstab', state);
+        const bsCondMult = state.conditionBonus ? 1.5 : 1.0;
+        const bsBerserkMult = state.heroBerserkRounds > 0 ? 1.5 : 1.0;
+        state.conditionBonus = false;
+        const bsEffectiveArmor = state.enemyDefense + state.enemyArmor;
+        const isSoftCC = state.enemyFreezeRounds > 0 || state.enemyStunnedRounds > 0;
+        const bsCCMult = isSoftCC ? 2.0 : 1.0;
+        const bsBaseDmg = Math.max(1, Math.floor(state.heroAttack * 1.2 + variance()) - Math.floor(bsEffectiveArmor * 0.5));
+        const bsFinalDmg = Math.floor(bsBaseDmg * bsCombo * bsCCMult * bsCondMult * bsBerserkMult);
+        state.enemyHP = Math.max(0, state.enemyHP - bsFinalDmg);
+        const bsCCTag = isSoftCC ? ' ⚡ Backstab! 2x damage on disabled enemy!' : '';
+        return `🗡️ Backstab!${bsCCTag} Enemy -${bsFinalDmg} HP.`;
+      }
+      case 'poison_strike': {
+        this.applyCombo('poison_strike', state);
+        state.conditionBonus = false;
+        const psEffectiveArmor = state.enemyDefense + state.enemyArmor;
+        const psBaseDmg = Math.max(1, Math.floor(state.heroAttack * 0.9 + variance()) - Math.floor(psEffectiveArmor * 0.5));
+        state.enemyHP = Math.max(0, state.enemyHP - psBaseDmg);
+        state.enemyPoisonRounds = Math.max(state.enemyPoisonRounds, 3);
+        return `🟣 Poison Strike! Enemy -${psBaseDmg} HP. 🟣 Poisoned 3 turns!`;
+      }
+      case 'shadow_step': {
+        this.applyCombo('shadow_step', state);
+        const ssCondMult = state.conditionBonus ? 1.5 : 1.0;
+        const ssBerserkMult = state.heroBerserkRounds > 0 ? 1.5 : 1.0;
+        state.conditionBonus = false;
+        state.heroIsEvading = true;
+        const ssEffectiveArmor = state.enemyDefense + state.enemyArmor;
+        const ssBaseDmg = Math.max(1, Math.floor(state.heroAttack * 1.3 + variance()) - Math.floor(ssEffectiveArmor * 0.5));
+        const ssFinalDmg = Math.floor(ssBaseDmg * ssCondMult * ssBerserkMult);
+        state.enemyHP = Math.max(0, state.enemyHP - ssFinalDmg);
+        return `👤 Shadow Step! Vanish + strike from shadows. Enemy -${ssFinalDmg} HP. (Evade active!)`;
+      }
+
+      // ── BARBARIAN SKILLS ───────────────────────────────────────────
+      case 'whirlwind': {
+        this.applyCombo('whirlwind', state);
+        const wwCondMult = state.conditionBonus ? 1.5 : 1.0;
+        const wwBerserkMult = state.heroBerserkRounds > 0 ? 1.5 : 1.0;
+        const wwBurnMult = state.enemyBurnRounds > 0 ? 1.3 : 1.0;
+        state.conditionBonus = false;
+        const wwEffectiveArmor = state.enemyDefense + state.enemyArmor;
+        let wwTotalDmg = 0;
+        for (let i = 0; i < 3; i++) {
+          const hit = Math.max(1, Math.floor(state.heroAttack * 0.7 + variance()) - Math.floor(wwEffectiveArmor * 0.3));
+          wwTotalDmg += Math.floor(hit * wwCondMult * wwBerserkMult * wwBurnMult);
+        }
+        state.enemyHP = Math.max(0, state.enemyHP - wwTotalDmg);
+        return `🌪️ Whirlwind! 3 rapid strikes! Enemy -${wwTotalDmg} HP total.`;
+      }
+      case 'bloodthirst': {
+        this.applyCombo('bloodthirst', state);
+        const btCondMult = state.conditionBonus ? 1.5 : 1.0;
+        const btBerserkMult = state.heroBerserkRounds > 0 ? 1.5 : 1.0;
+        const btBurnMult = state.enemyBurnRounds > 0 ? 1.3 : 1.0;
+        state.conditionBonus = false;
+        const btEffectiveArmor = state.enemyDefense + state.enemyArmor;
+        const btBaseDmg = Math.max(1, Math.floor(state.heroAttack * 1.3 + variance()) - Math.floor(btEffectiveArmor * 0.5));
+        const btFinalDmg = Math.floor(btBaseDmg * btCondMult * btBerserkMult * btBurnMult);
+        state.enemyHP = Math.max(0, state.enemyHP - btFinalDmg);
+        const btHealAmt = Math.floor(btFinalDmg * 0.5);
+        state.heroHP = Math.min(state.heroMaxHP, state.heroHP + btHealAmt);
+        return `🩸 Bloodthirst! Enemy -${btFinalDmg} HP. Hero +${btHealAmt} HP (lifesteal)!`;
+      }
+      case 'battle_cry': {
+        this.applyCombo('battle_cry', state);
+        state.conditionBonus = false;
+        state.heroBerserkRounds = Math.max(state.heroBerserkRounds, 3);
+        state.enemyStunnedRounds = Math.max(state.enemyStunnedRounds, 1);
+        return `💥 Battle Cry! Berserk 3 turns + ⚡ Enemy Stunned 1 turn!`;
+      }
+
+      // Phase 4: Debug block — removes virus nodes (handled by BattleScreen)
+      case 'debug_block': {
+        this.applyCombo('debug_block', state);
+        state.conditionBonus = false;
+        return '🔧 Debug Block executed! Scanning for virus nodes...';
       }
 
       default:
@@ -821,18 +910,24 @@ export class FlowchartEngine {
     switch (node.data.conditionType) {
       case 'hp_greater':    return state.heroHP > threshold;
       case 'hp_less':       return state.heroHP < threshold;
-      case 'mana_greater':  return state.heroMana > threshold;
-      case 'mana_less':     return state.heroMana < threshold;
       case 'enemy_alive':   return state.enemyHP > 0;
       case 'enemy_close':   return true;
       // Ailment conditions
       case 'hero_burning':  return state.heroBurnRounds > 0;
       case 'hero_poisoned': return state.heroPoisonRounds > 0;
       case 'hero_frozen':   return state.heroFreezeRounds > 0;
-      case 'enemy_stunned': return state.enemyStunnedRounds > 0;
+      case 'enemy_stunned':  return state.enemyStunnedRounds > 0;
+      // Enemy status conditions
+      case 'enemy_burning':  return state.enemyBurnRounds > 0;
+      case 'enemy_frozen':   return state.enemyFreezeRounds > 0;
+      case 'enemy_poisoned': return state.enemyPoisonRounds > 0;
       // Shop conditions
       case 'gold_greater':  return state.gold > threshold;
       case 'gold_less':     return state.gold < threshold;
+      // Turn counter — true when current turn >= threshold (teaches loop counting)
+      case 'turn_gte':      return state.currentTurn >= threshold;
+      // Phase 4: virus condition — evaluated externally via store; default false
+      case 'is_corrupted':  return false;
       default:              return true;
     }
   }
@@ -873,4 +968,113 @@ export class FlowchartEngine {
 
     return outgoing[0]?.target ?? null;
   }
+}
+
+/** Execute enemy's action for its turn in turn-based mode */
+export function executeEnemyAction(
+  behavior: string,
+  state: BattleState,
+): { newState: BattleState; log: string } {
+  const s = { ...state };
+  const variance = () => Math.floor(Math.random() * 5) - 2;
+
+  // Process enemy status ticks before enemy acts
+  const tickLogs: string[] = [];
+  if (s.enemyFreezeRounds > 0) {
+    s.enemyFreezeRounds--;
+    return { newState: s, log: `❄️ Enemy is frozen! Skips turn. (${s.enemyFreezeRounds} left)` };
+  }
+  if (s.enemyBurnRounds > 0) {
+    const burnDmg = Math.max(3, Math.floor(s.enemyAttack * 0.15));
+    s.enemyHP = Math.max(0, s.enemyHP - burnDmg);
+    s.enemyBurnRounds--;
+    tickLogs.push(`🔥 Enemy burn! -${burnDmg} HP (${s.enemyBurnRounds} left)`);
+  }
+  if (s.enemyPoisonRounds > 0) {
+    s.enemyHP = Math.max(0, s.enemyHP - 3);
+    s.enemyPoisonRounds--;
+    tickLogs.push(`🟣 Enemy poison! -3 HP (${s.enemyPoisonRounds} left)`);
+  }
+
+  // If enemy died from status ticks, skip action
+  if (s.enemyHP <= 0) {
+    return { newState: s, log: tickLogs.join(' | ') + ' Enemy defeated by status!' };
+  }
+
+  // Dodge/evade: hero prepared to evade → 65% chance to reduce damage
+  const heroEvades = s.heroIsEvading && Math.random() < 0.65;
+  s.heroIsEvading = false; // consume dodge
+
+  const tickPrefix = tickLogs.length > 0 ? tickLogs.join(' | ') + ' | ' : '';
+
+  switch (behavior) {
+    case 'attack': {
+      const rawDmg = Math.max(0, s.enemyAttack + variance() - Math.floor(s.heroDefense * 0.5));
+      const heroParried = Math.random() * 100 < s.heroParry;
+      let finalDmg = heroParried ? 0 : heroEvades ? Math.floor(rawDmg * 0.35) : rawDmg;
+      // Berserk reduces damage taken by 20%
+      if (s.heroBerserkRounds > 0 && finalDmg > 0) finalDmg = Math.max(1, Math.floor(finalDmg * 0.8));
+      if (!heroParried && finalDmg > 0 && s.enemyAilmentType && Math.random() < s.enemyAilmentChance) {
+        if (s.enemyAilmentType === 'burn')   s.heroBurnRounds   = Math.max(s.heroBurnRounds, 3);
+        if (s.enemyAilmentType === 'freeze') s.heroFreezeRounds = Math.max(s.heroFreezeRounds, 2);
+        if (s.enemyAilmentType === 'poison') s.heroPoisonRounds = Math.max(s.heroPoisonRounds, 5);
+      }
+      s.heroHP = Math.max(0, s.heroHP - finalDmg);
+      const evadeTag = heroEvades ? ' (Evaded! -65%)' : '';
+      const berserkTag = s.heroBerserkRounds > 0 ? ' (🛡️ Berserk -20%)' : '';
+      const ailMap: Record<string, string> = { burn: ' 🔥 Burn!', freeze: ' ❄️ Freeze!', poison: ' 🟣 Poison!' };
+      const ailTag = (!heroParried && finalDmg > 0 && s.enemyAilmentType && Math.random() < s.enemyAilmentChance) ? (ailMap[s.enemyAilmentType] ?? '') : '';
+      const baseLog = heroParried ? '🛡️ Hero parries the attack!' : `👹 Enemy attacks! Hero -${finalDmg} HP${evadeTag}${berserkTag}${ailTag}`;
+      return { newState: s, log: tickPrefix + baseLog };
+    }
+    case 'heal': {
+      const healAmt = Math.floor(s.enemyMaxHP * 0.12);
+      s.enemyHP = Math.min(s.enemyMaxHP, s.enemyHP + healAmt);
+      return { newState: s, log: tickPrefix + `👹 Enemy heals! +${healAmt} HP (${s.enemyHP}/${s.enemyMaxHP})` };
+    }
+    case 'cast_spell': {
+      const spellDmg = Math.max(1, Math.floor(s.enemyAttack * 1.5 + variance()) - Math.floor(s.heroDefense * 0.25));
+      let finalSpellDmg = heroEvades ? Math.floor(spellDmg * 0.35) : spellDmg;
+      // Berserk reduces damage taken by 20%
+      if (s.heroBerserkRounds > 0 && finalSpellDmg > 0) finalSpellDmg = Math.max(1, Math.floor(finalSpellDmg * 0.8));
+      if (finalSpellDmg > 0 && s.enemyAilmentType && Math.random() < s.enemyAilmentChance * 1.5) {
+        if (s.enemyAilmentType === 'burn')   s.heroBurnRounds   = Math.max(s.heroBurnRounds, 3);
+        if (s.enemyAilmentType === 'freeze') s.heroFreezeRounds = Math.max(s.heroFreezeRounds, 2);
+        if (s.enemyAilmentType === 'poison') s.heroPoisonRounds = Math.max(s.heroPoisonRounds, 5);
+      }
+      s.heroHP = Math.max(0, s.heroHP - finalSpellDmg);
+      const evadeTag2 = heroEvades ? ' (Evaded! -65%)' : '';
+      const berserkTag2 = s.heroBerserkRounds > 0 ? ' (🛡️ Berserk -20%)' : '';
+      return { newState: s, log: tickPrefix + `✨ Enemy casts spell! Hero -${finalSpellDmg} HP${evadeTag2}${berserkTag2}` };
+    }
+    default:
+      return { newState: s, log: tickPrefix + '👹 Enemy prepares...' };
+  }
+}
+
+/** Resolve hero status effects at end of turn (burn, poison, freeze, berserk) */
+export function resolveHeroStatuses(state: BattleState): { newState: BattleState; logs: string[] } {
+  const s = { ...state };
+  const logs: string[] = [];
+  if (s.heroBurnRounds > 0) {
+    const dmg = 5;
+    s.heroHP = Math.max(0, s.heroHP - dmg);
+    s.heroBurnRounds--;
+    logs.push(`🔥 Burn ticks! Hero -${dmg} HP (${s.heroBurnRounds} rounds left)`);
+  }
+  if (s.heroPoisonRounds > 0) {
+    const dmg = 3;
+    s.heroHP = Math.max(0, s.heroHP - dmg);
+    s.heroPoisonRounds--;
+    logs.push(`🟣 Poison ticks! Hero -${dmg} HP (${s.heroPoisonRounds} rounds left)`);
+  }
+  if (s.heroFreezeRounds > 0) {
+    s.heroFreezeRounds--;
+    logs.push(`❄️ Freeze fades (${s.heroFreezeRounds} rounds left)`);
+  }
+  if (s.heroBerserkRounds > 0) {
+    s.heroBerserkRounds--;
+    if (s.heroBerserkRounds === 0) logs.push('💢 Berserk fades.');
+  }
+  return { newState: s, logs };
 }

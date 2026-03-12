@@ -8,6 +8,9 @@ interface FlowchartState {
   currentStepIndex: number;
   isValid: boolean;
   validationError: string | null;
+  // Execution trace — set after each run so nodes can show visited state
+  visitedNodeIds: string[];
+  visitedConditionResults: Record<string, boolean>; // nodeId → YES(true)/NO(false)
 
   setNodes: (nodes: FlowNode[]) => void;
   setEdges: (edges: FlowEdge[]) => void;
@@ -21,6 +24,12 @@ interface FlowchartState {
   highlightNode: (nodeId: string | null) => void;
   resetFlowchart: () => void;
   clearToStartEnd: () => void;
+  setVisitedTrace: (nodeIds: string[], results: Record<string, boolean>) => void;
+  clearTrace: () => void;
+  // Phase 4: Virus injection
+  injectVirusNode: (virusNode: FlowNode, edgeId: string) => void;
+  removeVirusNodes: () => void;
+  hasVirusNodes: () => boolean;
 }
 
 const defaultNodes: FlowNode[] = [
@@ -38,13 +47,15 @@ const defaultNodes: FlowNode[] = [
   },
 ];
 
-export const useFlowchartStore = create<FlowchartState>((set) => ({
+export const useFlowchartStore = create<FlowchartState>((set, get) => ({
   nodes: defaultNodes,
   edges: [],
   executionLog: [],
   currentStepIndex: -1,
   isValid: false,
   validationError: null,
+  visitedNodeIds: [],
+  visitedConditionResults: {},
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
@@ -69,6 +80,9 @@ export const useFlowchartStore = create<FlowchartState>((set) => ({
   setExecutionLog: (executionLog) => set({ executionLog }),
   setCurrentStep: (currentStepIndex) => set({ currentStepIndex }),
 
+  setVisitedTrace: (visitedNodeIds, visitedConditionResults) => set({ visitedNodeIds, visitedConditionResults }),
+  clearTrace: () => set({ visitedNodeIds: [], visitedConditionResults: {} }),
+
   setValid: (valid, error) => set({
     isValid: valid,
     validationError: error ?? null,
@@ -88,6 +102,8 @@ export const useFlowchartStore = create<FlowchartState>((set) => ({
     currentStepIndex: -1,
     isValid: false,
     validationError: null,
+    visitedNodeIds: [],
+    visitedConditionResults: {},
   }),
 
   clearToStartEnd: () => set({
@@ -97,5 +113,81 @@ export const useFlowchartStore = create<FlowchartState>((set) => ({
     currentStepIndex: -1,
     isValid: false,
     validationError: null,
+    visitedNodeIds: [],
+    visitedConditionResults: {},
   }),
+
+  // Phase 4: Virus injection
+  injectVirusNode: (virusNode, edgeId) => set((state) => {
+    const edge = state.edges.find((e) => e.id === edgeId);
+    if (!edge) return state;
+
+    // Remove the original edge
+    const newEdges = state.edges.filter((e) => e.id !== edgeId);
+
+    // Create two replacement edges: source → virusNode, virusNode → target
+    const edgeToVirus: FlowEdge = {
+      id: `e_${edge.source}_${virusNode.id}_${Date.now()}`,
+      source: edge.source,
+      target: virusNode.id,
+      sourceHandle: edge.sourceHandle,
+      label: edge.label,
+      animated: edge.animated,
+    };
+    const edgeFromVirus: FlowEdge = {
+      id: `e_${virusNode.id}_${edge.target}_${Date.now() + 1}`,
+      source: virusNode.id,
+      target: edge.target,
+    };
+
+    return {
+      nodes: [...state.nodes, virusNode],
+      edges: [...newEdges, edgeToVirus, edgeFromVirus],
+    };
+  }),
+
+  removeVirusNodes: () => set((state) => {
+    const virusIds = new Set(state.nodes.filter((n) => n.data.isVirus).map((n) => n.id));
+    if (virusIds.size === 0) return state;
+
+    // For each virus node, find its incoming and outgoing edges and reconnect
+    const newEdges: FlowEdge[] = [];
+    const processedVirus = new Set<string>();
+
+    for (const virusId of virusIds) {
+      processedVirus.add(virusId);
+      const inEdges  = state.edges.filter((e) => e.target === virusId);
+      const outEdges = state.edges.filter((e) => e.source === virusId);
+
+      // Reconnect: each source of inEdge → each target of outEdge
+      for (const inE of inEdges) {
+        for (const outE of outEdges) {
+          if (!virusIds.has(inE.source) && !virusIds.has(outE.target)) {
+            newEdges.push({
+              id: `e_${inE.source}_${outE.target}_${Date.now()}`,
+              source: inE.source,
+              target: outE.target,
+              sourceHandle: inE.sourceHandle,
+              label: inE.label,
+              animated: inE.animated,
+            });
+          }
+        }
+      }
+    }
+
+    // Keep edges that don't touch any virus node
+    const cleanEdges = state.edges.filter(
+      (e) => !virusIds.has(e.source) && !virusIds.has(e.target)
+    );
+
+    return {
+      nodes: state.nodes.filter((n) => !n.data.isVirus),
+      edges: [...cleanEdges, ...newEdges],
+    };
+  }),
+
+  hasVirusNodes: () => {
+    return get().nodes.some((n) => n.data.isVirus === true);
+  },
 }));

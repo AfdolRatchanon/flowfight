@@ -1,7 +1,7 @@
 # FlowFight — Flowchart Battle RPG
 
-เกม RPG เพื่อการศึกษาที่ผู้เล่นสร้าง **Flowchart** เพื่อควบคุมวีรบุรุษในการต่อสู้
-ไม่ใช่แค่กด Attack — คุณต้องเขียนโปรแกรมด้วยกล่องลาก-วาง!
+เกม RPG เพื่อการศึกษาที่ผู้เล่นสร้าง **Flowchart** เพื่อควบคุม hero ในการต่อสู้
+ไม่ใช่แค่กด Attack — คุณต้องออกแบบ algorithm ด้วยกล่องลาก-วาง!
 
 ---
 
@@ -12,18 +12,21 @@
 - [ตั้งค่า Firebase](#ตั้งค่า-firebase)
 - [วิธีเล่น](#วิธีเล่น)
 - [Flowchart Blocks](#flowchart-blocks)
+- [Class Skills](#class-skills)
 - [ระบบตัวละครและ Level](#ระบบตัวละครและ-level)
+- [Shop System](#shop-system)
 - [Deploy ขึ้น Firebase Hosting](#deploy-ขึ้น-firebase-hosting)
 - [โครงสร้างโปรเจกต์](#โครงสร้างโปรเจกต์)
-- [ด่านทั้งหมด (15 ด่าน)](#ด่านทั้งหมด-15-ด่าน)
+- [ด่านทั้งหมด (15 ด่าน)](#ด่านทั้งหมด-15-ด่าน--endless)
+- [สถานะระบบ](#สถานะระบบ)
 
 ---
 
 ## Requirements
 
 - [Node.js](https://nodejs.org) v18 ขึ้นไป
-- npm v9+ (มากับ Node)
-- บัญชี [Firebase](https://firebase.google.com) (ฟรี Spark plan ได้เลย)
+- npm v9+
+- บัญชี [Firebase](https://firebase.google.com) (ฟรี Spark plan ได้)
 - (สำหรับ deploy) Firebase CLI
 
 ---
@@ -37,12 +40,9 @@ cd flowfight
 # 2. ติดตั้ง dependencies
 npm install
 
-# 3. คัดลอกไฟล์ config
-cp .env.example .env.local
+# 3. ตั้งค่า Firebase config (ดูหัวข้อถัดไป)
 
-# 4. แก้ไข .env.local ใส่ค่า Firebase (ดูหัวข้อถัดไป)
-
-# 5. รัน dev server
+# 4. รัน dev server
 npm run dev
 # เปิดเบราว์เซอร์ไปที่ http://localhost:5173
 ```
@@ -54,44 +54,37 @@ npm run dev
 ### 1. สร้าง Firebase Project
 
 1. ไปที่ [Firebase Console](https://console.firebase.google.com)
-2. คลิก **Add project** → ตั้งชื่อโปรเจกต์ → สร้าง
-3. ในโปรเจกต์ ไปที่ **Project Settings** (ไอคอนฟันเฟือง) → แท็บ **General**
-4. เลื่อนลงมาที่ **Your apps** → คลิก **Web** (`</>`)
-5. ตั้งชื่อ app → **Register app**
-6. คัดลอก config object ที่ได้
+2. **Add project** → ตั้งชื่อ → สร้าง
+3. **Project Settings** → แท็บ **General** → **Your apps** → คลิก Web (`</>`)
+4. ตั้งชื่อ app → **Register app** → คัดลอก config object
 
 ### 2. เปิด Authentication
 
-1. ไปที่ **Authentication** → **Get started**
-2. แท็บ **Sign-in method** → เปิด **Email/Password**
-3. (แนะนำ) เปิด **Anonymous** ด้วย เพื่อให้เล่นแบบไม่ต้อง login
+1. **Authentication** → **Get started**
+2. **Sign-in method** → เปิด **Google** และ/หรือ **Email/Password**
 
 ### 3. สร้าง Firestore Database
 
-1. ไปที่ **Firestore Database** → **Create database**
+1. **Firestore Database** → **Create database**
 2. เลือก **Start in test mode** (ระหว่างพัฒนา)
-3. เลือก region ใกล้บ้าน เช่น `asia-southeast1`
+3. Region: `asia-southeast1` หรือใกล้เคียง
 
-> **Production:** ก่อน deploy จริงควรตั้ง Security Rules ที่ปลอดภัย (ดูตัวอย่างด้านล่าง)
+### 4. ใส่ config ในโปรเจกต์
 
-### 4. ใส่ค่าใน .env.local
+แก้ไขไฟล์ `src/services/firebaseService.ts` ใส่ค่าจาก Firebase:
 
-เปิดไฟล์ `.env.local` แล้วใส่ค่าจาก Firebase config:
-
-```env
-VITE_FIREBASE_API_KEY=AIzaSy...
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
-VITE_FIREBASE_APP_ID=1:123456789:web:abcdef123456
-
-VITE_APP_VERSION=0.1.0
+```ts
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef123456",
+};
 ```
 
 ### Firestore Security Rules (แนะนำสำหรับ production)
-
-ไปที่ **Firestore** → **Rules** แล้วใช้:
 
 ```
 rules_version = '2';
@@ -118,152 +111,192 @@ service cloud.firestore {
 
 ### ขั้นตอนเริ่มต้น
 
-1. **Login** ด้วย Email/Password หรือ Anonymous
-2. **สร้างตัวละคร** → เลือกอาชีพ, Equipment, สี
-3. **เลือกด่าน** จากหน้า Level Select
-4. **สร้าง Flowchart** ในส่วนล่างของหน้าจอ
-5. กด **Play** เพื่อดูผลการต่อสู้
+1. **Login** ด้วย Google หรือ Email/Password
+2. **สร้างตัวละคร** → เลือกอาชีพ, Equipment, สีตัวละคร
+3. **เลือกด่าน** จากหน้า Level Select (ปลดล็อกตามลำดับ)
+4. **สร้าง Flowchart** ในครึ่งล่างของหน้าจอ
+5. กด **Execute Turn** เพื่อรัน hero ตาม flowchart
+
+### หน้าจอระหว่างเล่น
+
+หน้าจอแบ่งเป็น 2 ส่วน:
+- **ครึ่งบน** — Battle Arena: HP bars, battle log, ailment status, enemy intent
+- **ครึ่งล่าง** — Flowchart Editor: วาง/เชื่อม block ก่อนกด Execute
 
 ### การสร้าง Flowchart
 
-- **ลากบล็อก** จาก Panel ซ้ายมาวางบน Canvas
-- **เชื่อมต่อ** โดยคลิกจุดสีขาวที่ขอบบล็อก แล้วลากไปยังบล็อกถัดไป
-- ทุก Flowchart **ต้องมี Start และ End** เสมอ
-- กด **Validate** เพื่อตรวจสอบก่อนรัน
+- **คลิกขวา** บน canvas ว่าง → เมนู 3 ระดับสำหรับเพิ่ม block
+  - Level 1: Process / Decision / Class Skills
+  - Level 2: หมวดหมู่ (Combat / Support / HP / Ailment / Status / Counter)
+  - Level 3: action หรือ condition ที่ต้องการ
+- **ลาก** จุด handle ที่ขอบ node เพื่อเชื่อม edge
+- **คลิกขวา** บน node → เปลี่ยน Action, คัดลอก, หรือลบ
+- **Del** — ลบ node/edge ที่เลือก
+
+ทุก Flowchart **ต้องมี Start → ... → End** จึงจะ Execute ได้
 
 ### ปุ่มควบคุม
 
 | ปุ่ม | ความหมาย |
 |------|----------|
-| Validate | ตรวจว่า Flowchart ถูกต้องหรือไม่ |
-| Play | รัน Flowchart ทั้งหมดอัตโนมัติ |
-| Step | รันทีละขั้นตอน (ดูการทำงานละเอียด) |
-| Stop | หยุดการรันกลางคัน |
-| Clear | ล้าง Flowchart ทั้งหมด |
+| Execute Turn | รัน flowchart 1 รอบ (hero turn) |
+| Stop | หยุดกลางคัน |
+| 1x / 2x / 3x | ปรับความเร็ว animation |
+| Reset | เริ่มด่านใหม่ |
 
 ---
 
 ## Flowchart Blocks
 
-| บล็อก | รูปร่าง | ความหมาย |
-|-------|---------|----------|
-| **Start** | วงรีเขียว | จุดเริ่มต้น (มีได้แค่ 1 อัน) |
-| **End** | วงรีเขียว | จุดสิ้นสุด |
-| **Attack** | สี่เหลี่ยมแดง | โจมตีศัตรู (ศัตรูโต้กลับ 100%) |
-| **Heal** | สี่เหลี่ยมแดง | ฟื้นฟู HP ประมาณ 20 |
-| **Dodge** | สี่เหลี่ยมแดง | หลบการโจมตี (สำเร็จ 70%) |
-| **Cast Spell** | สี่เหลี่ยมแดง | เวทย์ดาเมจ 1.5× (ศัตรูโต้กลับ 50%) |
-| **Condition** | เพชรน้ำเงิน | แยกทาง YES / NO ตามเงื่อนไข |
-| **Loop** | เพชรส้ม | วนซ้ำทาง LOOP / ออกทาง NEXT |
+### Process (Action)
 
-### Condition Types
+| Action | 💎 | ผล |
+|--------|----|----|
+| Attack | 1 | โจมตีพื้นฐาน |
+| Power Strike | 2 | โจมตี 2x, cooldown 2 turns |
+| Dodge | 1 | หลบการโจมตีถัดไป |
+| Cast Spell | 2 | magic damage ทะลุ armor |
+| Heal | 1 | ฟื้น HP (จำกัด 3 ครั้ง/battle) |
+| Berserk | 1 | ATK+50%, DEF-30% เป็น 2 turns |
+| Use Potion | 1 | ฟื้น HP จำนวนมาก (ต้องซื้อ) |
+| Use Antidote | 1 | ล้าง Poison (ต้องซื้อ) |
+| Debug Block | 0 | ลบ Virus nodes ออกจาก canvas |
 
+> **💎 Budget** — แต่ละ turn มี 3 💎 ถ้า flowchart รวมเกิน 3 💎 จะแจ้งเตือน
+
+### Decision (Condition)
+
+เมนูเงื่อนไขแบ่งเป็น 4 หมวด:
+
+**HP** — `HP < 50?` / `HP > 50?`
+
+**Ailment (สถานะ)**
 | เงื่อนไข | YES เมื่อ |
 |----------|----------|
-| HP > X | HP ของฮีโร่มากกว่า X |
-| HP < X | HP ของฮีโร่น้อยกว่า X |
-| MP > X | Mana ของฮีโร่มากกว่า X |
-| MP < X | Mana ของฮีโร่น้อยกว่า X |
+| ฉัน Burning? | hero ติด Burn |
+| ศัตรู Burning? | ศัตรูติด Burn |
+| ฉัน Poisoned? | hero ติด Poison |
+| ศัตรู Poisoned? | ศัตรูติด Poison |
+| ฉัน Frozen? | hero ติด Freeze |
+| ศัตรู Frozen? | ศัตรูติด Freeze |
+
+**Status**
+| เงื่อนไข | YES เมื่อ |
+|----------|----------|
 | Enemy Alive? | ศัตรูยังมีชีวิต |
-| Enemy Close? | ศัตรูอยู่ใกล้ (สำหรับ Rogue) |
+| Enemy Stunned? | ศัตรูติด Stun |
+| Virus Present? | มี Virus node บน canvas |
 
-> **Interactive Condition Node:** คลิกปุ่ม HP/MP เพื่อสลับ subject, คลิก `>/<` เพื่อสลับ operator, กด `+10`/`−10` เพื่อปรับ threshold โดยตรงบน node
+**Counter** — `Turn ≥ N?`
 
-### Loop Types
+---
 
-| ประเภท | ทำงาน |
-|--------|-------|
-| Repeat N times | วนซ้ำ N รอบแล้วออก |
-| While Enemy Alive | วนจนกว่าศัตรูจะตาย |
+## Class Skills
+
+แต่ละ class มี 3 สกิลพิเศษ ปลดล็อกตาม character level
+ใส่ใน flowchart ผ่านเมนู **Class Skills** (คลิกขวา → Class Skills)
+
+| Class | Skill | Lv | 💎 | ผล |
+|-------|-------|----|----|----|
+| Knight | Iron Shield | 1 | 1 | ลด damage ที่รับ 50% |
+| Knight | Counter | 3 | 2 | สะท้อน 40% damage กลับ |
+| Knight | War Cry | 5 | 2 | ATK+40% / DEF-15% เป็น 2 turns |
+| Mage | Fireball | 1 | 2 | Fire damage + 40% โอกาสติด Burn |
+| Mage | Frost Nova | 3 | 2 | Magic damage + Freeze enemy 1 turn |
+| Mage | Arcane Surge | 5 | 3 | Massive burst ทะลุ armor+DEF ทั้งหมด |
+| Rogue | Backstab | 1 | 2 | ดาเมจ 2x ถ้าศัตรูติด Freeze/Stun |
+| Rogue | Poison Strike | 3 | 1 | โจมตี + ติด Poison 3 รอบ |
+| Rogue | Shadow Step | 5 | 2 | Evade + โจมตีหลังหลบ (guaranteed hit) |
+| Barbarian | Whirlwind | 1 | 2 | โจมตี 3 ครั้ง (ดาเมจ -30%/ครั้ง) |
+| Barbarian | Bloodthirst | 3 | 2 | โจมตี + ฮีล 50% ของดาเมจที่ทำ |
+| Barbarian | Battle Cry | 5 | 3 | Berserk 3 turns + Stun ศัตรู 1 turn |
+
+> สกิลที่ยังไม่ถึง level จะแสดงใน menu แต่มี 🔒 Lv.X และกดไม่ได้
 
 ---
 
 ## ระบบตัวละครและ Level
 
-### 4 อาชีพ
+### 4 Classes
 
-| อาชีพ | HP | ATK | DEF | จุดเด่น |
-|-------|----|----|-----|---------|
-| Knight | 100 | 10 | 8 | ทนทาน |
-| Mage | 80 | 14 | 4 | ดาเมจสูง |
-| Rogue | 90 | 12 | 5 | เร็ว |
-| Barbarian | 120 | 13 | 6 | HP สูงสุด |
+| Class | HP | ATK | DEF | SPD | บทบาท |
+|-------|----|-----|-----|-----|-------|
+| Knight | สูง | ปกติ | สูง | ปกติ | Tank — ทนดาเมจสูงสุด |
+| Mage | ต่ำ | สูงมาก | ต่ำ | ปกติ | Glass Cannon — ดาเมจสูงสุด |
+| Rogue | ปกติ | ปกติ | ต่ำ | สูง | Speedster — เร็ว คล่องแคล่ว |
+| Barbarian | สูงมาก | สูง | ปกติ | ต่ำ | Berserker — พละกำลังดิบ |
 
-### XP และ Level
+### Stat Growth ต่อ Level
 
-- เอาชนะศัตรูได้รับ XP
-- Level สูงสุดคือ **Level 10**
-- XP progress บันทึกลง Firestore อัตโนมัติ
+| Class | HP/Lv | ATK/Lv | DEF/Lv | SPD/Lv |
+|-------|-------|--------|--------|--------|
+| Knight | +15 | +1 | +2 | — |
+| Mage | +8 | +3 | — | +1 |
+| Rogue | +8 | +2 | — | +2 |
+| Barbarian | +18 | +2 | +1 | — |
 
-| Level | XP ที่ต้องการ |
-|-------|-------------|
-| 2 | 100 |
-| 3 | 250 |
-| 4 | 450 |
-| 5 | 700 |
-| 6 | 1,000 |
-| 7 | 1,400 |
-| 8 | 1,900 |
-| 9 | 2,500 |
-| 10 | 3,200 |
+### XP ที่ต้องการแต่ละ Level (Level 1–10)
+
+| Level | XP รวม | รับได้จากด่าน |
+|-------|--------|-------------|
+| 2 | 100 | ด่าน 1–2 |
+| 3 | 250 | ด่าน 1–3 |
+| 4 | 450 | ด่าน 1–4 |
+| 5 | 700 | ด่าน 1–5 |
+| 6 | 1,000 | ด่าน 1–7 |
+| 7 | 1,400 | ด่าน 1–9 |
+| 8 | 1,900 | ด่าน 1–11 |
+| 9 | 2,500 | ด่าน 1–13 |
+| 10 (MAX) | 3,200 | ด่าน 1–15 |
+
+### Passive Bonuses (ปลดล็อกอัตโนมัติ)
+
+| Class | Lv.2 | Lv.4 | Lv.6 |
+|-------|------|------|------|
+| Knight | DEF+3 | DEF+5 HP+10 | ATK+3 DEF+8 |
+| Mage | ATK+4 | ATK+7 SPD+1 | ATK+10 SPD+1 |
+| Rogue | SPD+2 | ATK+5 SPD+2 | ATK+8 SPD+3 |
+| Barbarian | HP+15 | ATK+5 HP+20 | ATK+8 HP+30 |
+
+---
+
+## Shop System
+
+ซื้ออุปกรณ์ด้วย **Gold** ที่ได้จากการชนะด่าน
+
+| Slot | ตัวอย่าง |
+|------|--------|
+| Weapon | Iron Sword / Magic Staff / Twin Daggers / Hand Axe |
+| Armor | Chain Mail / Cloth Robe / Leather Vest / Bear Pelt |
+| Helmet | Iron Helmet / Wizard Hat / Scout Hood / Skull Cap |
+| Accessory | Ring of Health / Boots of Swiftness / Amulet of Focus |
+
+- อุปกรณ์ส่วนใหญ่ใช้ได้เฉพาะ class ตัวเอง
+- Accessory บางชิ้นใช้ได้ทุก class
+- Rarity: Common / Uncommon / Rare / Epic / Legendary
+- มีเงื่อนไข `requiredLevel` สำหรับบางชิ้น
 
 ---
 
 ## Deploy ขึ้น Firebase Hosting
 
-### ครั้งแรก (ติดตั้ง Firebase CLI)
+### ครั้งแรก
 
 ```bash
 npm install -g firebase-tools
 firebase login
-```
-
-### สร้างไฟล์ firebase.json
-
-รันคำสั่งนี้ในโฟลเดอร์โปรเจกต์:
-
-```bash
 firebase init hosting
+# public directory: dist
+# single-page app: Yes
+# overwrite dist/index.html: No
 ```
-
-ตอบคำถาม:
-- **What do you want to use as your public directory?** → `dist`
-- **Configure as a single-page app?** → `Yes`
-- **Set up automatic builds with GitHub?** → `No` (หรือ Yes ถ้าต้องการ CI/CD)
-- **File dist/index.html already exists. Overwrite?** → `No`
-
-จะได้ไฟล์ `firebase.json` แบบนี้:
-
-```json
-{
-  "hosting": {
-    "public": "dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  }
-}
-```
-
-> `rewrites` สำคัญมาก — ทำให้ React Router ทำงานได้ถูกต้องเมื่อ refresh หน้า
 
 ### Build และ Deploy
 
 ```bash
-# Build โปรเจกต์
 npm run build
-
-# Deploy
 firebase deploy --only hosting
-```
-
-เมื่อเสร็จจะได้ URL ประมาณ:
-```
-Hosting URL: https://your-project-id.web.app
+# Hosting URL: https://your-project-id.web.app
 ```
 
 ### Deploy ครั้งถัดไป
@@ -272,217 +305,134 @@ Hosting URL: https://your-project-id.web.app
 npm run build && firebase deploy --only hosting
 ```
 
-### (ทางเลือก) ตั้ง Custom Domain
-
-1. Firebase Console → **Hosting** → **Add custom domain**
-2. ใส่โดเมนของคุณ → ทำตามขั้นตอน DNS verification
-
 ---
 
 ## โครงสร้างโปรเจกต์
 
 ```
-flowfight/
-├── public/                   # Static assets
-├── src/
-│   ├── components/
-│   │   ├── Auth/             # หน้า Login / Register
-│   │   ├── Battle/           # BattleScreen (arena + flowchart)
-│   │   ├── Character/        # CharacterCustomizer
-│   │   ├── FlowchartEditor/  # Editor + CustomNodes + BlockPalette
-│   │   └── UI/               # MainMenu, LevelSelect, Leaderboard
-│   ├── engines/
-│   │   └── FlowchartEngine.ts   # Logic การรัน flowchart และ battle
-│   ├── hooks/
-│   │   ├── useAuth.ts           # Auth state + Firestore sync
-│   │   └── useBattle.ts         # Animation loop + step execution
-│   ├── services/
-│   │   ├── authService.ts       # Firebase read/write (auth, leaderboard, progress)
-│   │   ├── characterService.ts  # Character save/load (ยังไม่ integrate กับ UI)
-│   │   └── firebaseService.ts   # Firebase config & initialization
-│   ├── stores/
-│   │   ├── gameStore.ts         # Player + Character global state
-│   │   ├── battleStore.ts       # HP, Mana, log, battle state
-│   │   ├── characterStore.ts    # Character builder, equipment, class selection
-│   │   └── flowchartStore.ts    # Nodes + Edges + execution log
-│   ├── types/
-│   │   └── game.types.ts        # TypeScript interfaces ทั้งหมด
-│   └── utils/
-│       ├── constants.ts         # LEVELS, WEAPONS, ARMORS, etc.
-│       └── levelSystem.ts       # XP table, gainXP(), levelProgressPct()
-├── .env.example              # Template สำหรับ Firebase config
-├── .env.local                # Config จริง (อย่า commit!)
-├── firebase.json             # Firebase Hosting config
-├── vite.config.ts
-└── package.json
+src/
+├── components/
+│   ├── Auth/
+│   │   └── LoginPage.tsx          — Firebase Auth (Google + Email)
+│   ├── Battle/
+│   │   └── BattleScreen.tsx       — หน้าหลัก: arena + flowchart editor
+│   ├── Character/
+│   │   └── CharacterCustomizer.tsx — เลือก class / equipment / สี
+│   ├── FlowchartEditor/
+│   │   ├── FlowchartEditor.tsx    — canvas + context menu 3 ระดับ
+│   │   └── CustomNodes/           — ActionNode, ConditionNode, LoopNode, ...
+│   ├── Shop/
+│   │   ├── ShopScreen.tsx         — shop popup หลังชนะด่าน
+│   │   └── ShopPage.tsx           — หน้า shop แบบ standalone
+│   └── UI/
+│       ├── LevelSelect.tsx        — เลือกด่าน + แสดงสถานะ unlock
+│       ├── MainMenu.tsx           — หน้าแรกหลัง login
+│       ├── Leaderboard.tsx        — global + per-level leaderboard
+│       └── ThemeToggle.tsx        — สลับ Light / Dark theme
+├── engines/
+│   ├── FlowchartEngine.ts         — parse + validate + execute flowchart
+│   └── ShopEngine.ts              — คำนวณ stat bonus จาก equipment
+├── hooks/
+│   ├── useBattle.ts               — orchestrate battle (execute / stop / restart)
+│   └── useAuth.ts                 — Firebase auth state
+├── stores/
+│   ├── gameStore.ts               — Player + Character global state (Zustand)
+│   ├── battleStore.ts             — HP, log, ailment, executing state
+│   ├── flowchartStore.ts          — nodes, edges, executionLog, visitedTrace
+│   ├── shopStore.ts               — gold, potions, antidotes, equipment bonus
+│   └── characterStore.ts          — character builder state
+├── services/
+│   ├── authService.ts             — Firestore read/write (progress, leaderboard)
+│   ├── characterService.ts        — character save/load (Firestore)
+│   └── firebaseService.ts         — Firebase init + config
+├── contexts/
+│   └── ThemeContext.tsx           — Light/Dark theme + color tokens
+├── types/
+│   ├── game.types.ts              — TypeScript interfaces ทั้งหมด
+│   └── firebase.types.ts          — Firestore document types
+└── utils/
+    ├── constants.ts               — LEVELS, CLASS_SKILLS, WEAPONS, ARMORS, ...
+    └── levelSystem.ts             — gainXP(), levelProgressPct(), LEVEL_XP_TABLE
 ```
 
 ---
 
 ## ด่านทั้งหมด (15 ด่าน + Endless)
 
-| # | ชื่อด่าน | ศัตรู | HP | ความยาก | แนวคิดที่เรียน |
-|---|---------|------|----|---------|--------------|
-| 1 | The Slime Cave | Slime | 25 | ★ | Sequential Logic |
-| 2 | Slime x2 | Slime | 45 | ★ | Sequential (หลายครั้ง) |
-| 3 | The Goblin Cave | Goblin | 60 | ★★ | Condition + Loop |
-| 4 | Heal When Low | Goblin | 70 | ★★ | If/Else + Heal |
-| 5 | The Kobold Pack | Kobold Pack | 90 | ★★ | Condition Loop + Heal |
-| 6 | The Goblin Knight | Goblin Knight | 110 | ★★★ | Dodge + Armor + **Enrage 30%** |
-| 7 | The Spider Den | Spider Queen | 130 | ★★★ | Nested Conditions + **Enrage 25%** |
-| 8 | The Forest Wraith | Forest Wraith | 140 | ★★★ | Cast Spell |
-| 9 | Mana Control | Orc Warrior | 160 | ★★★★ | Resource Management |
-| 10 | Power Strike! | Stone Troll | 190 | ★★★★ | Power Strike + Armor |
-| 11 | The Orc Warlord | Orc Warlord | 220 | ★★★★ | Full Skill Set + **Enrage 30%** |
-| 12 | The Ice Cavern | Ice Giant | 260 | ★★★★★ | High Armor + Spell/Strike |
-| 13 | The Dragon's Lair | Young Dragon | 300 | ★★★★★ | All 5 Actions + **Enrage 35%** |
-| 14 | The Lich Lord | Lich Lord | 370 | ★★★★★ | Parry 25% + Heal + **Enrage 40%** |
-| 15 | The Dark Overlord | Dark Overlord | 500 | ★★★★★ | True Mastery + **Enrage 40%** |
-| ∞ | **Endless Mode** | Wave ∞ | Scales | ★★★★★ | ทุก Wave — ศัตรูแรง+มากขึ้น |
+| # | ชื่อด่าน | ศัตรู | HP | ★ | Concept ที่เรียน |
+|---|---------|------|----|---|----------------|
+| 1 | The Slime Cave | Slime | 20 | ★ | Sequence — ต่อ block เป็นเส้นตรง |
+| 2 | Bigger Slime | Slime | 38 | ★ | Sequence ยาวขึ้น |
+| 3 | Goblin Scout | Goblin | 65 | ★ | While Loop ผ่าน Condition |
+| 4 | Heal When Low | Goblin | 78 | ★★ | If/Else — HP < 50? Heal : Attack |
+| 5 | Spider Den | Spider | 100 | ★★ | Nested If — เงื่อนไขซ้อนกัน |
+| 6 | Kobold Pack | Kobold | 115 | ★★ | Counter Loop — Turn ≥ N? |
+| 7 | Forest Wraith | Wraith | 120 | ★★★ | Resource Condition — HP > 50? Spell |
+| 8 | Goblin Knight | Goblin Knight | 140 | ★★★ | Skill Selection + Armor + Enrage |
+| 9 | Orc Warrior | Orc | 155 | ★★★ | State Condition — Hero Poisoned? |
+| 10 | Stone Troll | Troll | 182 | ★★★ | HP Threshold + Enrage 35% |
+| 11 | Orc Warlord | Warlord | 218 | ★★★★ | Complex Decision Tree |
+| 12 | Ice Giant | Giant | 252 | ★★★★ | Counter + Resource Combined |
+| 13 | Dragon's Lair | Young Dragon | 295 | ★★★★★ | Full Algorithm Design |
+| 14 | The Lich Lord | Lich | 362 | ★★★★★ | Algorithm Optimization + Parry 25% |
+| 15 | The Dark Overlord | Overlord | 475 | ★★★★★ | Master Flowchart — ทุก concept |
+| ∞ | **Endless Mode** | Wave ∞ | scales | ★★★★★ | Survival — score = Wave × HP% |
 
-> **Enemy Enrage:** เมื่อ HP ของศัตรูตกต่ำกว่า threshold% → ATK ×1.5 และแสดงข้อความ "ENRAGED!"
+แต่ละด่านมี **requiredBlocks** — ถ้าไม่มี block ที่กำหนด ศัตรูจะ shield ป้องกันการโจมตี
+
+---
+
+## สถานะระบบ
+
+> อัปเดต: มีนาคม 2026
+
+### สิ่งที่พัฒนาแล้ว
+
+- [x] FlowchartEngine — validate + execute ครบ (loop detection, SCC algorithm)
+- [x] Battle System — HP / Armor / Parry / Dodge / Ailment / Enrage / Combo
+- [x] Flowchart Editor — context menu 3 ระดับ, Windows-style submenu positioning
+- [x] 💎 Budget System — action points per turn (3 💎/turn), badge บน node
+- [x] 4 Classes + Class Skills (3 skills/class, unlock ตาม level)
+- [x] Passive bonuses (Lv.2 / Lv.4 / Lv.6)
+- [x] Character Progression — XP, Level 1–10, stat growth per class
+- [x] Shop System — 40+ items, 4 slots, gold rewards จากด่าน
+- [x] Equipment stat bonuses ผ่าน ShopEngine
+- [x] 15 Campaign Levels + Endless Mode
+- [x] Firebase Auth — Google Sign-In
+- [x] Firestore — save player progress, character progress, leaderboard
+- [x] Global Leaderboard + Per-level Leaderboard
+- [x] Light / Dark Theme
+- [x] Enemy Shield mechanic — ป้องกันเมื่อขาด required blocks
+- [x] Virus mechanic — ไวรัสเกิดใน canvas, Debug Block ลบออก
+- [x] Turn-based battle (hero turn → enemy turn → resolution)
+- [x] Speed control 1x / 2x / 3x
+- [x] Visited node trace — แสดงเส้นทางที่รันหลัง execute
+- [x] Endless Wave Mode — wave scaling, score system
+
+### สิ่งที่ยังขาด
+
+- [ ] **Flowchart Save/Load per level** — วาดแล้วปิด → หาย (สำคัญสูงสุด)
+- [ ] Tooltip อธิบาย block แต่ละตัวเมื่อ hover
+- [ ] Sound Effects และ BGM
+- [ ] Sprite animation จริง (ปัจจุบันใช้ PNG + emoji)
+- [ ] Mobile / Touch screen support
+- [ ] Achievement System (type พร้อมแล้ว ยังขาด UI + logic)
 
 ---
 
 ## Tech Stack
 
-| เทคโนโลยี | เวอร์ชัน | บทบาท |
-|----------|---------|-------|
-| React + TypeScript | 19.x | UI Framework |
-| Vite | 7.x | Build Tool |
-| React Flow | 11.x | Flowchart Editor |
-| Zustand | 5.x | State Management |
-| Firebase Auth | 12.x | Authentication (Email / Google / Anonymous) |
-| Firebase Firestore | 12.x | Database (player data, leaderboard) |
-| Firebase Hosting | — | Web Hosting |
-| Tailwind CSS | 4.x | Styling (via @tailwindcss/vite) |
-| Framer Motion | 12.x | UI Animations |
-| Phaser 3 | 3.x | ติดตั้งแล้ว — ยังไม่ได้ใช้ (planned for sprite/battle animation) |
+| | เวอร์ชัน | บทบาท |
+|-|---------|-------|
+| React + TypeScript | 19 | UI Framework |
+| Vite | 7 | Build Tool |
+| React Flow | 11 | Flowchart Canvas |
+| Zustand | 5 | State Management |
+| Framer Motion | 12 | UI Animation |
+| Firebase | 12 | Auth + Firestore + Hosting |
+| Phaser 3 | 3.90 | ติดตั้งแล้ว — planned สำหรับ battle animation |
+| Tailwind CSS | 4 | Utility CSS |
 
 ---
 
-## สถานะระบบ — มีอะไรแล้ว / ขาดอะไร
-
-> อัปเดตล่าสุด: มีนาคม 2026
-
-### สิ่งที่พัฒนาแล้ว (Implemented)
-
-#### Core Gameplay
-- [x] Flowchart Editor ด้วย ReactFlow — Node, Edge, Handle ครบ
-- [x] FlowchartEngine — Validate + Execute ครบ รองรับ 5 action types
-- [x] Battle System — HP / Mana / Armor / Parry / Dodge ทำงานได้
-- [x] Infinite Loop Detection (Tarjan's SCC algorithm)
-- [x] Condition nodes: HP < X, HP > X, **MP < X, MP > X**, Enemy Alive, Enemy Close
-- [x] **Interactive Condition Node** — คลิกเปลี่ยน HP/MP, >/< operator, ±10 threshold บน node ได้เลย
-- [x] Loop nodes: Repeat N times, While Alive
-- [x] Speed Control 1x–5x และ Step-through mode
-- [x] Preview Flowchart แสดง branch outcomes ทั้ง YES/NO ก่อนรัน
-- [x] Required block validation — ศัตรูป้องกันถ้าไม่มี block ที่กำหนด
-- [x] **Enemy Enrage mechanic** — HP ต่ำกว่า threshold% → ATK ×1.5 (ด่าน 6,7,11,13,14,15)
-- [x] **Tutorial Overlay** — step-by-step hints ด่าน 1–5 พร้อม prev/next/close
-- [x] **Endless Wave Mode** — ศัตรู scale ขึ้นทุก wave, แก้ flowchart ระหว่าง wave ได้, score = wave × HP%
-
-#### Character & Progression
-- [x] 4 classes: Knight / Mage / Rogue / Barbarian พร้อม stat growth per level
-- [x] Equipment system — 40+ items ใน 4 slots (Head, Weapon, Armor, Accessory)
-- [x] Level 1–10 + XP system พร้อม XP table
-- [x] Color customization (hex picker) Primary / Secondary / Accent
-
-#### UI & Navigation
-- [x] Login: Email/Password + Google OAuth + Guest (Anonymous) + Password Reset
-- [x] MainMenu / LevelSelect (15 ด่าน) / BattleScreen / CharacterCustomizer / Leaderboard
-- [x] Light / Dark theme toggle
-- [x] Panel toggle ซ่อน/เปิด Blocks palette และ Sim Preview
-- [x] fitView auto-reset เมื่อเข้าด่านใหม่
-- [x] ReactFlow watermark ซ่อนแล้ว
-
-#### Backend (Firebase)
-- [x] Firebase Auth + Firestore
-- [x] Global leaderboard + Per-level leaderboard
-- [x] savePlayerProgress + saveCharacterProgress
-- [x] Firestore Security Rules ตัวอย่างพร้อมใช้งาน
-
----
-
-### สิ่งที่ยังขาด / ต้องพัฒนาต่อ
-
-#### ลำดับความสำคัญสูง
-
-- [ ] **Flowchart Save/Load per level** — ตอนนี้วาดแล้วปิดหน้าต่าง → หายหมด
-  - บันทึก nodes + edges ลง Firestore per `(userId, levelId)`
-  - โหลดกลับมาเมื่อเข้าด่านเดิมซ้ำ
-  - อาจเพิ่ม Template flowchart สำหรับ beginner
-
-- [x] **Tutorial ด่าน 1–5** — Overlay step-by-step hints พร้อมใช้งานแล้ว
-- [ ] Tooltip อธิบาย block แต่ละตัวเมื่อ hover (nice to have)
-
-- [ ] **Equipment Save ให้สมบูรณ์** — `characterService.ts` มีอยู่แต่ไม่ได้ถูก integrate
-  - เรียก `characterService` จาก `CharacterCustomizer` จริง
-  - บันทึก equipment ที่เลือกลง Firestore
-
-#### ลำดับความสำคัญกลาง
-
-- [ ] **Sound Effects เบื้องต้น**
-  - โฟลเดอร์ `assets/sounds/` มีอยู่แต่ว่างเปล่า
-  - SFX: โจมตี, heal, level up, victory, defeat
-  - ดนตรีประกอบ (battle music, menu music)
-
-- [ ] **Equipment Shop**
-  - มี item catalog ครบใน `constants.ts` แต่ไม่มีหน้า shop
-  - ต้องมีระบบ Gold / Currency
-  - Mechanics การได้ Gold จากการชนะด่าน
-
-- [ ] **Achievement System**
-  - type `Achievement` อยู่ใน `game.types.ts` แล้ว แต่ยังไม่มี UI
-  - ระบบ unlock achievement (เช่น ชนะด่าน 1, เล่นครบ 5 ด่าน)
-  - หน้าแสดง achievements และ progress
-
-#### ลำดับความสำคัญต่ำ (Nice to Have)
-
-- [ ] **Sprites / Visual ตัวละครจริง**
-  - โฟลเดอร์ `assets/sprites/` ว่างเปล่า
-  - ตอนนี้ Battle Arena ใช้ emoji + gradient box
-  - Phaser 3 อยู่ใน architecture docs แต่ยังไม่ได้ใช้
-
-- [ ] **Enemy Animation**
-  - ศัตรูแสดงเป็น emoji
-  - ควรมี sprite animation สำหรับ idle / attack / hurt / death
-
-- [ ] **Mobile / Responsive Support**
-  - Flowchart Editor ใช้งานยากบน touch screen
-  - Layout ออกแบบสำหรับ desktop เท่านั้น
-
-- [ ] **Flowchart Template Library**
-  - ตัวอย่าง flowchart พร้อมใช้สำหรับแต่ละด่าน
-  - ให้ผู้เล่นเลือก template แล้วปรับแต่งเพิ่ม
-
----
-
-### ตารางสรุปสถานะ
-
-| หมวด | สถานะ | หมายเหตุ |
-|------|--------|----------|
-| Game Logic (Engine) | 95% | ครบทุก action, Enrage mechanic, Mana conditions |
-| UI / Navigation | 90% | ครบหลัก, Tutorial overlay ด่าน 1–5 แล้ว |
-| Authentication | 95% | ครบ, username fix ใช้งานได้แล้ว |
-| Character / Equipment | 70% | UI ครบ, แต่ save equipment ไม่สมบูรณ์ |
-| Flowchart Save | 0% | **ยังไม่ได้ทำ** — สำคัญมาก |
-| Tutorial / Onboarding | 60% | Overlay ด่าน 1–5 เสร็จแล้ว, ขาด tooltip per block |
-| Sound / Music | 0% | โฟลเดอร์ว่างเปล่า |
-| Sprites / Animation | 5% | ใช้ emoji แทน sprite จริง |
-| Shop System | 0% | Item catalog พร้อม แต่ยังไม่มี shop UI |
-| Achievement System | 0% | Types พร้อม แต่ยังไม่มี logic + UI |
-| Mobile Support | 0% | Desktop only |
-| Endless Mode | 100% | Wave scaling, score system, flowchart editable between waves |
-| Leaderboard | 80% | ทำงานได้ ต้อง verify หลังเล่นจริง |
-
----
-
-### หมายเหตุทางเทคนิคที่ควรจำ
-
-- **Firebase Rules** ต้องอัปเดตใน Firebase Console ด้วยมือ (ดูหัวข้อ Firestore Security Rules ด้านบน)
-- **`characterService.ts`** มีอยู่ใน `src/services/` แต่ยังไม่ถูกเรียกใช้จาก CharacterCustomizer
-- **`updateDoc`** จะ throw ถ้า document ยังไม่มีใน Firestore — ใช้ `setDoc` กับ `{ merge: true }` แทน
-- **Username fallback chain**: `profile.username` → `user.displayName` → `user.email.split('@')[0]` → `'Player'`
-- **`key={level.id}`** บน `<FlowchartEditor>` ทำให้ ReactFlow remount และ fitView ทุกครั้งที่เปลี่ยนด่าน
-- **`proOptions={{ hideAttribution: true }}`** ใน ReactFlow ซ่อน watermark
+`v0.1.0-alpha`

@@ -13,6 +13,8 @@ import type { Connection, Edge, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowchartStore } from '../../stores/flowchartStore';
 import type { FlowNode, FlowEdge, FlowNodeType } from '../../types/game.types';
+import { CLASS_SKILLS } from '../../utils/constants';
+import { BLOCK_MANA_COST } from '../../engines/FlowchartEngine';
 import StartNode from './CustomNodes/StartNode';
 import EndNode from './CustomNodes/EndNode';
 import ActionNode from './CustomNodes/ActionNode';
@@ -30,9 +32,10 @@ const nodeTypes = {
 };
 
 // ── Submenu data ──────────────────────────────────────────────────────────────
+// Level-2 = categories, Level-3 = items inside
 const ACTION_GROUPS = [
   {
-    label: 'COMBAT',
+    key: 'combat', label: 'COMBAT', icon: '⚔️',
     items: [
       { type: 'attack',       icon: '⚔️', label: 'Attack' },
       { type: 'power_strike', icon: '💥', label: 'Power Strike' },
@@ -41,33 +44,49 @@ const ACTION_GROUPS = [
     ],
   },
   {
-    label: 'SUPPORT',
+    key: 'support', label: 'SUPPORT', icon: '💚',
     items: [
       { type: 'heal',         icon: '💚', label: 'Heal' },
+      { type: 'berserk',      icon: '💢', label: 'Berserk' },
       { type: 'use_potion',   icon: '🧪', label: 'Use Potion' },
       { type: 'use_antidote', icon: '💊', label: 'Use Antidote' },
+      { type: 'debug_block',  icon: '🔧', label: 'Debug' },
     ],
   },
 ];
 
+// Condition items — flat list per group (all clickable directly in level-3)
 const CONDITION_GROUPS = [
   {
-    label: 'HP / MP',
+    key: 'hp', label: 'HP', icon: '❤️',
     items: [
-      { type: 'hp_less',      icon: '❤️',  label: 'HP < 50?',  conditionType: 'hp_less',      threshold: 50 },
-      { type: 'hp_greater',   icon: '❤️',  label: 'HP > 50?',  conditionType: 'hp_greater',   threshold: 50 },
-      { type: 'mana_less',    icon: '💙', label: 'MP < 25?',  conditionType: 'mana_less',    threshold: 25 },
-      { type: 'mana_greater', icon: '💙', label: 'MP > 25?',  conditionType: 'mana_greater', threshold: 25 },
+      { conditionType: 'hp_less',    icon: '❤️', label: 'HP < 50?', threshold: 50 },
+      { conditionType: 'hp_greater', icon: '❤️', label: 'HP > 50?', threshold: 50 },
     ],
   },
   {
-    label: 'STATUS',
+    key: 'ailment', label: 'AILMENT', icon: '🔥',
     items: [
-      { type: 'enemy_alive',   icon: '☠️', label: 'Enemy Alive?',  conditionType: 'enemy_alive' },
-      { type: 'hero_burning',  icon: '🔥', label: 'Burning?',       conditionType: 'hero_burning' },
-      { type: 'hero_poisoned', icon: '🟣', label: 'Poisoned?',      conditionType: 'hero_poisoned' },
-      { type: 'hero_frozen',   icon: '❄️', label: 'Frozen?',        conditionType: 'hero_frozen' },
-      { type: 'enemy_stunned', icon: '⚡', label: 'Enemy Stunned?', conditionType: 'enemy_stunned' },
+      { conditionType: 'hero_burning',   icon: '🔥', label: 'ฉัน Burning?' },
+      { conditionType: 'enemy_burning',  icon: '🔥', label: 'ศัตรู Burning?' },
+      { conditionType: 'hero_poisoned',  icon: '🟣', label: 'ฉัน Poisoned?' },
+      { conditionType: 'enemy_poisoned', icon: '🟣', label: 'ศัตรู Poisoned?' },
+      { conditionType: 'hero_frozen',    icon: '❄️', label: 'ฉัน Frozen?' },
+      { conditionType: 'enemy_frozen',   icon: '❄️', label: 'ศัตรู Frozen?' },
+    ],
+  },
+  {
+    key: 'status', label: 'STATUS', icon: '☠️',
+    items: [
+      { conditionType: 'enemy_alive',   icon: '☠️', label: 'Enemy Alive?' },
+      { conditionType: 'enemy_stunned', icon: '⚡', label: 'Enemy Stunned?' },
+      { conditionType: 'is_corrupted',  icon: '🦠', label: 'Virus Present?' },
+    ],
+  },
+  {
+    key: 'counter', label: 'COUNTER', icon: '🔢',
+    items: [
+      { conditionType: 'turn_gte', icon: '🔢', label: 'Turn ≥ 3?', threshold: 3 },
     ],
   },
 ];
@@ -91,15 +110,20 @@ type CtxMenu = {
   x: number; y: number;
 } | null;
 
-type SubmenuKind = 'process' | 'decision' | 'change_action' | 'change_condition' | null;
+type SubmenuKind = 'process' | 'decision' | 'change_action' | 'change_condition' | 'class_skills' | null;
 
 const MENU_W = 200; // main menu width
 
 interface FlowchartEditorProps {
   allowedBlocks?: string[];
+  nodeLimit?: number;
+  turnManaMax?: number;
+  turnManaUsed?: number;
+  characterClass?: string;
+  characterLevel?: number;
 }
 
-export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: FlowchartEditorProps = {}) {
+export default function FlowchartEditor({ allowedBlocks: _allowedBlocks, nodeLimit, turnManaMax, turnManaUsed, characterClass, characterLevel }: FlowchartEditorProps = {}) {
   const storeNodes = useFlowchartStore((s) => s.nodes);
   const storeEdges = useFlowchartStore((s) => s.edges);
   const store = useFlowchartStore();
@@ -109,9 +133,18 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
   const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges as Edge[]);
   const [ctxMenu, setCtxMenu] = useState<CtxMenu>(null);
   const [submenu, setSubmenu] = useState<SubmenuKind>(null);
+  const [subSubmenu, setSubSubmenu] = useState<string | null>(null); // level-3: variant item type
+  const [submenuY, setSubmenuY] = useState(0);       // Y of level-1 item → positions level-2
+  const [subSubmenuY, setSubSubmenuY] = useState(0); // Y of level-2 item → positions level-3
+  const [nodeLimitFlash, setNodeLimitFlash] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rfInstance = useRef<any>(null);
+
+  // Count action nodes only (not start/end/condition/loop)
+  const actionNodeCount = storeNodes.filter((n) => n.type === 'action').length;
+  const atNodeLimit = nodeLimit !== undefined && actionNodeCount >= nodeLimit;
+  const manaOverBudget = turnManaMax !== undefined && turnManaUsed !== undefined && turnManaUsed > turnManaMax;
 
   useEffect(() => { setNodes(storeNodes as Node[]); }, [storeNodes]);
   useEffect(() => { setEdges(storeEdges as Edge[]); }, [storeEdges]);
@@ -128,7 +161,7 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
     return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onMouseDown); };
   }, [ctxMenu]);
 
-  function closeAll() { setCtxMenu(null); setSubmenu(null); }
+  function closeAll() { setCtxMenu(null); setSubmenu(null); setSubSubmenu(null); }
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -201,6 +234,13 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
 
   // Add a brand-new node at the clicked position
   function addBlock(type: FlowNodeType, data: Record<string, any>, screenPos?: { x: number; y: number }) {
+    // Enforce node limit for action nodes
+    if (type === 'action' && nodeLimit !== undefined && actionNodeCount >= nodeLimit) {
+      setNodeLimitFlash(true);
+      setTimeout(() => setNodeLimitFlash(false), 1800);
+      closeAll();
+      return;
+    }
     const id = `${type}_${Date.now()}`;
     let position = { x: 180 + Math.random() * 160, y: 80 + Math.random() * 140 };
     if (screenPos && rfInstance.current && wrapperRef.current) {
@@ -271,6 +311,14 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
     : submenu === 'decision' || submenu === 'change_condition' ? CONDITION_GROUPS
     : null;
 
+  // Class skills: all skills of the class (for display), filtered to unlocked for use
+  const allClassSkills = characterClass
+    ? CLASS_SKILLS.filter((s) => s.class === characterClass)
+    : [];
+  const unlockedClassSkills = allClassSkills.filter(
+    (s) => s.requiredLevel <= (characterLevel ?? 1)
+  );
+
   // Position the main menu
   const menuX = ctxMenu ? ctxMenu.x + 6 : 0;
   const menuY = ctxMenu ? ctxMenu.y + 6 : 0;
@@ -278,6 +326,60 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       <div ref={wrapperRef} style={{ flex: 1, position: 'relative' }}>
+        {(nodeLimit !== undefined || (turnManaMax !== undefined && turnManaUsed !== undefined)) && (
+          <div style={{
+            position: 'absolute', top: 8, left: 8, zIndex: 100,
+            display: 'flex', flexDirection: 'column', gap: 4,
+          }}>
+            {turnManaMax !== undefined && turnManaUsed !== undefined && (
+              <div style={{
+                background: manaOverBudget ? 'rgba(239,68,68,0.18)' : 'rgba(59,130,246,0.15)',
+                border: `1px solid ${manaOverBudget ? 'rgba(239,68,68,0.5)' : 'rgba(99,179,237,0.4)'}`,
+                borderRadius: 8, padding: '4px 10px',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ fontSize: 12 }}>💎</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 800,
+                  color: manaOverBudget ? '#f87171' : '#93c5fd',
+                }}>
+                  Budget: {turnManaUsed}/{turnManaMax} pts
+                </span>
+                {manaOverBudget && (
+                  <span style={{ color: '#fca5a5', fontSize: 9, fontWeight: 700 }}>เกิน!</span>
+                )}
+              </div>
+            )}
+            {nodeLimit !== undefined && (
+              <div style={{
+                background: atNodeLimit ? 'rgba(239,68,68,0.18)' : 'rgba(100,116,139,0.15)',
+                border: `1px solid ${atNodeLimit ? 'rgba(239,68,68,0.5)' : 'rgba(100,116,139,0.4)'}`,
+                borderRadius: 8, padding: '4px 10px',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ fontSize: 12 }}>▭</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 800,
+                  color: atNodeLimit ? '#f87171' : '#94a3b8',
+                }}>
+                  Blocks: {actionNodeCount}/{nodeLimit}
+                </span>
+                {atNodeLimit && (
+                  <span style={{ color: '#fca5a5', fontSize: 9, fontWeight: 700 }}>เต็ม!</span>
+                )}
+              </div>
+            )}
+            {nodeLimitFlash && (
+              <div style={{
+                background: 'rgba(239,68,68,0.9)', borderRadius: 8, padding: '4px 10px',
+                fontSize: 11, fontWeight: 800, color: 'white', textAlign: 'center',
+                animation: 'pulse 0.3s ease',
+              }}>
+                ถึงขีดจำกัด Block แล้ว!
+              </div>
+            )}
+          </div>
+        )}
         <ReactFlow
           onInit={(instance) => { rfInstance.current = instance; }}
           nodes={nodes}
@@ -339,15 +441,23 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
                   <SubMenuItem
                     icon="▭" label="Process" desc="โจมตี / ฮีล / หลบ" color="#3b82f6"
                     active={submenu === 'process'}
-                    onEnter={() => setSubmenu('process')}
+                    onEnter={(y) => { setSubmenu('process'); setSubmenuY(y); setSubSubmenu(null); }}
                     colors={colors}
                   />
                   <SubMenuItem
                     icon="◇" label="Decision" desc="เงื่อนไข YES / NO" color="#d97706"
                     active={submenu === 'decision'}
-                    onEnter={() => setSubmenu('decision')}
+                    onEnter={(y) => { setSubmenu('decision'); setSubmenuY(y); setSubSubmenu(null); }}
                     colors={colors}
                   />
+                  {allClassSkills.length > 0 && (
+                    <SubMenuItem
+                      icon="⭐" label="Class Skills" desc={`${unlockedClassSkills.length}/${allClassSkills.length} unlocked`} color="#a855f7"
+                      active={submenu === 'class_skills'}
+                      onEnter={(y) => { setSubmenu('class_skills'); setSubmenuY(y); setSubSubmenu(null); }}
+                      colors={colors}
+                    />
+                  )}
                 </>
               )}
 
@@ -361,7 +471,7 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
                         <SubMenuItem
                           icon="🔄" label="เปลี่ยน Action" color={colors.text}
                           active={submenu === 'change_action'}
-                          onEnter={() => setSubmenu('change_action')}
+                          onEnter={(y) => { setSubmenu('change_action'); setSubmenuY(y); setSubSubmenu(null); }}
                           colors={colors}
                         />
                       )}
@@ -369,7 +479,7 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
                         <SubMenuItem
                           icon="🔄" label="เปลี่ยน Condition" color={colors.text}
                           active={submenu === 'change_condition'}
-                          onEnter={() => setSubmenu('change_condition')}
+                          onEnter={(y) => { setSubmenu('change_condition'); setSubmenuY(y); setSubSubmenu(null); }}
                           colors={colors}
                         />
                       )}
@@ -394,7 +504,7 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
             {showSubmenu && submenuGroups && (
               <div style={{
                 position: 'fixed',
-                ...clampPos(menuX + MENU_W + 4, menuY, 200, 400),
+                ...clampPos(menuX + MENU_W + 4, submenuY, 200, (submenuGroups.length * 44) + 8),
                 background: colors.bgCard,
                 border: `1px solid ${colors.border}`,
                 borderRadius: 10,
@@ -402,47 +512,145 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks }: Flowc
                 minWidth: 200,
                 overflow: 'hidden',
               }}>
-                {submenuGroups.map((group) => (
-                  <div key={group.label}>
-                    {/* Group header */}
-                    <div style={{ padding: '6px 12px 3px', fontSize: 9, fontWeight: 800, color: colors.textMuted, letterSpacing: 1 }}>
-                      {group.label}
-                    </div>
-                    {group.items.map((item) => (
-                      <button
-                        key={item.type}
-                        onClick={() => {
-                          if (submenu === 'process' && ctxMenu?.kind === 'pane') {
-                            addBlock('action', { actionType: item.type, label: item.label }, { x: ctxMenu.x, y: ctxMenu.y });
-                          } else if (submenu === 'decision' && ctxMenu?.kind === 'pane') {
-                            const cond = item as any;
-                            addBlock('condition', { conditionType: cond.conditionType, label: item.label, threshold: cond.threshold ?? 50 }, { x: ctxMenu.x, y: ctxMenu.y });
-                          } else if (submenu === 'change_action' && selectedNodeId) {
-                            changeAction(selectedNodeId, item.type, item.label);
-                          } else if (submenu === 'change_condition' && selectedNodeId) {
-                            const cond = item as any;
-                            changeCondition(selectedNodeId, { conditionType: cond.conditionType, label: item.label, threshold: cond.threshold ?? 50 });
-                          }
-                        }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 10,
-                          width: '100%', padding: '8px 14px',
-                          border: 'none', background: 'transparent',
-                          cursor: 'pointer', textAlign: 'left',
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = colors.bgSurfaceHover; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-                      >
-                        <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
-                        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>{item.label}</span>
-                      </button>
-                    ))}
-                    {/* Group separator */}
-                    <div style={{ height: 1, background: colors.borderSubtle, margin: '2px 0' }} />
+                {/* Level-2: category headers only */}
+                {submenuGroups.map((group: any) => (
+                  <div
+                    key={group.key}
+                    onMouseEnter={(e) => { setSubSubmenu(group.key); setSubSubmenuY(e.currentTarget.getBoundingClientRect().top); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 14px', cursor: 'default',
+                      background: subSubmenu === group.key ? colors.bgSurfaceHover : 'transparent',
+                    }}
+                  >
+                    <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{group.icon}</span>
+                    <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{group.label}</span>
+                    <span style={{ color: colors.textMuted, fontSize: 11 }}>▶</span>
                   </div>
                 ))}
               </div>
             )}
+
+            {/* ── Class Skills submenu panel ── */}
+            {showSubmenu && submenu === 'class_skills' && allClassSkills.length > 0 && (
+              <div style={{
+                position: 'fixed',
+                ...clampPos(menuX + MENU_W + 4, submenuY, 240, allClassSkills.length * 62 + 32),
+                background: colors.bgCard,
+                border: `1px solid rgba(168,85,247,0.5)`,
+                borderRadius: 10,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                minWidth: 240,
+                overflow: 'hidden',
+              }}>
+                <div style={{ padding: '6px 12px 3px', fontSize: 9, fontWeight: 800, color: '#a855f7', letterSpacing: 1 }}>
+                  CLASS SKILLS — {characterClass?.toUpperCase()} (Lv.{characterLevel ?? 1})
+                </div>
+                <div style={{ height: 1, background: colors.borderSubtle, margin: '2px 0' }} />
+                {allClassSkills.map((skill) => {
+                  const locked = skill.requiredLevel > (characterLevel ?? 1);
+                  return (
+                    <button
+                      key={skill.id}
+                      onClick={() => {
+                        if (!locked && ctxMenu?.kind === 'pane') {
+                          addBlock('action', { actionType: skill.id, label: skill.name }, { x: ctxMenu.x, y: ctxMenu.y });
+                        }
+                      }}
+                      title={locked ? `ต้องการ Lv.${skill.requiredLevel}` : skill.description}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        width: '100%', padding: '8px 14px',
+                        border: 'none', background: 'transparent',
+                        cursor: locked ? 'not-allowed' : 'pointer', textAlign: 'left',
+                        opacity: locked ? 0.45 : 1,
+                      }}
+                      onMouseEnter={(e) => { if (!locked) (e.currentTarget as HTMLButtonElement).style.background = colors.bgSurfaceHover; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                    >
+                      <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{skill.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>{skill.name}</div>
+                        <div style={{ color: colors.textMuted, fontSize: 9 }}>{skill.description}</div>
+                      </div>
+                      {locked
+                        ? <span style={{ fontSize: 9, fontWeight: 800, color: '#f59e0b', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>🔒 Lv.{skill.requiredLevel}</span>
+                        : <span style={{ color: '#93c5fd', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>💎{skill.manaCost}</span>
+                      }
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── Level-3: items ── */}
+            {showSubmenu && subSubmenu && (() => {
+              const group = (submenuGroups ?? []).find((g: any) => g.key === subSubmenu);
+              if (!group) return null;
+              const isAction = submenu === 'process' || submenu === 'change_action';
+              return (
+                <div style={{
+                  position: 'fixed',
+                  ...clampPos(menuX + MENU_W + 4 + 204, subSubmenuY, 200, 400),
+                  background: colors.bgCard,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 10,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                  minWidth: 200,
+                  overflow: 'hidden',
+                }}>
+                  <div style={{ padding: '6px 12px 3px', fontSize: 9, fontWeight: 800, color: colors.textMuted, letterSpacing: 1 }}>
+                    {(group as any).label}
+                  </div>
+                  <div style={{ height: 1, background: colors.borderSubtle, margin: '2px 0' }} />
+                  {(group as any).items.map((item: any) => (
+                    <button
+                      key={item.type ?? item.conditionType}
+                      onClick={() => {
+                        if (isAction) {
+                          if (submenu === 'process' && ctxMenu?.kind === 'pane') {
+                            addBlock('action', { actionType: item.type, label: item.label }, { x: ctxMenu.x, y: ctxMenu.y });
+                          } else if (submenu === 'change_action' && selectedNodeId) {
+                            changeAction(selectedNodeId, item.type, item.label);
+                          }
+                        } else {
+                          if (submenu === 'decision' && ctxMenu?.kind === 'pane') {
+                            addBlock('condition', { conditionType: item.conditionType, label: item.label, threshold: item.threshold ?? 50 }, { x: ctxMenu.x, y: ctxMenu.y });
+                          } else if (submenu === 'change_condition' && selectedNodeId) {
+                            changeCondition(selectedNodeId, { conditionType: item.conditionType, label: item.label, threshold: item.threshold ?? 50 });
+                          }
+                        }
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        width: '100%', padding: '8px 14px',
+                        border: 'none', background: 'transparent',
+                        cursor: 'pointer', textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = colors.bgSurfaceHover; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                    >
+                      <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                      <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{item.label}</span>
+                      {isAction && (() => {
+                        const cost = BLOCK_MANA_COST[item.type] ?? 1;
+                        return (
+                          <span style={{
+                            fontSize: 9, fontWeight: 800, flexShrink: 0,
+                            color: cost === 0 ? 'rgba(255,255,255,0.3)' : '#fbbf24',
+                            background: cost === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(251,191,36,0.15)',
+                            border: `1px solid ${cost === 0 ? 'rgba(255,255,255,0.1)' : 'rgba(251,191,36,0.4)'}`,
+                            borderRadius: 4, padding: '1px 5px',
+                          }}>
+                            {cost === 0 ? 'free' : `💎${cost}`}
+                          </span>
+                        );
+                      })()}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -465,11 +673,11 @@ function SubMenuItem({
   icon, label, desc, color, active, onEnter, colors,
 }: {
   icon: string; label: string; desc?: string; color: string;
-  active: boolean; onEnter: () => void; colors: ThemeColors;
+  active: boolean; onEnter: (y: number) => void; colors: ThemeColors;
 }) {
   return (
     <button
-      onMouseEnter={onEnter}
+      onMouseEnter={(e) => onEnter(e.currentTarget.getBoundingClientRect().top)}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', padding: '9px 12px',
