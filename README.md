@@ -19,6 +19,7 @@
 - [โครงสร้างโปรเจกต์](#โครงสร้างโปรเจกต์)
 - [ด่านทั้งหมด (15 ด่าน)](#ด่านทั้งหมด-15-ด่าน--endless)
 - [สถานะระบบ](#สถานะระบบ)
+- [Changelog](#changelog)
 
 ---
 
@@ -420,6 +421,71 @@ src/
 
 ---
 
+## Changelog
+
+### v0.9.0 (มีนาคม 2026)
+- ระบบ **Diminishing Returns**: XP/Gold ลดลงเมื่อ clear ด่านซ้ำ (×100% → ×50% → ×25% → ×10%)
+- **Bonus XP** จาก Bonus Objective (+50% base XP ก่อนคูณ multiplier)
+- Victory screen แสดง multiplier และ bonus XP
+- **Full Firestore Persistence**: potions, antidotes, attackBonus, equipped items บันทึกครบทุก field
+- แก้ bug buyConsumable ไม่ save gold/items ทันที
+- **Endless mode**: ใช้ภาพศัตรูจากแคมเปญ (กลุ่มละ 5 wave × 15 ศัตรู)
+- แก้ ShopScreen ถูก result overlay บัง (zIndex 60 → 300)
+
+### v0.8.0
+- **BagButton**: overlay กระเป๋า (React Portal) เข้าถึงได้จากทุกหน้า
+- แท็บ "ของใช้" และ "Equip" — ใส่/ถอดอุปกรณ์ระหว่างด่านได้
+- **Daily Restock**: รับ potion/antidote ฟรีทุก 8 ชั่วโมง พร้อม countdown timer
+- เปิดร้านค้าจากกระเป๋าระหว่างด่าน แล้วกลับสู้รบต่อโดยไม่ reset
+- แก้ Endless mode base attack (3 → 8)
+
+### v0.7.0
+- **Turn-based system**: planning → running → enemy_turn → resolution
+- **Budget system**: 💎 3/turn, ACTION_COST per node, badge แสดงบน ActionNode
+- **Enemy Shield**: บล็อก damaging action ถ้าขาด required blocks
+- **Class Skills**: 3 skills/class, lock ตาม character level, แสดงใน context menu
+- Condition menu 3 ระดับ (Process / Decision / ClassSkills)
+- แก้ animation transform สร้าง stacking context ทำให้ overlay บัง
+
+### v0.6.0
+- **Post-battle ShopScreen**: ซื้อ consumable + equipment หลังชนะด่าน
+- ปุ่ม Retry จาก ShopScreen restart ด่านได้ทันที
+- `fromBag` prop: ปิดร้านแล้วกลับด่านเดิม ไม่ navigate
+- Equipment tab ใน ShopScreen แสดงอุปกรณ์แยก slot
+
+### v0.5.0
+- **Shop system**: ซื้อ Potion, Antidote, ATK Scroll, Equipment ด้วย Gold
+- Gold ได้จากการชนะด่าน — บันทึก/โหลดจาก Firestore
+- Flowchart Editor ปรับ UX ใหม่: drag-and-drop, palette, END reachability check
+- `purchasedEquipment` บันทึกแยกจาก character progress
+
+### v0.4.0
+- **Equipment system**: 40+ ชิ้น, 4 slots (Weapon / Armor / Helmet / Accessory)
+- Per-class base stats + Passive Bonuses ปลดล็อกตาม level (Lv.2/4/6)
+- **Leaderboard**: overall + per-level + endless mode
+- Loop guard ป้องกัน infinite loop
+
+### v0.3.0
+- Right-click **context menu** บน node/edge/canvas (3 ระดับ, Windows-style)
+- เพิ่ม/ลบ/แก้ไข node ผ่าน menu
+- UX: snap-to-grid, mini-map, auto-layout
+
+### v0.2.0
+- **Condition** และ **Loop** node
+- **Objective system**: เงื่อนไขผ่านด่าน + Bonus Objective
+- Tutorial text ต่อด่าน
+- **15 Campaign Levels** (Sequence → Loop → If/Else → Nested → Counter → Full Algorithm)
+
+### v0.1.0
+- ระบบต่อสู้พื้นฐาน Hero vs Enemy
+- Flowchart Editor: Start / End / Action node (Attack, Heal, Dodge)
+- 4 Character Classes: Knight / Mage / Rogue / Barbarian
+- Level system: XP, Level 1–10
+- Firebase Auth: Email, Google, Anonymous login
+- Endless Mode (wave scaling)
+
+---
+
 ## Tech Stack
 
 | | เวอร์ชัน | บทบาท |
@@ -435,4 +501,4 @@ src/
 
 ---
 
-`v0.1.0-alpha`
+`v0.9.0`

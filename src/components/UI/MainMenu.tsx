@@ -5,8 +5,8 @@ import { levelProgressPct, xpToNextLevel, MAX_LEVEL } from '../../utils/levelSys
 import { useTheme } from '../../contexts/ThemeContext';
 
 const MENU_ITEMS = [
-  { icon: '⚔️', label: 'Play Game',   path: '/levels',      color: '#e94560' },
-  { icon: '🎨', label: 'Character',   path: '/character',   color: '#7c3aed' },
+  { icon: '⚔️', label: 'Play Game', path: '/levels', color: '#e94560' },
+  { icon: '🎨', label: 'Character', path: '/character', color: '#7c3aed' },
   { icon: '🏆', label: 'Leaderboard', path: '/leaderboard', color: '#10b981' },
 ];
 
@@ -48,7 +48,7 @@ export default function MainMenu() {
 
         {/* Character card */}
         {character && (() => {
-          const xpPct  = levelProgressPct(character.level, character.experience);
+          const xpPct = levelProgressPct(character.level, character.experience);
           const xpLeft = xpToNextLevel(character.level, character.experience);
           return (
             <div style={{
@@ -148,7 +148,7 @@ export default function MainMenu() {
         </button>
 
         <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 11, marginTop: 20, opacity: 0.5 }}>
-          v{import.meta.env.VITE_APP_VERSION ?? '0.1.0'}
+          v{import.meta.env.VITE_APP_VERSION ?? '0.9.0'}
         </p>
       </div>
     </div>

@@ -2,7 +2,7 @@
 // FlowFight - Game Constants
 // ===========================
 
-export const GAME_VERSION = '0.1.0';
+export const GAME_VERSION = '0.9.0';
 
 // Battle
 export const STEP_DELAY_MS = 800;
