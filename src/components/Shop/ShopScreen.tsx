@@ -54,6 +54,8 @@ interface ShopScreenProps {
   characterLevel?: number;
   onClose: () => void;
   onRetry?: () => void;
+  /** เปิดจากกระเป๋าระหว่างด่าน — ซ่อน Retry, ปุ่มปิดกลับสู้รบ */
+  fromBag?: boolean;
 }
 
 type Tab = 'items' | 'equip';
@@ -61,7 +63,7 @@ type Tab = 'items' | 'equip';
 // ────────────────────────────────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────────────────────────────────
-export default function ShopScreen({ goldEarned, characterClass, characterLevel = 1, onClose, onRetry }: ShopScreenProps) {
+export default function ShopScreen({ goldEarned, characterClass, characterLevel = 1, onClose, onRetry, fromBag = false }: ShopScreenProps) {
   const shop = useShopStore();
   const { player } = useGameStore();
 
@@ -98,6 +100,11 @@ export default function ShopScreen({ goldEarned, characterClass, characterLevel 
     else if (item.stat === 'antidotes') shop.setAntidotes(shop.antidotes + 1);
     else if (item.stat === 'scroll')    shop.setAttackBonus(shop.attackBonus + 5);
     setBought((b) => ({ ...b, [item.id]: (b[item.id] ?? 0) + 1 }));
+    // Save gold + potions/antidotes ทันที
+    if (player) {
+      const s = useShopStore.getState();
+      saveShopData(player.id, s.gold, s.purchasedEquipment, s.lastRestockTime, s.potions, s.antidotes, s.attackBonus).catch(() => {});
+    }
   }
 
   // ── Equipment ─────────────────────────────────────────────────────────────
@@ -124,8 +131,8 @@ export default function ShopScreen({ goldEarned, characterClass, characterLevel 
     if (ok) {
       showFlash(`ซื้อ ${item.name} สำเร็จ!`, true);
       if (player) {
-        const { gold, purchasedEquipment, lastRestockTime } = useShopStore.getState();
-        saveShopData(player.id, gold, purchasedEquipment, lastRestockTime).catch(() => {});
+        const { gold, purchasedEquipment, lastRestockTime, potions, antidotes, attackBonus } = useShopStore.getState();
+        saveShopData(player.id, gold, purchasedEquipment, lastRestockTime, potions, antidotes, attackBonus).catch(() => {});
       }
     } else {
       showFlash(`เงินไม่พอ! ต้องการ ${item.cost}g (มี ${shop.gold}g)`);
@@ -144,7 +151,7 @@ export default function ShopScreen({ goldEarned, characterClass, characterLevel 
       background: 'rgba(0,0,0,0.85)',
       backdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 60,
+      zIndex: 300,
     }}>
       <div style={{
         width: 500,
@@ -166,7 +173,7 @@ export default function ShopScreen({ goldEarned, characterClass, characterLevel 
           <div>
             <h2 style={{ color: '#fbbf24', fontWeight: 800, fontSize: 22, margin: 0 }}>🏪 Shop</h2>
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '3px 0 0' }}>
-              เตรียมพร้อมก่อนออกสู้รบถัดไป
+              {fromBag ? 'ระหว่างด่าน — ออกแล้วกลับสู้รบต่อ' : 'เตรียมพร้อมก่อนออกสู้รบถัดไป'}
             </p>
           </div>
           <div style={{
@@ -364,7 +371,7 @@ export default function ShopScreen({ goldEarned, characterClass, characterLevel 
             {totalSpent > 0 ? `ซื้อไปแล้ว ${totalSpent}g` : 'ยังไม่ได้ซื้ออะไร'}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {onRetry && (
+            {!fromBag && onRetry && (
               <button
                 onClick={onRetry}
                 style={{
@@ -381,12 +388,14 @@ export default function ShopScreen({ goldEarned, characterClass, characterLevel 
               onClick={onClose}
               style={{
                 padding: '9px 22px', borderRadius: 10, border: 'none',
-                background: 'linear-gradient(135deg,#1d4ed8,#1e40af)',
+                background: fromBag
+                  ? 'linear-gradient(135deg,#7c3aed,#6d28d9)'
+                  : 'linear-gradient(135deg,#1d4ed8,#1e40af)',
                 color: 'white', fontWeight: 700, fontSize: 13,
                 cursor: 'pointer',
               }}
             >
-              ออกจากร้าน →
+              {fromBag ? '⚔️ กลับสู้รบ' : 'ออกจากร้าน →'}
             </button>
           </div>
         </div>

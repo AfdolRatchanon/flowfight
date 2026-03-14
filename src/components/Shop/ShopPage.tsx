@@ -123,6 +123,11 @@ export default function ShopPage() {
     else if (item.id === 'scroll') shop.setAttackBonus(shop.attackBonus + 5);
     setBought((b) => ({ ...b, [item.id]: (b[item.id] ?? 0) + 1 }));
     showFlash(`ซื้อ ${item.label} สำเร็จ!`, true);
+    // Save gold + potions/antidotes ทันที
+    if (player) {
+      const s = useShopStore.getState();
+      saveShopData(player.id, s.gold, s.purchasedEquipment, s.lastRestockTime, s.potions, s.antidotes, s.attackBonus).catch(() => {});
+    }
   }
 
   function claimRestock() {
@@ -132,7 +137,7 @@ export default function ShopPage() {
     // save to Firebase
     if (player) {
       const s = useShopStore.getState();
-      saveShopData(player.id, s.gold, s.purchasedEquipment, s.lastRestockTime).catch(() => {});
+      saveShopData(player.id, s.gold, s.purchasedEquipment, s.lastRestockTime, s.potions, s.antidotes, s.attackBonus).catch(() => {});
     }
   }
 

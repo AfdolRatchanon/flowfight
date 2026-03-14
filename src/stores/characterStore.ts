@@ -44,6 +44,7 @@ interface CharacterState {
   setColors: (colors: Partial<CharacterColors>) => void;
   equipItem: (item: EquipmentItem) => void;
   unequipItem: (slot: keyof CharacterEquipment) => void;
+  setEquipment: (equipment: CharacterEquipment) => void;
   setCharacterName: (name: string) => void;
   getCalculatedStats: () => typeof CLASS_BASE_STATS.knight;
 }
@@ -84,6 +85,8 @@ export const useCharacterStore = create<CharacterState>((set, get) => ({
   unequipItem: (slot) => set((state) => ({
     equipment: { ...state.equipment, [slot]: null },
   })),
+
+  setEquipment: (equipment) => set({ equipment }),
 
   setCharacterName: (characterName) => set({ characterName }),
 

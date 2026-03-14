@@ -29,7 +29,7 @@ interface ShopState extends ShopInventory {
   claimRestock: () => void;
   isRestockReady: () => boolean;
   nextRestockMs: () => number; // ms เหลือจนกว่าจะ restock ใหม่
-  initFromProfile: (gold: number, purchasedEquipment: string[], lastRestockTime?: number) => void;
+  initFromProfile: (gold: number, purchasedEquipment: string[], lastRestockTime?: number, potions?: number, antidotes?: number, attackBonus?: number) => void;
   reset: () => void;
 }
 
@@ -91,8 +91,13 @@ export const useShopStore = create<ShopState>((set, get) => ({
     }));
   },
 
-  initFromProfile: (gold, purchasedEquipment, lastRestockTime = 0) =>
-    set({ gold, purchasedEquipment, lastRestockTime }),
+  initFromProfile: (gold, purchasedEquipment, lastRestockTime = 0, potions, antidotes, attackBonus) =>
+    set({
+      gold, purchasedEquipment, lastRestockTime,
+      ...(potions      !== undefined && { potions }),
+      ...(antidotes    !== undefined && { antidotes }),
+      ...(attackBonus  !== undefined && { attackBonus }),
+    }),
 
   reset: () => set({ gold: 150, potions: 0, antidotes: 0, attackBonus: 0, purchasedEquipment: [], lastRestockTime: 0 }),
 }));

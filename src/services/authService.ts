@@ -122,6 +122,10 @@ export async function savePlayerProgress(uid: string, levelId: string, won: bool
   const levelsCompleted: string[] = [...((data.levelsCompleted ?? []) as string[])];
   if (won && !levelsCompleted.includes(levelId)) levelsCompleted.push(levelId);
 
+  // Increment clear count per level (ใช้สำหรับ diminishing returns)
+  const levelClearCounts: Record<string, number> = { ...((data.levelClearCounts ?? {}) as Record<string, number>) };
+  if (won) levelClearCounts[levelId] = (levelClearCounts[levelId] ?? 0) + 1;
+
   const levelNumber = parseInt(levelId.replace('level_', '')) || 1;
   const prevStats = data.stats ?? { totalKills: 0, totalDefeats: 0, levelReached: 1, totalPlayTime: 0 };
   const newStats = {
@@ -131,12 +135,12 @@ export async function savePlayerProgress(uid: string, levelId: string, won: bool
     totalPlayTime: prevStats.totalPlayTime ?? 0,
   };
 
-  const payload: Record<string, unknown> = { levelsCompleted, stats: newStats, lastActive: Date.now() };
+  const payload: Record<string, unknown> = { levelsCompleted, levelClearCounts, stats: newStats, lastActive: Date.now() };
   if (username) payload.username = username;
 
   await setDoc(ref, payload, { merge: true });
 
-  return { ...data, id: uid, levelsCompleted, stats: newStats } as Player;
+  return { ...data, id: uid, levelsCompleted, levelClearCounts, stats: newStats } as Player;
 }
 
 export async function saveCharacterProgress(uid: string, character: Character): Promise<void> {
@@ -174,11 +178,35 @@ export async function saveEndlessProgress(uid: string, score: number, wave: numb
   return { highScore, highWave };
 }
 
-export async function saveShopData(uid: string, gold: number, purchasedEquipment: string[], lastRestockTime?: number): Promise<void> {
+export async function saveShopData(
+  uid: string,
+  gold: number,
+  purchasedEquipment: string[],
+  lastRestockTime?: number,
+  potions?: number,
+  antidotes?: number,
+  attackBonus?: number,
+): Promise<void> {
   const ref = doc(db, 'users', uid);
   const payload: Record<string, unknown> = { gold, purchasedEquipment };
   if (lastRestockTime !== undefined) payload.lastRestockTime = lastRestockTime;
+  if (potions         !== undefined) payload.potions         = potions;
+  if (antidotes       !== undefined) payload.antidotes       = antidotes;
+  if (attackBonus     !== undefined) payload.attackBonus     = attackBonus;
   await setDoc(ref, payload, { merge: true });
+}
+
+export async function saveEquippedItems(
+  uid: string,
+  cls: string,
+  items: { weapon: string | null; armor: string | null; head: string | null; accessory: string | null },
+): Promise<void> {
+  const ref = doc(db, 'users', uid);
+  await setDoc(ref, {
+    characterProgress: {
+      [cls]: { equippedItems: items },
+    },
+  }, { merge: true });
 }
 
 export async function saveLeaderboardEntry(

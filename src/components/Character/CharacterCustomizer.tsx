@@ -6,7 +6,7 @@ import { useShopStore } from '../../stores/shopStore';
 import type { CharacterClass, EquipmentItem } from '../../types/game.types';
 import { WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../../utils/constants';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL, CLASS_STAT_GAIN } from '../../utils/levelSystem';
-import { saveCharacterProgress, saveShopData } from '../../services/authService';
+import { saveCharacterProgress, saveShopData, saveEquippedItems } from '../../services/authService';
 import { useTheme } from '../../contexts/ThemeContext';
 
 // ===== Class definitions =====
@@ -371,8 +371,8 @@ function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: Characte
     if (ok) {
       showFlash(`ซื้อ ${item.name} สำเร็จ!`, true);
       if (player) {
-        const { gold, purchasedEquipment, lastRestockTime } = useShopStore.getState();
-        saveShopData(player.id, gold, purchasedEquipment, lastRestockTime).catch(() => {});
+        const { gold, purchasedEquipment, lastRestockTime, potions, antidotes, attackBonus } = useShopStore.getState();
+        saveShopData(player.id, gold, purchasedEquipment, lastRestockTime, potions, antidotes, attackBonus).catch(() => {});
       }
     } else {
       showFlash(`เงินไม่พอ! ต้องการ ${item.cost}g (มี ${shopStore.gold}g)`, false);
@@ -432,7 +432,19 @@ function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: Characte
               <span style={{ color: colors.textSub, fontWeight: 700, fontSize: 12 }}>{meta.label}</span>
               {store.equipment[slot] && (
                 <span style={{ marginLeft: 'auto', color: '#e94560', fontSize: 10, cursor: 'pointer' }}
-                  onClick={() => store.unequipItem(slot)}>✕ ถอด</span>
+                  onClick={() => {
+                    store.unequipItem(slot);
+                    if (player) {
+                      const eq = useCharacterStore.getState().equipment;
+                      saveEquippedItems(player.id, store.selectedClass, {
+                        weapon:    eq.weapon?.id    ?? null,
+                        armor:     eq.armor?.id     ?? null,
+                        head:      eq.head?.id      ?? null,
+                        accessory: eq.accessory?.id ?? null,
+                        [slot]: null,
+                      }).catch(() => {});
+                    }
+                  }}>✕ ถอด</span>
               )}
             </div>
 
@@ -509,7 +521,34 @@ function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: Characte
                         </button>
                       ) : (
                         <button
-                          onClick={() => isLevelLock ? undefined : isEquipped ? store.unequipItem(slot) : store.equipItem(item as EquipmentItem)}
+                          onClick={() => {
+                            if (isLevelLock) return;
+                            if (isEquipped) {
+                              store.unequipItem(slot);
+                              if (player) {
+                                const eq = useCharacterStore.getState().equipment;
+                                saveEquippedItems(player.id, store.selectedClass, {
+                                  weapon:    eq.weapon?.id    ?? null,
+                                  armor:     eq.armor?.id     ?? null,
+                                  head:      eq.head?.id      ?? null,
+                                  accessory: eq.accessory?.id ?? null,
+                                  [slot]: null,
+                                }).catch(() => {});
+                              }
+                            } else {
+                              store.equipItem(item as EquipmentItem);
+                              if (player) {
+                                const eq = useCharacterStore.getState().equipment;
+                                saveEquippedItems(player.id, store.selectedClass, {
+                                  weapon:    eq.weapon?.id    ?? null,
+                                  armor:     eq.armor?.id     ?? null,
+                                  head:      eq.head?.id      ?? null,
+                                  accessory: eq.accessory?.id ?? null,
+                                  [item.type]: item.id,
+                                }).catch(() => {});
+                              }
+                            }
+                          }}
                           disabled={isLevelLock}
                           style={{
                             padding: '6px 12px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700,

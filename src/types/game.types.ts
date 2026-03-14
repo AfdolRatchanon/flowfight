@@ -39,6 +39,8 @@ export interface Player {
   gold?: number;
   /** อุปกรณ์ที่ซื้อแล้ว — ใช้ร่วมกันทุก class */
   purchasedEquipment?: string[];
+  /** จำนวนครั้งที่ clear แต่ละด่าน (สำหรับ diminishing returns) */
+  levelClearCounts?: Record<string, number>;
   createdAt: number;
   lastActive: number;
   stats: PlayerStats;

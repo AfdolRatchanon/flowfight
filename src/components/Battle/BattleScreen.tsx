@@ -163,15 +163,15 @@ const ENEMY_ICONS: Record<string, string> = {
 
 // Map level.id → image filename (1 ภาพต่อ 1 ด่าน ไม่ซ้ำกัน)
 const LEVEL_IMAGE: Record<string, string> = {
-  level_1:  'slime.png',
-  level_2:  'Bigger Slime.png',
-  level_3:  'Goblin Scout.png',
-  level_4:  'Goblin Heal When Low.png',
-  level_5:  'Spider.png',
-  level_6:  'Kobold.png',
-  level_7:  'Forest Wraith.png',
-  level_8:  'Goblin Knight.png',
-  level_9:  'Orc Warrior.png',
+  level_1: 'slime.png',
+  level_2: 'Bigger Slime.png',
+  level_3: 'Goblin Scout.png',
+  level_4: 'Goblin Heal When Low.png',
+  level_5: 'Spider.png',
+  level_6: 'Kobold.png',
+  level_7: 'Forest Wraith.png',
+  level_8: 'Goblin Knight.png',
+  level_9: 'Orc Warrior.png',
   level_10: 'Stone Troll.png',
   level_11: 'Orc.png',
   level_12: 'Ice Giant.png',
@@ -180,14 +180,40 @@ const LEVEL_IMAGE: Record<string, string> = {
   level_15: 'The Dark Overlord.png',
 };
 
-function EnemySprite({ enemyId, levelId }: { enemyId: string; levelId: string }) {
-  const imgFile = LEVEL_IMAGE[levelId];
+// Endless mode: กลุ่มละ 5 wave → 15 ศัตรู (ตามลำดับความยาก)
+const WAVE_IMAGES = [
+  'slime.png',              // wave  1–5
+  'Bigger Slime.png',       // wave  6–10
+  'Goblin Scout.png',       // wave 11–15
+  'Goblin Heal When Low.png', // wave 16–20
+  'Spider.png',             // wave 21–25
+  'Kobold.png',             // wave 26–30
+  'Forest Wraith.png',      // wave 31–35
+  'Goblin Knight.png',      // wave 36–40
+  'Orc Warrior.png',        // wave 41–45
+  'Stone Troll.png',        // wave 46–50
+  'Orc.png',                // wave 51–55
+  'Ice Giant.png',          // wave 56–60
+  "Dragon's Lair.png",      // wave 61–65
+  'The Lich Lord.png',      // wave 66–70
+  'The Dark Overlord.png',  // wave 71+
+];
+
+function getWaveImage(wave: number): string {
+  return WAVE_IMAGES[Math.min(Math.floor((wave - 1) / 5), WAVE_IMAGES.length - 1)];
+}
+
+function EnemySprite({ enemyId, levelId, waveNumber }: { enemyId: string; levelId: string; waveNumber?: number }) {
+  const isEndlessMode = levelId === 'level_endless';
+  const imgFile = isEndlessMode && waveNumber ? getWaveImage(waveNumber) : LEVEL_IMAGE[levelId];
   const [useImg, setUseImg] = useState(!!imgFile);
+  // reset เมื่อ wave เปลี่ยน (endless)
+  React.useEffect(() => { setUseImg(!!imgFile); }, [imgFile]);
   return useImg && imgFile ? (
     <img
       src={`/enemies/${imgFile}`}
       alt={enemyId}
-      style={{ width:'100%', height:'100%', objectFit:'contain', objectPosition:'bottom', imageRendering:'pixelated' }}
+      style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'bottom', imageRendering: 'pixelated' }}
       onError={() => setUseImg(false)}
     />
   ) : (
@@ -350,6 +376,20 @@ function parseLogAction(action: string) {
 // Stable empty array — avoids new [] reference on every render (prevents infinite loop)
 const EMPTY_REQUIRED_BLOCKS: string[] = [];
 
+/**
+ * Diminishing returns per level clear count (BEFORE this run)
+ * XP:  1st=100%  2nd=50%  3rd=25%  4th+=10%
+ * Gold: 1st=100%  2nd=75%  3rd=50%  4th+=25%
+ */
+function getRewardMultiplier(clearCountBefore: number): { xp: number; gold: number } {
+  if (clearCountBefore === 0) return { xp: 1.0, gold: 1.0 };
+  if (clearCountBefore === 1) return { xp: 0.5, gold: 0.75 };
+  if (clearCountBefore === 2) return { xp: 0.25, gold: 0.5 };
+  return { xp: 0.1, gold: 0.25 };
+}
+
+const BONUS_OBJECTIVE_XP_RATIO = 0.5; // bonus XP = 50% ของ base XP เมื่อผ่าน bonus objective
+
 // ===== Main Component =====
 export default function BattleScreen() {
   const { colors, theme } = useTheme();
@@ -376,6 +416,7 @@ export default function BattleScreen() {
 
   // Shop state
   const [showShop, setShowShop] = useState(false);
+  const [shopFromBag, setShopFromBag] = useState(false);
   const [goldEarned, setGoldEarned] = useState(0);
 
   // Endless Wave state
@@ -421,6 +462,8 @@ export default function BattleScreen() {
   // Level-up / XP state (shown in result overlay)
   const [levelUpData, setLevelUpData] = useState<LevelUpData | null>(null);
   const [xpGained, setXpGained] = useState(0);
+  const [bonusXpGained, setBonusXpGained] = useState(0);
+  const [xpMultiplierPct, setXpMultiplierPct] = useState(100);
   const [missingBlocks, setMissingBlocks] = useState<string[]>([]);
   const [showSimPreview, setShowSimPreview] = useState(true);
 
@@ -759,18 +802,30 @@ export default function BattleScreen() {
 
       let savedChar = heroChar;
       if (won) {
-        // Award gold
-        const earnedGold = (level.rewards as any).gold ?? 0;
+        // ── Diminishing returns ──────────────────────────────────────────────
+        const clearCountBefore = (player.levelClearCounts ?? {})[level.id] ?? 0;
+        const mult = getRewardMultiplier(clearCountBefore);
+        setXpMultiplierPct(Math.round(mult.xp * 100));
+
+        // Award gold (with multiplier)
+        const baseGold = (level.rewards as any).gold ?? 0;
+        const earnedGold = Math.max(0, Math.round(baseGold * mult.gold));
         if (earnedGold > 0) {
           setGoldEarned(earnedGold);
           addGold(earnedGold);
           const newGold = shopGold + earnedGold;
-          saveShopData(player.id, newGold, purchasedEquipment, lastRestockTime).catch(() => { });
+          const { potions: sp, antidotes: sa, attackBonus: sab } = useShopStore.getState();
+          saveShopData(player.id, newGold, purchasedEquipment, lastRestockTime, sp, sa, sab).catch(() => { });
         }
 
-        const xp = level.rewards.experience;
-        setXpGained(xp);
-        const { newCharacter, leveledUp, oldLevel, newLevel } = gainXP(heroChar, xp);
+        // Award XP: base * multiplier + bonus XP (ถ้าผ่าน bonus objective)
+        const baseXp = level.rewards.experience;
+        const bonusObjPassed = !!level.bonusObjective && heroHP > heroMaxHP * 0.2;
+        const bonusXp = bonusObjPassed ? Math.floor(baseXp * BONUS_OBJECTIVE_XP_RATIO) : 0;
+        const finalXp = Math.max(1, Math.round(baseXp * mult.xp)) + bonusXp;
+        setBonusXpGained(bonusXp);
+        setXpGained(finalXp);
+        const { newCharacter, leveledUp, oldLevel, newLevel } = gainXP(heroChar, finalXp);
         savedChar = newCharacter;
         setCharacter(newCharacter);
         // sync player.characterProgress ใน store ให้เป็นปัจจุบัน (ป้องกัน stale ใน CharacterCustomizer)
@@ -980,11 +1035,25 @@ export default function BattleScreen() {
               background: colors.bgSurface, border: 'none',
               color: colors.textSub, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
             }}>← Levels</button>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ color: colors.text, fontWeight: 700, fontSize: 14, margin: 0 }}>{level.name}</p>
-              <p style={{ color: stat.color, fontSize: 12, margin: 0 }}>{stat.label}</p>
-            </div>
-            <BagButton compact overlayTop={120} />
+
+            {/* Center: wave badge (Endless) หรือ level name (Tutorial) */}
+            {isEndless ? (
+              <div style={{
+                background: 'linear-gradient(135deg,rgba(124,58,237,0.8),rgba(239,68,68,0.8))',
+                border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10,
+                padding: '4px 16px', textAlign: 'center',
+              }}>
+                <p style={{ color: 'white', fontSize: 12, fontWeight: 800, margin: 0 }}>WAVE {waveNumber}</p>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, margin: 0 }}>Score: {endlessScore}</p>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ color: colors.text, fontWeight: 700, fontSize: 14, margin: 0 }}>{level.name}</p>
+                <p style={{ color: stat.color, fontSize: 12, margin: 0 }}>{stat.label}</p>
+              </div>
+            )}
+
+            <BagButton compact onShopClick={() => { setShopFromBag(true); setShowShop(true); }} />
           </div>
 
           {/* Level info bar — compact */}
@@ -1022,161 +1091,161 @@ export default function BattleScreen() {
                 </div>
                 {/* Name + Level badge */}
                 <div style={{ position: 'absolute', top: 4, left: 4, display: 'flex', alignItems: 'center', gap: 3, zIndex: 2 }}>
-                  <span style={{ background:'linear-gradient(135deg,#fbbf24,#f59e0b)', color:'#1c1917', fontSize:9, fontWeight:900, padding:'1px 5px', borderRadius:4 }}>Lv.{heroChar.level}</span>
-                  <span style={{ background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)', color:'#fff', fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:4 }}>{heroChar.name}</span>
+                  <span style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', color: '#1c1917', fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 4 }}>Lv.{heroChar.level}</span>
+                  <span style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>{heroChar.name}</span>
                 </div>
                 {/* Ailment badges — horizontal row top-right */}
-                <div style={{ position:'absolute', top:4, right:4, display:'flex', flexDirection:'row', gap:2, flexWrap:'wrap', justifyContent:'flex-end', zIndex:2 }}>
-                  {heroBurnRounds   > 0 && <span style={{ background:'rgba(220,38,38,0.8)',   color:'#fff', fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>🔥{heroBurnRounds}</span>}
-                  {heroFreezeRounds > 0 && <span style={{ background:'rgba(37,99,235,0.8)',   color:'#fff', fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>❄️{heroFreezeRounds}</span>}
-                  {heroPoisonRounds > 0 && <span style={{ background:'rgba(124,58,237,0.8)', color:'#fff', fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>🟣{heroPoisonRounds}</span>}
-                  {heroBerserkRounds > 0 && <span style={{ background:'rgba(220,38,38,0.8)', color:'#fff', fontSize:8, fontWeight:800, padding:'1px 5px', borderRadius:4 }}>💢{heroBerserkRounds}</span>}
-                  {comboCount >= 2   && <span style={{ background:'rgba(161,98,7,0.85)',     color:'#fef08a', fontSize:8, fontWeight:800, padding:'1px 5px', borderRadius:4 }}>⚡x{comboCount+1}</span>}
+                <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap', justifyContent: 'flex-end', zIndex: 2 }}>
+                  {heroBurnRounds > 0 && <span style={{ background: 'rgba(220,38,38,0.8)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4 }}>🔥{heroBurnRounds}</span>}
+                  {heroFreezeRounds > 0 && <span style={{ background: 'rgba(37,99,235,0.8)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4 }}>❄️{heroFreezeRounds}</span>}
+                  {heroPoisonRounds > 0 && <span style={{ background: 'rgba(124,58,237,0.8)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4 }}>🟣{heroPoisonRounds}</span>}
+                  {heroBerserkRounds > 0 && <span style={{ background: 'rgba(220,38,38,0.8)', color: '#fff', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4 }}>💢{heroBerserkRounds}</span>}
+                  {comboCount >= 2 && <span style={{ background: 'rgba(161,98,7,0.85)', color: '#fef08a', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4 }}>⚡x{comboCount + 1}</span>}
                 </div>
               </div>
 
               {/* Center controls */}
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, flexShrink:0, width:110, zIndex:2, borderRadius:12, transition:'box-shadow 0.3s', boxShadow: tutorialTarget === 'run-btn' ? '0 0 0 3px rgba(74,222,128,0.7), 0 0 20px rgba(74,222,128,0.4)' : undefined }}>
-                <span style={{ color:colors.textSub, fontWeight:800, fontSize:11 }}>VS</span>
-                <div style={{ background:'rgba(124,58,237,0.2)', border:'1px solid rgba(124,58,237,0.4)', borderRadius:7, padding:'2px 8px' }}>
-                  <span style={{ color:'#c4b5fd', fontSize:10, fontWeight:800 }}>Turn {currentTurn}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, flexShrink: 0, width: 110, zIndex: 2, borderRadius: 12, transition: 'box-shadow 0.3s', boxShadow: tutorialTarget === 'run-btn' ? '0 0 0 3px rgba(74,222,128,0.7), 0 0 20px rgba(74,222,128,0.4)' : undefined }}>
+                <span style={{ color: colors.textSub, fontWeight: 800, fontSize: 11 }}>VS</span>
+                <div style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.4)', borderRadius: 7, padding: '2px 8px' }}>
+                  <span style={{ color: '#c4b5fd', fontSize: 10, fontWeight: 800 }}>Turn {currentTurn}</span>
                 </div>
                 {flowNodes.some(n => n.data.isVirus) && (
-                  <div style={{ background:'rgba(150,0,30,0.85)', border:'1px solid rgba(220,0,80,0.6)', borderRadius:5, padding:'2px 6px', fontSize:8, fontWeight:700, color:'#ff4070', textAlign:'center' }}>☠️ VIRUS!</div>
+                  <div style={{ background: 'rgba(150,0,30,0.85)', border: '1px solid rgba(220,0,80,0.6)', borderRadius: 5, padding: '2px 6px', fontSize: 8, fontWeight: 700, color: '#ff4070', textAlign: 'center' }}>☠️ VIRUS!</div>
                 )}
-                <div style={{ display:'flex', gap:4 }}>
+                <div style={{ display: 'flex', gap: 4 }}>
                   <button
-                    onClick={() => { battleStartTime.current=Date.now(); setBattlePhase('running'); executeBattle(SPEED_LEVELS[speedIdx].ms,(level.requiredBlocks??[]) as any,turnManaMax); }}
-                    disabled={isExecuting||status==='victory'||status==='defeat'||battlePhase!=='planning'}
+                    onClick={() => { battleStartTime.current = Date.now(); setBattlePhase('running'); executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as any, turnManaMax); }}
+                    disabled={isExecuting || status === 'victory' || status === 'defeat' || battlePhase !== 'planning'}
                     style={{
                       background: isExecuting ? 'rgba(74,222,128,0.15)' : 'linear-gradient(135deg,#16a34a,#15803d)',
-                      border:'none', color:'white', padding:'7px 10px', borderRadius:9,
-                      cursor:(isExecuting||battlePhase!=='planning')?'not-allowed':'pointer',
-                      fontWeight:700, fontSize:12, opacity:status==='victory'||status==='defeat'?0.4:1,
-                      boxShadow:isExecuting?'none':'0 4px 12px rgba(22,163,74,0.4)', minWidth:56,
+                      border: 'none', color: 'white', padding: '7px 10px', borderRadius: 9,
+                      cursor: (isExecuting || battlePhase !== 'planning') ? 'not-allowed' : 'pointer',
+                      fontWeight: 700, fontSize: 12, opacity: status === 'victory' || status === 'defeat' ? 0.4 : 1,
+                      boxShadow: isExecuting ? 'none' : '0 4px 12px rgba(22,163,74,0.4)', minWidth: 56,
                     }}>
-                    {isExecuting?'⏳':battlePhase==='enemy_turn'?'👹...':battlePhase==='resolution'?'⚙️...':'▶ Run'}
+                    {isExecuting ? '⏳' : battlePhase === 'enemy_turn' ? '👹...' : battlePhase === 'resolution' ? '⚙️...' : '▶ Run'}
                   </button>
                   <button onClick={stopBattle} disabled={!isExecuting} style={{
-                    background:isExecuting?'linear-gradient(135deg,#dc2626,#991b1b)':colors.bgSurface,
-                    border:isExecuting?'none':`1px solid ${colors.border}`,
-                    color:isExecuting?colors.text:colors.textMuted,
-                    padding:'7px 9px', borderRadius:9, cursor:isExecuting?'pointer':'not-allowed',
-                    fontWeight:700, fontSize:12, boxShadow:isExecuting?'0 4px 12px rgba(220,38,38,0.4)':'none',
+                    background: isExecuting ? 'linear-gradient(135deg,#dc2626,#991b1b)' : colors.bgSurface,
+                    border: isExecuting ? 'none' : `1px solid ${colors.border}`,
+                    color: isExecuting ? colors.text : colors.textMuted,
+                    padding: '7px 9px', borderRadius: 9, cursor: isExecuting ? 'pointer' : 'not-allowed',
+                    fontWeight: 700, fontSize: 12, boxShadow: isExecuting ? '0 4px 12px rgba(220,38,38,0.4)' : 'none',
                   }}>⏹</button>
                 </div>
-                <div style={{ display:'flex', gap:2, alignItems:'center' }}>
-                  <span style={{ color:colors.textMuted, fontSize:7 }}>ช้า</span>
-                  {SPEED_LEVELS.map((s,i) => (
-                    <button key={i} onClick={()=>setSpeedIdx(i)} disabled={isExecuting} style={{
-                      width:20, height:16, borderRadius:3, border:'none',
-                      background:speedIdx===i?'linear-gradient(135deg,#e94560,#7c3aed)':colors.bgSurfaceHover,
-                      color:speedIdx===i?colors.text:colors.textSub,
-                      fontSize:7, fontWeight:700, cursor:isExecuting?'not-allowed':'pointer',
+                <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                  <span style={{ color: colors.textMuted, fontSize: 7 }}>ช้า</span>
+                  {SPEED_LEVELS.map((s, i) => (
+                    <button key={i} onClick={() => setSpeedIdx(i)} disabled={isExecuting} style={{
+                      width: 20, height: 16, borderRadius: 3, border: 'none',
+                      background: speedIdx === i ? 'linear-gradient(135deg,#e94560,#7c3aed)' : colors.bgSurfaceHover,
+                      color: speedIdx === i ? colors.text : colors.textSub,
+                      fontSize: 7, fontWeight: 700, cursor: isExecuting ? 'not-allowed' : 'pointer',
                     }}>{s.label}</button>
                   ))}
-                  <span style={{ color:colors.textMuted, fontSize:7 }}>เร็ว</span>
+                  <span style={{ color: colors.textMuted, fontSize: 7 }}>เร็ว</span>
                 </div>
-                {validationError && <p style={{ color:'#f87171', fontSize:8, maxWidth:100, textAlign:'center', margin:0 }}>{validationError}</p>}
+                {validationError && <p style={{ color: '#f87171', fontSize: 8, maxWidth: 100, textAlign: 'center', margin: 0 }}>{validationError}</p>}
               </div>
 
               {/* Enemy sprite — clean, no HP overlay */}
               <div style={{ flex: 1, position: 'relative', minWidth: 0, overflow: 'hidden' }}>
                 <div key={`enemy-${enemyAnimKey}`} style={{
-                  position:'absolute', inset:0,
+                  position: 'absolute', inset: 0,
                   animation: enemyAnim ? `${enemyAnim} 0.52s ease` : undefined,
-                  filter: isEnemyShielded && status==='waiting'
+                  filter: isEnemyShielded && status === 'waiting'
                     ? 'grayscale(0.3) drop-shadow(0 0 12px rgba(99,102,241,0.8))'
-                    : enemyHP < enemyMaxHP*0.3 ? 'grayscale(0.5)' : undefined,
-                  display:'flex', alignItems:'flex-end', justifyContent:'center',
+                    : enemyHP < enemyMaxHP * 0.3 ? 'grayscale(0.5)' : undefined,
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
                 }}>
-                  <EnemySprite enemyId={level.enemy.id} levelId={levelId??''} />
+                  <EnemySprite enemyId={level.enemy.id} levelId={levelId ?? ''} waveNumber={isEndless ? waveNumber : undefined} />
                 </div>
                 {/* Name + ENEMY badge */}
-                <div style={{ position:'absolute', top:4, right:4, display:'flex', alignItems:'center', gap:3, zIndex:2 }}>
-                  <span style={{ background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)', color:'#fff', fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:4 }}>{level.enemy.name}</span>
-                  <span style={{ background:'rgba(248,113,113,0.3)', border:'1px solid rgba(248,113,113,0.4)', color:'#f87171', fontSize:9, fontWeight:900, padding:'1px 5px', borderRadius:4 }}>ENEMY</span>
+                <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', alignItems: 'center', gap: 3, zIndex: 2 }}>
+                  <span style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>{level.enemy.name}</span>
+                  <span style={{ background: 'rgba(248,113,113,0.3)', border: '1px solid rgba(248,113,113,0.4)', color: '#f87171', fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 4 }}>ENEMY</span>
                 </div>
                 {/* Ailment badges — horizontal row top-left */}
-                <div style={{ position:'absolute', top:4, left:4, display:'flex', flexDirection:'row', gap:2, flexWrap:'wrap', zIndex:2 }}>
-                  {isEnemyShielded && status==='waiting' && (
-                    <span style={{ background:'rgba(99,102,241,0.9)', color:'#e0e7ff', fontSize:10, fontWeight:800, padding:'2px 7px', borderRadius:5 }}>🛡️</span>
+                <div style={{ position: 'absolute', top: 4, left: 4, display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap', zIndex: 2 }}>
+                  {isEnemyShielded && status === 'waiting' && (
+                    <span style={{ background: 'rgba(99,102,241,0.9)', color: '#e0e7ff', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 5 }}>🛡️</span>
                   )}
-                  {enemyStunnedRounds > 0 && <span style={{ background:'rgba(161,98,7,0.85)',   color:'#fef08a', fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>⚡{enemyStunnedRounds}</span>}
-                  {enemyBurnRounds   > 0 && <span style={{ background:'rgba(220,38,38,0.8)',   color:'#fff',    fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>🔥{enemyBurnRounds}</span>}
-                  {enemyFreezeRounds > 0 && <span style={{ background:'rgba(37,99,235,0.8)',   color:'#fff',    fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>❄️{enemyFreezeRounds}</span>}
-                  {enemyPoisonRounds > 0 && <span style={{ background:'rgba(124,58,237,0.8)', color:'#fff',    fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>🟣{enemyPoisonRounds}</span>}
+                  {enemyStunnedRounds > 0 && <span style={{ background: 'rgba(161,98,7,0.85)', color: '#fef08a', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4 }}>⚡{enemyStunnedRounds}</span>}
+                  {enemyBurnRounds > 0 && <span style={{ background: 'rgba(220,38,38,0.8)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4 }}>🔥{enemyBurnRounds}</span>}
+                  {enemyFreezeRounds > 0 && <span style={{ background: 'rgba(37,99,235,0.8)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4 }}>❄️{enemyFreezeRounds}</span>}
+                  {enemyPoisonRounds > 0 && <span style={{ background: 'rgba(124,58,237,0.8)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4 }}>🟣{enemyPoisonRounds}</span>}
                 </div>
               </div>
             </div>
 
             {/* ── Row 2: Status bar — HP bars, shield info, XP ── */}
-            <div style={{ flexShrink:0, display:'flex', gap:4, padding:'4px 2px 2px', borderTop:`1px solid ${colors.borderSubtle}` }}>
+            <div style={{ flexShrink: 0, display: 'flex', gap: 4, padding: '4px 2px 2px', borderTop: `1px solid ${colors.borderSubtle}` }}>
 
               {/* Hero status */}
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:'flex', gap:3, marginBottom:2, flexWrap:'wrap' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 3, marginBottom: 2, flexWrap: 'wrap' }}>
                   <span style={{
                     background: healCharges > 0 ? 'rgba(74,222,128,0.3)' : 'rgba(255,255,255,0.1)',
                     color: healCharges > 0 ? '#4ade80' : 'rgba(255,255,255,0.3)',
-                    fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:3,
+                    fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
                   }}>💊{healCharges}/3</span>
                   {(passiveBonusSummary.atkBonus > 0 || passiveBonusSummary.defBonus > 0) && (
-                    <span style={{ background:'rgba(168,85,247,0.35)', color:'#e9d5ff', fontSize:7, fontWeight:700, padding:'1px 4px', borderRadius:3 }}>
-                      {[passiveBonusSummary.atkBonus>0&&`ATK+${passiveBonusSummary.atkBonus}`,passiveBonusSummary.defBonus>0&&`DEF+${passiveBonusSummary.defBonus}`].filter(Boolean).join(' ')}
+                    <span style={{ background: 'rgba(168,85,247,0.35)', color: '#e9d5ff', fontSize: 7, fontWeight: 700, padding: '1px 4px', borderRadius: 3 }}>
+                      {[passiveBonusSummary.atkBonus > 0 && `ATK+${passiveBonusSummary.atkBonus}`, passiveBonusSummary.defBonus > 0 && `DEF+${passiveBonusSummary.defBonus}`].filter(Boolean).join(' ')}
                     </span>
                   )}
                 </div>
                 <HPBar current={heroHP} max={heroMaxHP} color="#4ade80" />
-                <span style={{ color: heroHP < heroMaxHP*0.3 ? '#ef4444' : '#4ade80', fontSize:9, fontWeight:700 }}>{heroHP}/{heroMaxHP}</span>
+                <span style={{ color: heroHP < heroMaxHP * 0.3 ? '#ef4444' : '#4ade80', fontSize: 9, fontWeight: 700 }}>{heroHP}/{heroMaxHP}</span>
                 <XPBar pct={xpPct} />
-                <p style={{ color:'rgba(255,255,255,0.45)', fontSize:7, margin:'1px 0 0' }}>
-                  {heroChar.level >= MAX_LEVEL ? 'MAX' : `${xpLeft}xp→Lv.${heroChar.level+1}`}
+                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 7, margin: '1px 0 0' }}>
+                  {heroChar.level >= MAX_LEVEL ? 'MAX' : `${xpLeft}xp→Lv.${heroChar.level + 1}`}
                 </p>
               </div>
 
               {/* Spacer aligns with center controls */}
-              <div style={{ width:110, flexShrink:0 }} />
+              <div style={{ width: 110, flexShrink: 0 }} />
 
               {/* Enemy status */}
-              <div style={{ flex:1, minWidth:0 }}>
-                {isEnemyShielded && status==='waiting' && (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {isEnemyShielded && status === 'waiting' && (
                   <div style={{
-                    background:'rgba(79,70,229,0.3)', border:'1px solid rgba(99,102,241,0.7)',
-                    borderRadius:5, padding:'2px 6px', marginBottom:3,
-                    display:'flex', alignItems:'center', gap:4, flexWrap:'wrap',
+                    background: 'rgba(79,70,229,0.3)', border: '1px solid rgba(99,102,241,0.7)',
+                    borderRadius: 5, padding: '2px 6px', marginBottom: 3,
+                    display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap',
                   }}>
-                    <span style={{ color:'#a5b4fc', fontSize:9, fontWeight:700 }}>วาง</span>
+                    <span style={{ color: '#a5b4fc', fontSize: 9, fontWeight: 700 }}>วาง</span>
                     {missingRequiredTypes.map((req) => (
                       <span key={req} style={{
-                        background:'rgba(99,102,241,0.5)', border:'1px solid rgba(165,180,252,0.6)',
-                        borderRadius:3, padding:'1px 5px', color:'#e0e7ff', fontSize:10, fontWeight:800,
+                        background: 'rgba(99,102,241,0.5)', border: '1px solid rgba(165,180,252,0.6)',
+                        borderRadius: 3, padding: '1px 5px', color: '#e0e7ff', fontSize: 10, fontWeight: 800,
                       }}>{SHIELD_ICONS[req]}{SHIELD_LABELS[req]}</span>
                     ))}
-                    <span style={{ color:'#a5b4fc', fontSize:9, fontWeight:700 }}>เพื่อทะลุโล!</span>
+                    <span style={{ color: '#a5b4fc', fontSize: 9, fontWeight: 700 }}>เพื่อทะลุโล!</span>
                   </div>
                 )}
-                {level?.enemy.behaviors && status!=='victory' && status!=='defeat' && (
-                  <div style={{ marginBottom:2 }}>
-                    <span style={{ background:'rgba(239,68,68,0.35)', color:'#fca5a5', fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3 }}>ท่าต่อไป: {enemyIntentionLabel}</span>
+                {level?.enemy.behaviors && status !== 'victory' && status !== 'defeat' && (
+                  <div style={{ marginBottom: 2 }}>
+                    <span style={{ background: 'rgba(239,68,68,0.35)', color: '#fca5a5', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3 }}>ท่าต่อไป: {enemyIntentionLabel}</span>
                   </div>
                 )}
                 <HPBar current={enemyHP} max={enemyMaxHP} color="#f87171" />
-                <span style={{ color:enemyHP<enemyMaxHP*0.3?'#ef4444':'#f87171', fontSize:9, fontWeight:700, display:'block', textAlign:'right' }}>{enemyHP}/{enemyMaxHP}</span>
+                <span style={{ color: enemyHP < enemyMaxHP * 0.3 ? '#ef4444' : '#f87171', fontSize: 9, fontWeight: 700, display: 'block', textAlign: 'right' }}>{enemyHP}/{enemyMaxHP}</span>
               </div>
             </div>
 
             {/* Floating damage/heal numbers */}
             {floats.map(f => (
               <div key={f.id} style={{
-                position:'absolute',
-                [f.side==='hero'?'left':'right']: '11%',
-                top:'8%',
-                color:f.color, fontSize:24, fontWeight:900,
-                pointerEvents:'none',
-                animation:'floatUp 0.88s ease forwards',
-                textShadow:`0 2px 10px ${f.color}, 0 0 24px ${f.color}`,
-                zIndex:10,
+                position: 'absolute',
+                [f.side === 'hero' ? 'left' : 'right']: '11%',
+                top: '8%',
+                color: f.color, fontSize: 24, fontWeight: 900,
+                pointerEvents: 'none',
+                animation: 'floatUp 0.88s ease forwards',
+                textShadow: `0 2px 10px ${f.color}, 0 0 24px ${f.color}`,
+                zIndex: 10,
               }}>{f.text}</div>
             ))}
           </div>
@@ -1203,18 +1272,6 @@ export default function BattleScreen() {
             <TutorialGuide levelId={levelId!} onClose={() => setShowTutorial(false)} onTargetChange={setTutorialTarget} />
           )}
 
-          {/* Endless wave badge */}
-          {isEndless && (
-            <div style={{
-              position: 'absolute', top: 8, right: 12, zIndex: 10,
-              background: 'linear-gradient(135deg,rgba(124,58,237,0.8),rgba(239,68,68,0.8))',
-              border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10,
-              padding: '4px 12px', textAlign: 'center',
-            }}>
-              <p style={{ color: 'white', fontSize: 11, fontWeight: 800, margin: 0 }}>WAVE {waveNumber}</p>
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, margin: 0 }}>Score: {endlessScore}</p>
-            </div>
-          )}
         </div>
 
         {/* ===== FLOWCHART SECTION ===== */}
@@ -1438,10 +1495,34 @@ export default function BattleScreen() {
 
               {status === 'victory' && (
                 <>
-                  <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 12 }}>
-                    <p style={{ color: '#4ade80', margin: 0, fontSize: 15 }}>+{xpGained} XP</p>
-                    {goldEarned > 0 && (
-                      <p style={{ color: '#fbbf24', margin: 0, fontSize: 15 }}>+{goldEarned}💰</p>
+                  <div style={{ marginBottom: 12 }}>
+                    {/* ── รางวัลหลัก ── */}
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                      <p style={{ color: '#4ade80', margin: 0, fontSize: 15 }}>+{xpGained} XP</p>
+                      {goldEarned > 0 && (
+                        <p style={{ color: '#fbbf24', margin: 0, fontSize: 15 }}>+{goldEarned}💰</p>
+                      )}
+                    </div>
+                    {/* ── Diminishing returns อธิบาย ── */}
+                    {xpMultiplierPct < 100 && (
+                      <div style={{
+                        marginTop: 6, background: 'rgba(251,191,36,0.07)',
+                        border: '1px solid rgba(251,191,36,0.2)',
+                        borderRadius: 8, padding: '5px 10px', textAlign: 'center',
+                      }}>
+                        <p style={{ color: 'rgba(251,191,36,0.8)', fontSize: 10, margin: 0, fontWeight: 600 }}>
+                          เล่นซ้ำ → XP ×{xpMultiplierPct}% / Gold ×{Math.round((goldEarned / Math.max(1, (level.rewards as any).gold ?? 1)) * 100)}%
+                        </p>
+                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, margin: '2px 0 0' }}>
+                          รางวัลลดลงเมื่อผ่านด่านนี้แล้ว — ลองด่านใหม่เพื่อ XP เต็ม
+                        </p>
+                      </div>
+                    )}
+                    {/* ── Bonus XP ── */}
+                    {bonusXpGained > 0 && (
+                      <p style={{ color: '#fbbf24', margin: '4px 0 0', fontSize: 11, textAlign: 'center', fontWeight: 700 }}>
+                        ⭐ +{bonusXpGained} Bonus XP (Bonus Objective)
+                      </p>
                     )}
                   </div>
 
@@ -1523,7 +1604,14 @@ export default function BattleScreen() {
                   <p style={{ color: colors.textSub, fontSize: 9, fontWeight: 800, textTransform: 'uppercase', margin: '0 0 5px' }}>บันทึกลง Firestore</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ color: '#4ade80', fontSize: 11 }}>✓ ด่าน {level.number} — บันทึกเป็น "ผ่านแล้ว"</span>
-                    <span style={{ color: '#4ade80', fontSize: 11 }}>✓ +{level.rewards.experience} XP → ตัวละคร Lv.{heroChar.level}</span>
+                    <span style={{ color: '#4ade80', fontSize: 11 }}>
+                      ✓ +{xpGained} XP{xpMultiplierPct < 100 ? ` (×${xpMultiplierPct}%)` : ''}{bonusXpGained > 0 ? ` +${bonusXpGained} Bonus` : ''} → ตัวละคร Lv.{heroChar.level}
+                    </span>
+                    {goldEarned > 0 && (
+                      <span style={{ color: '#fbbf24', fontSize: 11 }}>
+                        ✓ +{goldEarned}💰{xpMultiplierPct < 100 ? ` (×${Math.round(goldEarned / Math.max(1, (level.rewards as any).gold ?? 1) * 100)}%)` : ''} → คงเหลือ {shopGold}g
+                      </span>
+                    )}
                     <span style={{ color: '#4ade80', fontSize: 11 }}>✓ Leaderboard อัปเดตแล้ว</span>
                   </div>
                 </div>
@@ -1532,7 +1620,7 @@ export default function BattleScreen() {
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
                 <button
                   onClick={() => {
-                    setLevelUpData(null); setXpGained(0); setMissingBlocks([]);
+                    setLevelUpData(null); setXpGained(0); setBonusXpGained(0); setXpMultiplierPct(100); setMissingBlocks([]);
                     progressSaved.current = false;
                     setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
                     liveBattleStateRef.current = null;
@@ -1543,7 +1631,7 @@ export default function BattleScreen() {
                 </button>
                 {isRealVictory && (
                   <button
-                    onClick={() => setShowShop(true)}
+                    onClick={() => { setShopFromBag(false); setShowShop(true); }}
                     style={{ padding: '12px 20px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#d97706,#b45309)', color: 'white', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
                     🏪 Shop {goldEarned > 0 ? `(+${goldEarned}💰)` : ''}
                   </button>
@@ -1570,14 +1658,16 @@ export default function BattleScreen() {
       {/* ===== Shop Overlay ===== */}
       {showShop && (
         <ShopScreen
-          goldEarned={goldEarned}
+          goldEarned={shopFromBag ? 0 : goldEarned}
           characterClass={heroChar.class}
           characterLevel={heroChar.level}
+          fromBag={shopFromBag}
           onRetry={() => {
             setShowShop(false);
+            setShopFromBag(false);
             setGoldEarned(0);
             setLevelUpData(null);
-            setXpGained(0);
+            setXpGained(0); setBonusXpGained(0); setXpMultiplierPct(100);
             setMissingBlocks([]);
             progressSaved.current = false;
             setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
@@ -1585,9 +1675,14 @@ export default function BattleScreen() {
             restartBattle(getBoostedChar() as any, level.enemy as any, level.id);
           }}
           onClose={() => {
+            if (shopFromBag) {
+              // กลับสู้รบต่อ — ไม่ navigate ไม่ reset
+              setShowShop(false);
+              setShopFromBag(false);
+              return;
+            }
             setShowShop(false);
             setGoldEarned(0);
-            // Navigate to next level after shop
             const currentIdx = LEVELS.findIndex(l => l.id === levelId);
             const nextLevel = LEVELS[currentIdx + 1];
             navigate(nextLevel ? `/battle/${nextLevel.id}` : '/levels');

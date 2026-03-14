@@ -3,6 +3,7 @@ import type { User } from 'firebase/auth';
 import { onAuthChange, getPlayerProfile, ensurePlayerProfile } from '../services/authService';
 import { useGameStore } from '../stores/gameStore';
 import { useShopStore } from '../stores/shopStore';
+import { useCharacterStore } from '../stores/characterStore';
 import type { Character } from '../types/game.types';
 
 export function useAuth() {
@@ -20,9 +21,18 @@ export function useAuth() {
             if (!profile.username) {
               profile.username = user.displayName ?? user.email?.split('@')[0] ?? 'Player';
             }
+            // Ensure levelClearCounts is loaded from Firestore
+            if (!(profile as any).levelClearCounts) (profile as any).levelClearCounts = {};
             setPlayer(profile);
             // Restore shop data (gold + purchased equipment — shared across all classes)
-            initShop(profile.gold ?? 150, profile.purchasedEquipment ?? [], (profile as any).lastRestockTime ?? 0);
+            initShop(
+              profile.gold ?? 150,
+              profile.purchasedEquipment ?? [],
+              (profile as any).lastRestockTime ?? 0,
+              (profile as any).potions      ?? 0,
+              (profile as any).antidotes    ?? 0,
+              (profile as any).attackBonus  ?? 0,
+            );
             // Restore character progress (per-class map format)
             if (profile.characterProgress && profile.lastPlayedClass) {
               const cp = profile.characterProgress[profile.lastPlayedClass];
@@ -45,6 +55,19 @@ export function useAuth() {
                   lastModified: Date.now(),
                 };
                 setCharacter(restoredChar);
+                // Restore equipped items for this class
+                const savedEquipped = (cp as any).equippedItems;
+                if (savedEquipped) {
+                  const { WEAPONS, ARMORS, HELMETS, ACCESSORIES } = await import('../utils/constants');
+                  const allItems = [...WEAPONS, ...ARMORS, ...HELMETS, ...ACCESSORIES];
+                  const findItem = (id: string | null) => id ? allItems.find(i => i.id === id) ?? null : null;
+                  useCharacterStore.getState().setEquipment({
+                    weapon:    findItem(savedEquipped.weapon),
+                    armor:     findItem(savedEquipped.armor),
+                    head:      findItem(savedEquipped.head),
+                    accessory: findItem(savedEquipped.accessory),
+                  });
+                }
               }
             }
           } else {
