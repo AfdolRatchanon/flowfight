@@ -17,7 +17,7 @@
 - [Shop System](#shop-system)
 - [Deploy ขึ้น Firebase Hosting](#deploy-ขึ้น-firebase-hosting)
 - [โครงสร้างโปรเจกต์](#โครงสร้างโปรเจกต์)
-- [ด่านทั้งหมด (15 ด่าน)](#ด่านทั้งหมด-15-ด่าน--endless)
+- [ด่านทั้งหมด (20 ด่าน)](#ด่านทั้งหมด-20-ด่าน--endless)
 - [สถานะระบบ](#สถานะระบบ)
 - [Changelog](#changelog)
 
@@ -358,28 +358,68 @@ src/
 
 ---
 
-## ด่านทั้งหมด (15 ด่าน + Endless)
+## ด่านทั้งหมด (20 ด่าน + Endless)
 
-| # | ชื่อด่าน | ศัตรู | HP | ★ | Concept ที่เรียน |
-|---|---------|------|----|---|----------------|
-| 1 | The Slime Cave | Slime | 20 | ★ | Sequence — ต่อ block เป็นเส้นตรง |
-| 2 | Bigger Slime | Slime | 38 | ★ | Sequence ยาวขึ้น |
-| 3 | Goblin Scout | Goblin | 65 | ★ | While Loop ผ่าน Condition |
-| 4 | Heal When Low | Goblin | 78 | ★★ | If/Else — HP < 50? Heal : Attack |
-| 5 | Spider Den | Spider | 100 | ★★ | Nested If — เงื่อนไขซ้อนกัน |
-| 6 | Kobold Pack | Kobold | 115 | ★★ | Counter Loop — Turn ≥ N? |
-| 7 | Forest Wraith | Wraith | 120 | ★★★ | Resource Condition — HP > 50? Spell |
-| 8 | Goblin Knight | Goblin Knight | 140 | ★★★ | Skill Selection + Armor + Enrage |
-| 9 | Orc Warrior | Orc | 155 | ★★★ | State Condition — Hero Poisoned? |
-| 10 | Stone Troll | Troll | 182 | ★★★ | HP Threshold + Enrage 35% |
-| 11 | Orc Warlord | Warlord | 218 | ★★★★ | Complex Decision Tree |
-| 12 | Ice Giant | Giant | 252 | ★★★★ | Counter + Resource Combined |
-| 13 | Dragon's Lair | Young Dragon | 295 | ★★★★★ | Full Algorithm Design |
-| 14 | The Lich Lord | Lich | 362 | ★★★★★ | Algorithm Optimization + Parry 25% |
-| 15 | The Dark Overlord | Overlord | 475 | ★★★★★ | Master Flowchart — ทุก concept |
-| ∞ | **Endless Mode** | Wave ∞ | scales | ★★★★★ | Survival — score = Wave × HP% |
+ด่านออกแบบให้สอน Flowchart แบบสะสมตามลำดับ:
+**Sequence → Decision (HP → Ailment → Counter) → Loop → Combine → Mastery**
 
-แต่ละด่านมี **requiredBlocks** — ถ้าไม่มี block ที่กำหนด ศัตรูจะ shield ป้องกันการโจมตี
+### หมวด 1: Sequence (ด่าน 1–3)
+
+| # | ชื่อด่าน | ศัตรู | HP | Concept |
+|---|---------|------|----|---------|
+| 1 | The Slime Cave | Slime | 20 | Sequence พื้นฐาน — ต่อ block เป็นเส้นตรง |
+| 2 | Return of the Slime | Bigger Slime | 38 | เพิ่ม Heal — Process มีหลายประเภท |
+| 3 | Goblin Scout | Goblin Scout | 65 | Dodge — เลือก action ที่เหมาะสม |
+
+### หมวด 2: Decision — HP Condition (ด่าน 4–6)
+
+| # | ชื่อด่าน | ศัตรู | HP | Concept |
+|---|---------|------|----|---------|
+| 4 | Goblin's Gambit | Goblin | 78 | If/Else — HP < 50? Heal : Attack |
+| 5 | The Spider's Web | Spider | 100 | Nested Condition — เงื่อนไขซ้อนกัน |
+| 6 | Forest Wraith | Forest Wraith | 120 | HP > 50? Cast Spell เมื่อเลือด HPs สูง |
+
+### หมวด 3: Decision — Ailment Condition (ด่าน 7–8)
+
+| # | ชื่อด่าน | ศัตรู | HP | Concept |
+|---|---------|------|----|---------|
+| 7 | Orc Warrior | Orc Warrior | 145 | Hero Poisoned? — ตรวจสถานะตัวเอง |
+| 8 | Kobold Pack | Kobold Pack | 155 | Hero Frozen? + Dodge — รับมือ Ailment |
+
+### หมวด 4: Decision — Counter (ด่าน 9–10)
+
+| # | ชื่อด่าน | ศัตรู | HP | Concept |
+|---|---------|------|----|---------|
+| 9 | Goblin Knight | Goblin Knight | 168 | Turn ≥ N? — Power Strike ในเวลาที่ถูกต้อง |
+| 10 | Stone Troll | Stone Troll | 195 | Counter + HP Threshold ซ้อนกัน |
+
+### หมวด 5: Loop (ด่าน 11–13)
+
+| # | ชื่อด่าน | ศัตรู | HP | Concept |
+|---|---------|------|----|---------|
+| 11 | Orc Warlord | Orc Warlord | 230 | While Loop — Enemy Alive? วนโจมตี |
+| 12 | Ice Giant | Ice Giant | 270 | Loop + HP Decision ข้างใน |
+| 13 | Young Dragon | Young Dragon | 310 | Loop + Counter ข้างใน |
+
+### หมวด 6: Combine (ด่าน 14–15)
+
+| # | ชื่อด่าน | ศัตรู | HP | Concept |
+|---|---------|------|----|---------|
+| 14 | Dragon Elder | Dragon Elder | 345 | Loop + Ailment + HP + Counter รวมกัน |
+| 15 | Orc Warlord Elite | Orc Warlord Elite | 280 | Full Algorithm — Sequence + Decision + Loop |
+
+### หมวด 7: Mastery (ด่าน 16–20)
+
+| # | ชื่อด่าน | ศัตรู | HP | ★ | หมายเหตุ |
+|---|---------|------|----|---|---------|
+| 16 | Vampire Lord | Vampire Lord 🧛 | 350 | ★★★★ | Class Skills + Ailment |
+| 17 | Frost Titan | Frost Titan ❄️ | 400 | ★★★★ | Counter Precision |
+| 18 | Dark Commander | Dark Commander ⚔️ | 450 | ★★★★★ | ออกแบบ Algorithm เอง |
+| 19 | The Lich Lord | Lich Lord 💀 | 500 | ★★★★★ | **Sub-BOSS** — Mastery |
+| 20 | The Dark Overlord | Dark Overlord 👑 | 650 | ★★★★★ | **FINAL BOSS** — ทุก concept |
+| ∞ | **Endless Mode** | Wave ∞ | scales | — | Survival — score = Wave × HP% |
+
+> แต่ละด่านมี **requiredBlocks** — ถ้าไม่มี block ที่กำหนด ศัตรูจะ Shield ป้องกันการโจมตีทุกครั้ง
 
 ---
 
@@ -398,7 +438,7 @@ src/
 - [x] Character Progression — XP, Level 1–10, stat growth per class
 - [x] Shop System — 40+ items, 4 slots, gold rewards จากด่าน
 - [x] Equipment stat bonuses ผ่าน ShopEngine
-- [x] 15 Campaign Levels + Endless Mode
+- [x] 20 Campaign Levels + Endless Mode (สอน Sequence → Decision → Loop → Combine → Mastery)
 - [x] Firebase Auth — Google Sign-In
 - [x] Firestore — save player progress, character progress, leaderboard
 - [x] Global Leaderboard + Per-level Leaderboard
@@ -409,6 +449,8 @@ src/
 - [x] Speed control 1x / 2x / 3x
 - [x] Visited node trace — แสดงเส้นทางที่รันหลัง execute
 - [x] Endless Wave Mode — wave scaling, score system
+- [x] Tutorial Guide — hint panel ลากย้ายได้ (draggable) + 20 ด่านพร้อม guided steps
+- [x] Process block menu — แสดงคำอธิบายแต่ละ action ในเมนู context
 
 ### สิ่งที่ยังขาด
 
@@ -424,6 +466,11 @@ src/
 ## Changelog
 
 ### v0.9.0 (มีนาคม 2026)
+- **Tutorial rework**: 20 ด่าน ลำดับการสอนที่ถูกต้อง Sequence → Decision (HP/Ailment/Counter) → Loop → Combine → Mastery
+- **Draggable Tutorial Guide**: hint panel ลากย้ายได้ ไม่บังหน้าจอเล่น
+- **Process block descriptions**: เมนู context level-3 แสดงคำอธิบายใต้ชื่อ action ทุกตัว
+- **Counter threshold**: Decision node `Turn ≥ N?` ปรับค่าทีละ ±1 (HP/Gold ยังคง ±10)
+- **Emoji fallback**: ด่าน 16–20 (Vampire Lord / Frost Titan / Dark Commander / Lich Lord / Dark Overlord) ใช้ emoji แสดงศัตรูจนกว่าจะมีภาพจริง
 - ระบบ **Diminishing Returns**: XP/Gold ลดลงเมื่อ clear ด่านซ้ำ (×100% → ×50% → ×25% → ×10%)
 - **Bonus XP** จาก Bonus Objective (+50% base XP ก่อนคูณ multiplier)
 - Victory screen แสดง multiplier และ bonus XP
@@ -474,7 +521,7 @@ src/
 - **Condition** และ **Loop** node
 - **Objective system**: เงื่อนไขผ่านด่าน + Bonus Objective
 - Tutorial text ต่อด่าน
-- **15 Campaign Levels** (Sequence → Loop → If/Else → Nested → Counter → Full Algorithm)
+- **15 Campaign Levels** (ต่อมา rework เป็น 20 ด่านใน v0.9.0)
 
 ### v0.1.0
 - ระบบต่อสู้พื้นฐาน Hero vs Enemy
@@ -501,4 +548,4 @@ src/
 
 ---
 
-`v0.9.0`
+`v0.9.0` — มีนาคม 2026
