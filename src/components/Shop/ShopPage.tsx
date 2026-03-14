@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useShopStore } from '../../stores/shopStore';
+import { useShopStore, RESTOCK_INTERVAL_MS, RESTOCK_POTIONS, RESTOCK_ANTIDOTES } from '../../stores/shopStore';
+import { useGameStore } from '../../stores/gameStore';
+import { saveShopData } from '../../services/authService';
 import { useTheme } from '../../contexts/ThemeContext';
 
 // ─── Catalog ─────────────────────────────────────────────────────────────────
@@ -66,14 +68,39 @@ function getOwned(id: string, shop: { potions: number; antidotes: number; attack
   return 0;
 }
 
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return 'พร้อมแล้ว!';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  if (h > 0) return `${h}ชม. ${m}น.`;
+  if (m > 0) return `${m}น. ${s}ว.`;
+  return `${s}ว.`;
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ShopPage() {
   const navigate = useNavigate();
   const { colors } = useTheme();
   const shop = useShopStore();
+  const { player } = useGameStore();
   const [flash, setFlash] = useState<{ msg: string; ok: boolean } | null>(null);
   const [bought, setBought] = useState<Record<string, number>>({});
+  const [countdown, setCountdown] = useState(shop.nextRestockMs());
+  const [restockReady, setRestockReady] = useState(shop.isRestockReady());
+
+  // Countdown ticker
+  useEffect(() => {
+    const tick = () => {
+      const ms = useShopStore.getState().nextRestockMs();
+      setCountdown(ms);
+      setRestockReady(ms <= 0);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [shop.lastRestockTime]);
 
   function showFlash(msg: string, ok: boolean) {
     setFlash({ msg, ok });
@@ -98,8 +125,22 @@ export default function ShopPage() {
     showFlash(`ซื้อ ${item.label} สำเร็จ!`, true);
   }
 
+  function claimRestock() {
+    if (!restockReady) return;
+    shop.claimRestock();
+    showFlash(`รับของฟรี! +${RESTOCK_POTIONS} 🧪 +${RESTOCK_ANTIDOTES} 💊`, true);
+    // save to Firebase
+    if (player) {
+      const s = useShopStore.getState();
+      saveShopData(player.id, s.gold, s.purchasedEquipment, s.lastRestockTime).catch(() => {});
+    }
+  }
+
   const consumables = CATALOG.filter((i) => i.category === 'consumable');
   const upgrades    = CATALOG.filter((i) => i.category === 'upgrade');
+
+  // Progress for countdown bar (0–1)
+  const restockPct = restockReady ? 1 : 1 - countdown / RESTOCK_INTERVAL_MS;
 
   return (
     <div style={{
@@ -158,6 +199,82 @@ export default function ShopPage() {
             {flash.ok ? '✅ ' : '❌ '}{flash.msg}
           </div>
         )}
+      </div>
+
+      {/* ── Daily Restock Card ── */}
+      <div style={{
+        width: '100%', maxWidth: 640, marginBottom: 20,
+        background: restockReady
+          ? 'linear-gradient(135deg, rgba(74,222,128,0.12), rgba(34,197,94,0.08))'
+          : 'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(99,102,241,0.05))',
+        border: `1px solid ${restockReady ? 'rgba(74,222,128,0.4)' : 'rgba(124,58,237,0.25)'}`,
+        borderRadius: 16, padding: '16px 20px',
+        transition: 'all 0.4s',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Icon */}
+          <div style={{
+            width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+            background: restockReady ? 'rgba(74,222,128,0.15)' : 'rgba(124,58,237,0.12)',
+            border: `1px solid ${restockReady ? 'rgba(74,222,128,0.4)' : 'rgba(124,58,237,0.3)'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 24,
+          }}>
+            {restockReady ? '🎁' : '⏳'}
+          </div>
+
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ color: 'white', fontWeight: 800, fontSize: 14 }}>Daily Restock</span>
+              {restockReady && (
+                <span style={{
+                  background: 'rgba(74,222,128,0.2)', border: '1px solid rgba(74,222,128,0.5)',
+                  borderRadius: 20, padding: '1px 8px',
+                  color: '#4ade80', fontSize: 10, fontWeight: 800,
+                }}>พร้อมแล้ว!</span>
+              )}
+            </div>
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, margin: '0 0 8px' }}>
+              รับฟรี +{RESTOCK_POTIONS} 🧪 +{RESTOCK_ANTIDOTES} 💊 ทุก 8 ชั่วโมง
+            </p>
+            {/* Progress bar */}
+            <div style={{ height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{
+                width: `${restockPct * 100}%`, height: '100%', borderRadius: 2,
+                background: restockReady
+                  ? 'linear-gradient(90deg, #4ade80, #22c55e)'
+                  : 'linear-gradient(90deg, #7c3aed, #6366f1)',
+                transition: 'width 1s linear',
+              }} />
+            </div>
+            {!restockReady && (
+              <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, margin: '4px 0 0' }}>
+                อีก {formatCountdown(countdown)}
+              </p>
+            )}
+          </div>
+
+          {/* Claim button */}
+          <button
+            onClick={claimRestock}
+            disabled={!restockReady}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: restockReady
+                ? 'linear-gradient(135deg, #16a34a, #22c55e)'
+                : 'rgba(255,255,255,0.06)',
+              color: restockReady ? 'white' : 'rgba(255,255,255,0.2)',
+              fontWeight: 800, fontSize: 13,
+              cursor: restockReady ? 'pointer' : 'not-allowed',
+              flexShrink: 0, minWidth: 80, textAlign: 'center',
+              boxShadow: restockReady ? '0 0 16px rgba(34,197,94,0.4)' : 'none',
+              transition: 'all 0.2s',
+            }}
+          >
+            {restockReady ? 'รับเลย!' : 'รอก่อน'}
+          </button>
+        </div>
       </div>
 
       {/* ── Inventory card ── */}

@@ -116,6 +116,7 @@ const MENU_W = 200; // main menu width
 
 interface FlowchartEditorProps {
   allowedBlocks?: string[];
+  shieldRequiredTypes?: string[];
   nodeLimit?: number;
   turnManaMax?: number;
   turnManaUsed?: number;
@@ -123,7 +124,7 @@ interface FlowchartEditorProps {
   characterLevel?: number;
 }
 
-export default function FlowchartEditor({ allowedBlocks: _allowedBlocks, nodeLimit, turnManaMax, turnManaUsed, characterClass, characterLevel }: FlowchartEditorProps = {}) {
+export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, nodeLimit, turnManaMax, turnManaUsed, characterClass, characterLevel }: FlowchartEditorProps = {}) {
   const storeNodes = useFlowchartStore((s) => s.nodes);
   const storeEdges = useFlowchartStore((s) => s.edges);
   const store = useFlowchartStore();
@@ -147,6 +148,10 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks, nodeLim
   const manaOverBudget = turnManaMax !== undefined && turnManaUsed !== undefined && turnManaUsed > turnManaMax;
 
   useEffect(() => { setNodes(storeNodes as Node[]); }, [storeNodes]);
+  useEffect(() => {
+    store.setShieldGlowTypes(shieldRequiredTypes ?? []);
+    return () => { store.setShieldGlowTypes([]); };
+  }, [shieldRequiredTypes]);
   useEffect(() => { setEdges(storeEdges as Edge[]); }, [storeEdges]);
 
   // Close menu on outside click or Escape
@@ -304,11 +309,28 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks, nodeLim
   const isActionNode    = selectedNode?.type === 'action';
   const isConditionNode = selectedNode?.type === 'condition';
 
+  // Filter ACTION_GROUPS by allowedBlocks (if provided, hide blocks not in list)
+  const filteredActionGroups = allowedBlocks
+    ? ACTION_GROUPS
+        .map((g) => ({ ...g, items: g.items.filter((item) => allowedBlocks.includes(item.type)) }))
+        .filter((g) => g.items.length > 0)
+    : ACTION_GROUPS;
+  const showDecision = !allowedBlocks || allowedBlocks.includes('condition');
+
+  // Filter CONDITION_GROUPS: if allowedBlocks contains specific conditionTypes, show only those
+  const allConditionTypes = new Set(CONDITION_GROUPS.flatMap((g) => g.items.map((i) => i.conditionType)));
+  const hasSpecificConditions = allowedBlocks?.some((b) => allConditionTypes.has(b)) ?? false;
+  const filteredConditionGroups = allowedBlocks && hasSpecificConditions
+    ? CONDITION_GROUPS
+        .map((g) => ({ ...g, items: g.items.filter((item) => allowedBlocks.includes(item.conditionType)) }))
+        .filter((g) => g.items.length > 0)
+    : CONDITION_GROUPS;
+
   // Submenu content
   const showSubmenu = submenu !== null;
   const submenuGroups =
-    submenu === 'process' || submenu === 'change_action'   ? ACTION_GROUPS
-    : submenu === 'decision' || submenu === 'change_condition' ? CONDITION_GROUPS
+    submenu === 'process' || submenu === 'change_action'   ? filteredActionGroups
+    : submenu === 'decision' || submenu === 'change_condition' ? filteredConditionGroups
     : null;
 
   // Class skills: all skills of the class (for display), filtered to unlocked for use
@@ -444,13 +466,15 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks, nodeLim
                     onEnter={(y) => { setSubmenu('process'); setSubmenuY(y); setSubSubmenu(null); }}
                     colors={colors}
                   />
-                  <SubMenuItem
-                    icon="◇" label="Decision" desc="เงื่อนไข YES / NO" color="#d97706"
-                    active={submenu === 'decision'}
-                    onEnter={(y) => { setSubmenu('decision'); setSubmenuY(y); setSubSubmenu(null); }}
-                    colors={colors}
-                  />
-                  {allClassSkills.length > 0 && (
+                  {showDecision && (
+                    <SubMenuItem
+                      icon="◇" label="Decision" desc="เงื่อนไข YES / NO" color="#d97706"
+                      active={submenu === 'decision'}
+                      onEnter={(y) => { setSubmenu('decision'); setSubmenuY(y); setSubSubmenu(null); }}
+                      colors={colors}
+                    />
+                  )}
+                  {allClassSkills.length > 0 && !allowedBlocks && (
                     <SubMenuItem
                       icon="⭐" label="Class Skills" desc={`${unlockedClassSkills.length}/${allClassSkills.length} unlocked`} color="#a855f7"
                       active={submenu === 'class_skills'}
@@ -588,10 +612,11 @@ export default function FlowchartEditor({ allowedBlocks: _allowedBlocks, nodeLim
               const group = (submenuGroups ?? []).find((g: any) => g.key === subSubmenu);
               if (!group) return null;
               const isAction = submenu === 'process' || submenu === 'change_action';
+              const level3H = 36 + (group as any).items.length * 37; // header ~36px + items ~37px each
               return (
                 <div style={{
                   position: 'fixed',
-                  ...clampPos(menuX + MENU_W + 4 + 204, subSubmenuY, 200, 400),
+                  ...clampPos(menuX + MENU_W + 4 + 204, subSubmenuY, 200, level3H),
                   background: colors.bgCard,
                   border: `1px solid ${colors.border}`,
                   borderRadius: 10,

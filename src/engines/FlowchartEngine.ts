@@ -75,9 +75,11 @@ export function calcFlowchartManaCost(nodes: FlowNode[]): number {
     .reduce((sum, n) => sum + (ACTION_COST[n.data.actionType ?? ''] ?? 1), 0);
 }
 
-/** Max action budget per turn (fixed at 3 action points) */
-export function calcTurnManaMax(_turn: number): number {
-  return 3;
+/** Max action budget per turn — scales with turn, base 5 for level ≥ 11 */
+export function calcTurnManaMax(turn: number, levelNumber: number = 1): number {
+  const base = levelNumber >= 11 ? 5 : 3;
+  // const base = levelNumber >= 11 ? 3 : 3;
+  return base + (turn - 1);  // turn 1 = base, turn 2 = base+1, ...
 }
 
 export interface ExecutionResult {
@@ -199,10 +201,10 @@ function buildPreviewTree(
 
   if (node.type === 'condition') {
     const yesEdge = outgoing.find((e) => e.sourceHandle === 'yes' || e.label?.toLowerCase() === 'yes');
-    const noEdge  = outgoing.find((e) => e.sourceHandle === 'no'  || e.label?.toLowerCase() === 'no');
+    const noEdge = outgoing.find((e) => e.sourceHandle === 'no' || e.label?.toLowerCase() === 'no');
     const branchBudget = Math.max(2, Math.floor((budget - 1) / 2));
     const yesBranch = yesEdge ? buildPreviewTree(yesEdge.target, state, nodeMap, edges, nextVisited, branchBudget) : [];
-    const noBranch  = noEdge  ? buildPreviewTree(noEdge.target,  state, nodeMap, edges, nextVisited, branchBudget) : [];
+    const noBranch = noEdge ? buildPreviewTree(noEdge.target, state, nodeMap, edges, nextVisited, branchBudget) : [];
     // Annotate with what the condition checks (for preview display)
     const ct = node.data.conditionType;
     const th = node.data.threshold ?? 50;
@@ -264,11 +266,11 @@ export class FlowchartEngine {
   validate(): { valid: boolean; error?: string } {
     const nodeArr = Array.from(this.nodes.values());
     const startNodes = nodeArr.filter((n) => n.type === 'start');
-    const endNodes   = nodeArr.filter((n) => n.type === 'end');
+    const endNodes = nodeArr.filter((n) => n.type === 'end');
 
     if (startNodes.length === 0) return { valid: false, error: 'Missing Start block' };
-    if (startNodes.length > 1)  return { valid: false, error: 'Only one Start block allowed' };
-    if (endNodes.length === 0)  return { valid: false, error: 'Missing End block' };
+    if (startNodes.length > 1) return { valid: false, error: 'Only one Start block allowed' };
+    if (endNodes.length === 0) return { valid: false, error: 'Missing End block' };
 
     for (const node of nodeArr) {
       if (node.type === 'end') continue;
@@ -278,7 +280,7 @@ export class FlowchartEngine {
       }
       if (node.type === 'condition') {
         const hasYes = outgoing.some((e) => e.sourceHandle === 'yes' || e.label?.toLowerCase() === 'yes');
-        const hasNo  = outgoing.some((e) => e.sourceHandle === 'no'  || e.label?.toLowerCase() === 'no');
+        const hasNo = outgoing.some((e) => e.sourceHandle === 'no' || e.label?.toLowerCase() === 'no');
         if (!hasYes || !hasNo) {
           return { valid: false, error: `Condition "${node.data.label}" needs both YES and NO connections` };
         }
@@ -452,7 +454,7 @@ export class FlowchartEngine {
           step.battleLog = msg;
           step.heroHP = state.heroHP;
           step.enemyHP = state.enemyHP;
-              step.heroBurnRounds = state.heroBurnRounds;
+          step.heroBurnRounds = state.heroBurnRounds;
           step.heroFreezeRounds = state.heroFreezeRounds;
           step.heroPoisonRounds = state.heroPoisonRounds;
           step.enemyStunnedRounds = state.enemyStunnedRounds;
@@ -494,8 +496,8 @@ export class FlowchartEngine {
         }
       }
 
-      step.heroHP   = state.heroHP;
-      step.enemyHP  = state.enemyHP;
+      step.heroHP = state.heroHP;
+      step.enemyHP = state.enemyHP;
       step.heroBurnRounds = state.heroBurnRounds;
       step.heroFreezeRounds = state.heroFreezeRounds;
       step.heroPoisonRounds = state.heroPoisonRounds;
@@ -741,9 +743,9 @@ export class FlowchartEngine {
         }
         state.antidotes--;
         const cured: string[] = [];
-        if (state.heroBurnRounds > 0)   { state.heroBurnRounds   = 0; cured.push('🔥 Burn');   }
-        if (state.heroPoisonRounds > 0) { state.heroPoisonRounds = 0; cured.push('🟣 Poison');  }
-        if (state.heroFreezeRounds > 0) { state.heroFreezeRounds = 0; cured.push('❄️ Freeze');  }
+        if (state.heroBurnRounds > 0) { state.heroBurnRounds = 0; cured.push('🔥 Burn'); }
+        if (state.heroPoisonRounds > 0) { state.heroPoisonRounds = 0; cured.push('🟣 Poison'); }
+        if (state.heroFreezeRounds > 0) { state.heroFreezeRounds = 0; cured.push('❄️ Freeze'); }
         return cured.length > 0
           ? `💊 Antidote! Cured: ${cured.join(', ')} [${state.antidotes} left]`
           : `💊 Antidote used — no ailments to cure [${state.antidotes} left]`;
@@ -908,27 +910,27 @@ export class FlowchartEngine {
   private evaluateCondition(node: FlowNode, state: BattleState): boolean {
     const threshold = node.data.threshold ?? 50;
     switch (node.data.conditionType) {
-      case 'hp_greater':    return state.heroHP > threshold;
-      case 'hp_less':       return state.heroHP < threshold;
-      case 'enemy_alive':   return state.enemyHP > 0;
-      case 'enemy_close':   return true;
+      case 'hp_greater': return state.heroHP > threshold;
+      case 'hp_less': return state.heroHP < threshold;
+      case 'enemy_alive': return state.enemyHP > 0;
+      case 'enemy_close': return true;
       // Ailment conditions
-      case 'hero_burning':  return state.heroBurnRounds > 0;
+      case 'hero_burning': return state.heroBurnRounds > 0;
       case 'hero_poisoned': return state.heroPoisonRounds > 0;
-      case 'hero_frozen':   return state.heroFreezeRounds > 0;
-      case 'enemy_stunned':  return state.enemyStunnedRounds > 0;
+      case 'hero_frozen': return state.heroFreezeRounds > 0;
+      case 'enemy_stunned': return state.enemyStunnedRounds > 0;
       // Enemy status conditions
-      case 'enemy_burning':  return state.enemyBurnRounds > 0;
-      case 'enemy_frozen':   return state.enemyFreezeRounds > 0;
+      case 'enemy_burning': return state.enemyBurnRounds > 0;
+      case 'enemy_frozen': return state.enemyFreezeRounds > 0;
       case 'enemy_poisoned': return state.enemyPoisonRounds > 0;
       // Shop conditions
-      case 'gold_greater':  return state.gold > threshold;
-      case 'gold_less':     return state.gold < threshold;
+      case 'gold_greater': return state.gold > threshold;
+      case 'gold_less': return state.gold < threshold;
       // Turn counter — true when current turn >= threshold (teaches loop counting)
-      case 'turn_gte':      return state.currentTurn >= threshold;
+      case 'turn_gte': return state.currentTurn >= threshold;
       // Phase 4: virus condition — evaluated externally via store; default false
-      case 'is_corrupted':  return false;
-      default:              return true;
+      case 'is_corrupted': return false;
+      default: return true;
     }
   }
 
@@ -936,7 +938,7 @@ export class FlowchartEngine {
     switch (node.data.loopType) {
       case 'repeat': {
         const count = this.loopCounters.get(node.id) ?? 0;
-        const max   = node.data.loopCount ?? 3;
+        const max = node.data.loopCount ?? 3;
         if (count < max) {
           this.loopCounters.set(node.id, count + 1);
           return true;
@@ -1015,7 +1017,7 @@ export function executeEnemyAction(
       // Berserk reduces damage taken by 20%
       if (s.heroBerserkRounds > 0 && finalDmg > 0) finalDmg = Math.max(1, Math.floor(finalDmg * 0.8));
       if (!heroParried && finalDmg > 0 && s.enemyAilmentType && Math.random() < s.enemyAilmentChance) {
-        if (s.enemyAilmentType === 'burn')   s.heroBurnRounds   = Math.max(s.heroBurnRounds, 3);
+        if (s.enemyAilmentType === 'burn') s.heroBurnRounds = Math.max(s.heroBurnRounds, 3);
         if (s.enemyAilmentType === 'freeze') s.heroFreezeRounds = Math.max(s.heroFreezeRounds, 2);
         if (s.enemyAilmentType === 'poison') s.heroPoisonRounds = Math.max(s.heroPoisonRounds, 5);
       }
@@ -1038,7 +1040,7 @@ export function executeEnemyAction(
       // Berserk reduces damage taken by 20%
       if (s.heroBerserkRounds > 0 && finalSpellDmg > 0) finalSpellDmg = Math.max(1, Math.floor(finalSpellDmg * 0.8));
       if (finalSpellDmg > 0 && s.enemyAilmentType && Math.random() < s.enemyAilmentChance * 1.5) {
-        if (s.enemyAilmentType === 'burn')   s.heroBurnRounds   = Math.max(s.heroBurnRounds, 3);
+        if (s.enemyAilmentType === 'burn') s.heroBurnRounds = Math.max(s.heroBurnRounds, 3);
         if (s.enemyAilmentType === 'freeze') s.heroFreezeRounds = Math.max(s.heroFreezeRounds, 2);
         if (s.enemyAilmentType === 'poison') s.heroPoisonRounds = Math.max(s.heroPoisonRounds, 5);
       }

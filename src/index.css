@@ -183,6 +183,14 @@ body {
 .glow-purple { box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); }
 
 /* Animations */
+@keyframes shieldPulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(251,146,60,0.8), 0 0 4px rgba(251,146,60,0.4); }
+  50% { box-shadow: 0 0 24px rgba(251,146,60,1), 0 0 8px rgba(251,146,60,0.6); }
+}
+@keyframes shieldPulseSvg {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(251,146,60,0.8)); }
+  50% { filter: drop-shadow(0 0 14px rgba(251,146,60,1)); }
+}
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-6px); }

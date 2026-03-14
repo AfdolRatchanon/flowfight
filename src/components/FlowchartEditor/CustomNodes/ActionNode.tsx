@@ -38,7 +38,9 @@ export default function ActionNode({
   data: { label: string; actionType?: string; isActive?: boolean; isVirus?: boolean; virusEffect?: string };
 }) {
   const visitedNodeIds = useFlowchartStore((s) => s.visitedNodeIds);
+  const shieldGlowTypes = useFlowchartStore((s) => s.shieldGlowTypes);
   const wasVisited = visitedNodeIds.includes(id);
+  const isShieldTarget = shieldGlowTypes.includes(data.actionType ?? '');
 
   // Virus node: early return with special styling
   if (data.isVirus) {
@@ -76,10 +78,12 @@ export default function ActionNode({
         background: active
           ? 'linear-gradient(135deg,#60a5fa,#2563eb)'
           : 'linear-gradient(135deg,#1e3a8a,#1d4ed8)',
-        border: active ? '2px solid #fff' : wasVisited ? '2px solid rgba(74,222,128,0.7)' : '2px solid rgba(147,197,253,0.3)',
+        border: active ? '2px solid #fff' : isShieldTarget ? '2px solid #fb923c' : wasVisited ? '2px solid rgba(74,222,128,0.7)' : '2px solid rgba(147,197,253,0.3)',
         boxShadow: active
           ? '0 0 18px rgba(96,165,250,0.9)'
+          : isShieldTarget ? '0 0 14px rgba(251,146,60,0.8), 0 0 4px rgba(251,146,60,0.4)'
           : wasVisited ? '0 0 10px rgba(74,222,128,0.4)' : '0 3px 10px rgba(0,0,0,0.5)',
+        animation: isShieldTarget ? 'shieldPulse 1.4s ease-in-out infinite' : undefined,
         display: 'flex', alignItems: 'center', gap: 10,
         userSelect: 'none',
       }}

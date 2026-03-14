@@ -30,6 +30,8 @@ export interface Player {
   email: string;
   isAnonymous?: boolean;
   levelsCompleted: string[]; // level IDs ที่ผ่านแล้ว ['level_1', 'level_2']
+  endlessHighScore?: number;  // คะแนนสูงสุด Endless Mode
+  endlessHighWave?: number;   // Wave สูงสุด Endless Mode
   /** ความก้าวหน้าแยกต่อ class */
   characterProgress?: Partial<Record<CharacterClass, CharacterProgress>>;
   lastPlayedClass?: CharacterClass; // class ล่าสุดที่เลือก
@@ -329,5 +331,20 @@ export interface LevelLeaderboardEntry {
   timeMs: number;
   heroHPRemaining: number;
   heroHPPercent: number; // % HP เหลือเมื่อชนะ (0-100)
+  timestamp: number;
+}
+
+// สถิติ Endless Mode (collection: endlessboards)
+export interface EndlessLeaderboardEntry {
+  rank: number;
+  playerId: string;
+  playerName: string;
+  characterName: string;
+  characterClass: CharacterClass;
+  characterLevel: number;
+  score: number;           // คะแนนรวม (best run)
+  wavesCleared: number;    // wave สุดท้ายที่ผ่านได้ (best)
+  totalDamageDealt: number;
+  totalDamageTaken: number;
   timestamp: number;
 }

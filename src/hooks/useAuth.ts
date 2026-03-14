@@ -22,7 +22,7 @@ export function useAuth() {
             }
             setPlayer(profile);
             // Restore shop data (gold + purchased equipment — shared across all classes)
-            initShop(profile.gold ?? 150, profile.purchasedEquipment ?? []);
+            initShop(profile.gold ?? 150, profile.purchasedEquipment ?? [], (profile as any).lastRestockTime ?? 0);
             // Restore character progress (per-class map format)
             if (profile.characterProgress && profile.lastPlayedClass) {
               const cp = profile.characterProgress[profile.lastPlayedClass];

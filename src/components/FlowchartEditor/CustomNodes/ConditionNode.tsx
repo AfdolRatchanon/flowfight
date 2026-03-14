@@ -20,9 +20,10 @@ export default function ConditionNode({
   id: string;
   data: ConditionData;
 }) {
-  const { nodes, setNodes, visitedNodeIds, visitedConditionResults } = useFlowchartStore();
+  const { nodes, setNodes, visitedNodeIds, visitedConditionResults, shieldGlowTypes } = useFlowchartStore();
   const active = data.isActive;
   const wasVisited = visitedNodeIds.includes(id);
+  const isShieldTarget = shieldGlowTypes.includes('condition');
   const traceResult = wasVisited ? visitedConditionResults[id] : undefined; // true=YES, false=NO, undefined=not visited
   const W = 180, H = 80;
 
@@ -56,12 +57,14 @@ export default function ConditionNode({
         <polygon
           points={`${W / 2},2 ${W - 2},${H / 2} ${W / 2},${H - 2} 2,${H / 2}`}
           fill={active ? '#fbbf24' : wasVisited ? '#d97706' : '#d97706'}
-          stroke={active ? '#fff' : wasVisited ? 'rgba(74,222,128,0.8)' : '#92400e'}
-          strokeWidth={2}
+          stroke={active ? '#fff' : isShieldTarget ? '#fb923c' : wasVisited ? 'rgba(74,222,128,0.8)' : '#92400e'}
+          strokeWidth={isShieldTarget ? 3 : 2}
           style={{
             filter: active
               ? 'drop-shadow(0 0 12px rgba(251,191,36,0.8))'
+              : isShieldTarget ? undefined
               : wasVisited ? 'drop-shadow(0 0 8px rgba(74,222,128,0.5))' : 'drop-shadow(0 3px 6px rgba(0,0,0,0.5))',
+            animation: isShieldTarget ? 'shieldPulseSvg 1.4s ease-in-out infinite' : undefined,
           }}
         />
       </svg>

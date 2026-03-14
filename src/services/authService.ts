@@ -125,7 +125,7 @@ export async function savePlayerProgress(uid: string, levelId: string, won: bool
   const levelNumber = parseInt(levelId.replace('level_', '')) || 1;
   const prevStats = data.stats ?? { totalKills: 0, totalDefeats: 0, levelReached: 1, totalPlayTime: 0 };
   const newStats = {
-    totalKills:   (prevStats.totalKills   ?? 0) + (won ? 1 : 0),
+    totalKills: (prevStats.totalKills ?? 0) + (won ? 1 : 0),
     totalDefeats: (prevStats.totalDefeats ?? 0) + (won ? 0 : 1),
     levelReached: Math.max(prevStats.levelReached ?? 1, levelNumber + (won ? 1 : 0)),
     totalPlayTime: prevStats.totalPlayTime ?? 0,
@@ -160,9 +160,25 @@ export async function saveCharacterProgress(uid: string, character: Character): 
   }, { merge: true });
 }
 
-export async function saveShopData(uid: string, gold: number, purchasedEquipment: string[]): Promise<void> {
+export async function saveEndlessProgress(uid: string, score: number, wave: number): Promise<{ highScore: number; highWave: number }> {
   const ref = doc(db, 'users', uid);
-  await setDoc(ref, { gold, purchasedEquipment }, { merge: true });
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? (snap.data() as Partial<Player>) : {};
+  const prevScore = data.endlessHighScore ?? 0;
+  const prevWave  = data.endlessHighWave  ?? 0;
+  const highScore = Math.max(prevScore, score);
+  const highWave  = Math.max(prevWave,  wave);
+  if (highScore > prevScore || highWave > prevWave) {
+    await setDoc(ref, { endlessHighScore: highScore, endlessHighWave: highWave }, { merge: true });
+  }
+  return { highScore, highWave };
+}
+
+export async function saveShopData(uid: string, gold: number, purchasedEquipment: string[], lastRestockTime?: number): Promise<void> {
+  const ref = doc(db, 'users', uid);
+  const payload: Record<string, unknown> = { gold, purchasedEquipment };
+  if (lastRestockTime !== undefined) payload.lastRestockTime = lastRestockTime;
+  await setDoc(ref, payload, { merge: true });
 }
 
 export async function saveLeaderboardEntry(
@@ -179,7 +195,7 @@ export async function saveLeaderboardEntry(
     if (snap.exists()) {
       prevDealt = snap.data().totalDamageDealt ?? 0;
       prevTaken = snap.data().totalDamageTaken ?? 0;
-      prevTime  = snap.data().totalPlayTime    ?? 0;
+      prevTime = snap.data().totalPlayTime ?? 0;
     }
   } catch { /* ถ้าอ่านไม่ได้ให้ใช้ 0 */ }
 
@@ -193,9 +209,9 @@ export async function saveLeaderboardEntry(
     levelReached: player.stats?.levelReached ?? 1,
     levelsCompleted: (player.levelsCompleted ?? []).length,
     totalKills: player.stats?.totalKills ?? 0,
-    totalPlayTime:    prevTime  + (battleStats?.timeMs        ?? 0),
-    totalDamageDealt: prevDealt + (battleStats?.damageDealt   ?? 0),
-    totalDamageTaken: prevTaken + (battleStats?.damageTaken   ?? 0),
+    totalPlayTime: prevTime + (battleStats?.timeMs ?? 0),
+    totalDamageDealt: prevDealt + (battleStats?.damageDealt ?? 0),
+    totalDamageTaken: prevTaken + (battleStats?.damageTaken ?? 0),
     gameMode: 'normal',
     lastUpdated: Date.now(),
   });
@@ -216,42 +232,92 @@ export async function saveLevelLeaderboardEntry(
     if (snap.exists()) {
       const prev = snap.data();
       // เก็บ damageTaken น้อยสุด, damageDealt มากสุด, timeMs น้อยสุด, heroHPPercent มากสุด
-      const newTaken   = Math.min(stats.damageTaken, prev.damageTaken ?? Infinity);
-      const newDealt   = Math.max(stats.damageDealt, prev.damageDealt ?? 0);
-      const newTime    = Math.min(stats.timeMs,      prev.timeMs      ?? Infinity);
-      const newHPPct   = Math.max(
+      const newTaken = Math.min(stats.damageTaken, prev.damageTaken ?? Infinity);
+      const newDealt = Math.max(stats.damageDealt, prev.damageDealt ?? 0);
+      const newTime = Math.min(stats.timeMs, prev.timeMs ?? Infinity);
+      const newHPPct = Math.max(
         Math.round((stats.heroHPRemaining / stats.heroMaxHP) * 100),
         prev.heroHPPercent ?? 0,
       );
       await setDoc(ref, {
         ...prev,
-        playerName:      player.username ?? player.email ?? prev.playerName ?? 'Unknown',
-        characterName:   character.name ?? prev.characterName ?? 'Unknown',
-        damageTaken:     newTaken,
-        damageDealt:     newDealt,
-        timeMs:          newTime,
+        playerName: player.username ?? player.email ?? prev.playerName ?? 'Unknown',
+        characterName: character.name ?? prev.characterName ?? 'Unknown',
+        damageTaken: newTaken,
+        damageDealt: newDealt,
+        timeMs: newTime,
         heroHPRemaining: stats.heroHPRemaining,
-        heroHPPercent:   newHPPct,
-        characterLevel:  character.level,
-        timestamp:       Date.now(),
+        heroHPPercent: newHPPct,
+        characterLevel: character.level,
+        timestamp: Date.now(),
       });
       return;
     }
   } catch { /* ถ้าอ่านไม่ได้ให้ overwrite */ }
 
   await setDoc(ref, {
-    playerId:       player.id,
-    playerName:     player.username ?? player.email ?? 'Unknown',
-    characterName:  character.name ?? 'Unknown',
+    playerId: player.id,
+    playerName: player.username ?? player.email ?? 'Unknown',
+    characterName: character.name ?? 'Unknown',
     characterClass: character.class,
     characterLevel: character.level,
-    levelId:        stats.levelId,
-    levelNumber:    stats.levelNumber,
-    damageDealt:    stats.damageDealt,
-    damageTaken:    stats.damageTaken,
-    timeMs:         stats.timeMs,
+    levelId: stats.levelId,
+    levelNumber: stats.levelNumber,
+    damageDealt: stats.damageDealt,
+    damageTaken: stats.damageTaken,
+    timeMs: stats.timeMs,
     heroHPRemaining: stats.heroHPRemaining,
-    heroHPPercent:  Math.round((stats.heroHPRemaining / stats.heroMaxHP) * 100),
-    timestamp:      Date.now(),
+    heroHPPercent: Math.round((stats.heroHPRemaining / stats.heroMaxHP) * 100),
+    timestamp: Date.now(),
+  });
+}
+
+// ===== Endless Mode Leaderboard =====
+export interface EndlessBattleStats {
+  score: number;
+  wavesCleared: number;
+  damageDealt: number;
+  damageTaken: number;
+}
+
+export async function saveEndlessLeaderboardEntry(
+  player: Player,
+  character: Character,
+  stats: EndlessBattleStats,
+): Promise<void> {
+  const ref = doc(db, 'endlessboards', player.id);
+
+  // อ่านค่าเดิม — เก็บ best score, best wave, สะสม damage
+  try {
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const prev = snap.data();
+      await setDoc(ref, {
+        playerId: player.id,
+        playerName: player.username ?? player.email ?? prev.playerName ?? 'Unknown',
+        characterName: character.name ?? prev.characterName ?? 'Unknown',
+        characterClass: character.class,
+        characterLevel: character.level,
+        score: Math.max(stats.score, prev.score ?? 0),
+        wavesCleared: Math.max(stats.wavesCleared, prev.wavesCleared ?? 0),
+        totalDamageDealt: (prev.totalDamageDealt ?? 0) + stats.damageDealt,
+        totalDamageTaken: (prev.totalDamageTaken ?? 0) + stats.damageTaken,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+  } catch { /* ถ้าอ่านไม่ได้ให้ overwrite */ }
+
+  await setDoc(ref, {
+    playerId: player.id,
+    playerName: player.username ?? player.email ?? 'Unknown',
+    characterName: character.name ?? 'Unknown',
+    characterClass: character.class,
+    characterLevel: character.level,
+    score: stats.score,
+    wavesCleared: stats.wavesCleared,
+    totalDamageDealt: stats.damageDealt,
+    totalDamageTaken: stats.damageTaken,
+    timestamp: Date.now(),
   });
 }

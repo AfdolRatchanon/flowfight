@@ -371,8 +371,8 @@ function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: Characte
     if (ok) {
       showFlash(`ซื้อ ${item.name} สำเร็จ!`, true);
       if (player) {
-        const { gold, purchasedEquipment } = useShopStore.getState();
-        saveShopData(player.id, gold, purchasedEquipment).catch(() => {});
+        const { gold, purchasedEquipment, lastRestockTime } = useShopStore.getState();
+        saveShopData(player.id, gold, purchasedEquipment, lastRestockTime).catch(() => {});
       }
     } else {
       showFlash(`เงินไม่พอ! ต้องการ ${item.cost}g (มี ${shopStore.gold}g)`, false);

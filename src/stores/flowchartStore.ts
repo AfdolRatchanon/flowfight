@@ -12,6 +12,9 @@ interface FlowchartState {
   visitedNodeIds: string[];
   visitedConditionResults: Record<string, boolean>; // nodeId → YES(true)/NO(false)
 
+  shieldGlowTypes: string[]; // action/condition types that need to be added to break shield
+  setShieldGlowTypes: (types: string[]) => void;
+
   setNodes: (nodes: FlowNode[]) => void;
   setEdges: (edges: FlowEdge[]) => void;
   addNode: (node: FlowNode) => void;
@@ -56,7 +59,9 @@ export const useFlowchartStore = create<FlowchartState>((set, get) => ({
   validationError: null,
   visitedNodeIds: [],
   visitedConditionResults: {},
+  shieldGlowTypes: [],
 
+  setShieldGlowTypes: (types) => set({ shieldGlowTypes: types }),
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 

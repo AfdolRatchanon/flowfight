@@ -6,8 +6,9 @@ import {
 import { db } from '../../services/firebaseService';
 import { useGameStore } from '../../stores/gameStore';
 import { useTheme } from '../../contexts/ThemeContext';
-import type { LeaderboardEntry, LevelLeaderboardEntry } from '../../types/game.types';
+import type { LeaderboardEntry, LevelLeaderboardEntry, EndlessLeaderboardEntry } from '../../types/game.types';
 import { LEVELS } from '../../utils/constants';
+import { useFlowchartStore } from '../../stores/flowchartStore';
 
 // ===== Types =====
 type OverallSort =
@@ -23,8 +24,14 @@ type LevelSort =
   | 'timeMs'         // เวลาน้อยสุด
   | 'heroHPPercent'; // HP เหลือมากสุด
 
+type EndlessSort =
+  | 'score'            // คะแนนมากสุด
+  | 'wavesCleared'     // wave มากสุด
+  | 'totalDamageDealt' // ดาเมจรวมมากสุด
+  | 'totalDamageTaken'; // โดนดาเมจน้อยสุด
+
 // ===== Helpers =====
-const RANK_BG     = ['rgba(255,215,0,0.10)', 'rgba(192,192,192,0.07)', 'rgba(205,127,50,0.07)'];
+const RANK_BG = ['rgba(255,215,0,0.10)', 'rgba(192,192,192,0.07)', 'rgba(205,127,50,0.07)'];
 const RANK_BORDER = ['rgba(255,215,0,0.30)', 'rgba(192,192,192,0.22)', 'rgba(205,127,50,0.22)'];
 
 function fmtTime(ms: number) {
@@ -58,18 +65,25 @@ function CharAvatar({ cls }: { cls: string }) {
 
 // ===== Sort config =====
 const OVERALL_SORTS: { key: OverallSort; label: string; icon: string; asc: boolean }[] = [
-  { key: 'levelsCompleted',  label: 'ด่านที่ผ่าน',       icon: '🗺️', asc: false },
-  { key: 'experience',       label: 'XP สะสม',           icon: '✨', asc: false },
-  { key: 'totalDamageDealt', label: 'ดาเมจรวมมากสุด',   icon: '⚔️', asc: false },
-  { key: 'totalDamageTaken', label: 'โดนดาเมจน้อยสุด',  icon: '🛡️', asc: true  },
-  { key: 'totalPlayTime',    label: 'เวลาน้อยสุด',       icon: '⏱️', asc: true  },
+  { key: 'levelsCompleted', label: 'ด่านที่ผ่าน', icon: '🗺️', asc: false },
+  { key: 'experience', label: 'XP สะสม', icon: '✨', asc: false },
+  { key: 'totalDamageDealt', label: 'ดาเมจรวมมากสุด', icon: '⚔️', asc: false },
+  { key: 'totalDamageTaken', label: 'โดนดาเมจน้อยสุด', icon: '🛡️', asc: true },
+  { key: 'totalPlayTime', label: 'เวลาน้อยสุด', icon: '⏱️', asc: true },
 ];
 
 const LEVEL_SORTS: { key: LevelSort; label: string; icon: string; asc: boolean }[] = [
-  { key: 'damageDealt',   label: 'ดาเมจมากสุด',    icon: '⚔️', asc: false },
-  { key: 'damageTaken',   label: 'โดนดาเมจน้อยสุด', icon: '🛡️', asc: true  },
-  { key: 'timeMs',        label: 'เวลาน้อยสุด',     icon: '⏱️', asc: true  },
-  { key: 'heroHPPercent', label: 'HP เหลือมากสุด',  icon: '💚', asc: false },
+  { key: 'damageDealt', label: 'ดาเมจมากสุด', icon: '⚔️', asc: false },
+  { key: 'damageTaken', label: 'โดนดาเมจน้อยสุด', icon: '🛡️', asc: true },
+  { key: 'timeMs', label: 'เวลาน้อยสุด', icon: '⏱️', asc: true },
+  { key: 'heroHPPercent', label: 'HP เหลือมากสุด', icon: '💚', asc: false },
+];
+
+const ENDLESS_SORTS: { key: EndlessSort; label: string; icon: string; asc: boolean }[] = [
+  { key: 'score', label: 'คะแนนสูงสุด', icon: '🏆', asc: false },
+  { key: 'wavesCleared', label: 'Wave มากสุด', icon: '🌊', asc: false },
+  { key: 'totalDamageDealt', label: 'ดาเมจรวมมากสุด', icon: '⚔️', asc: false },
+  { key: 'totalDamageTaken', label: 'โดนดาเมจน้อยสุด', icon: '🛡️', asc: true },
 ];
 
 // ===== Main Component =====
@@ -78,21 +92,27 @@ export default function Leaderboard() {
   const { player } = useGameStore();
   const { colors } = useTheme();
 
-  // Tab: 'overall' | 'level'
-  const [tab, setTab] = useState<'overall' | 'level'>('overall');
+  // Tab: 'overall' | 'level' | 'endless'
+  const [tab, setTab] = useState<'overall' | 'level' | 'endless'>('overall');
 
   // Overall state
   const [overallEntries, setOverallEntries] = useState<LeaderboardEntry[]>([]);
-  const [overallSort, setOverallSort]       = useState<OverallSort>('levelsCompleted');
+  const [overallSort, setOverallSort] = useState<OverallSort>('levelsCompleted');
   const [overallLoading, setOverallLoading] = useState(true);
-  const [overallError, setOverallError]     = useState('');
+  const [overallError, setOverallError] = useState('');
 
   // Per-level state
-  const [selectedLevel, setSelectedLevel]   = useState(LEVELS[0].id);
-  const [levelEntries, setLevelEntries]     = useState<LevelLeaderboardEntry[]>([]);
-  const [levelSort, setLevelSort]           = useState<LevelSort>('damageDealt');
-  const [levelLoading, setLevelLoading]     = useState(false);
-  const [levelError, setLevelError]         = useState('');
+  const [selectedLevel, setSelectedLevel] = useState(LEVELS[0].id);
+  const [levelEntries, setLevelEntries] = useState<LevelLeaderboardEntry[]>([]);
+  const [levelSort, setLevelSort] = useState<LevelSort>('damageDealt');
+  const [levelLoading, setLevelLoading] = useState(false);
+  const [levelError, setLevelError] = useState('');
+
+  // Endless state
+  const [endlessEntries, setEndlessEntries] = useState<EndlessLeaderboardEntry[]>([]);
+  const [endlessSort, setEndlessSort] = useState<EndlessSort>('score');
+  const [endlessLoading, setEndlessLoading] = useState(false);
+  const [endlessError, setEndlessError] = useState('');
 
   // ===== Load overall =====
   useEffect(() => {
@@ -141,6 +161,27 @@ export default function Leaderboard() {
     load();
   }, [tab, selectedLevel]);
 
+  // ===== Load endless =====
+  useEffect(() => {
+    if (tab !== 'endless') return;
+    async function load() {
+      setEndlessLoading(true);
+      setEndlessError('');
+      try {
+        const q = query(collection(db, 'endlessboards'), limit(200));
+        const snap = await getDocs(q);
+        const rows = snap.docs.map((d) => ({ rank: 0, ...d.data() } as EndlessLeaderboardEntry));
+        setEndlessEntries(rows);
+      } catch {
+        setEndlessError('โหลดข้อมูลไม่ได้');
+        setEndlessEntries([]);
+      } finally {
+        setEndlessLoading(false);
+      }
+    }
+    load();
+  }, [tab]);
+
   // ===== Sort overall client-side =====
   const sortedOverall = useMemo(() => {
     const cfg = OVERALL_SORTS.find((s) => s.key === overallSort)!;
@@ -164,8 +205,21 @@ export default function Leaderboard() {
   }, [levelEntries, levelSort]);
 
   const myOverall = sortedOverall.find((e) => e.playerId === player?.id);
-  const myLevel   = sortedLevel.find((e)   => e.playerId === player?.id);
-  const selLevel  = LEVELS.find((l) => l.id === selectedLevel);
+  const myLevel = sortedLevel.find((e) => e.playerId === player?.id);
+  const selLevel = LEVELS.find((l) => l.id === selectedLevel);
+
+  // ===== Sort endless client-side =====
+  const sortedEndless = useMemo(() => {
+    const cfg = ENDLESS_SORTS.find((s) => s.key === endlessSort)!;
+    const sorted = [...endlessEntries].sort((a, b) => {
+      const av = (a as any)[cfg.key] ?? 0;
+      const bv = (b as any)[cfg.key] ?? 0;
+      return cfg.asc ? av - bv : bv - av;
+    });
+    return sorted.map((e, i) => ({ ...e, rank: i + 1 }));
+  }, [endlessEntries, endlessSort]);
+
+  const myEndless = sortedEndless.find((e) => e.playerId === player?.id);
 
   return (
     <div className="page-outer">
@@ -188,7 +242,7 @@ export default function Leaderboard() {
 
         {/* ===== Tabs ===== */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {(['overall', 'level'] as const).map((t) => (
+          {(['overall', 'level', 'endless'] as const).map((t) => (
             <button key={t} onClick={() => setTab(t)} style={{
               flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
               fontWeight: 700, fontSize: 13,
@@ -197,7 +251,7 @@ export default function Leaderboard() {
                 : colors.bgSurface,
               color: tab === t ? '#ffffff' : colors.textSub,
             }}>
-              {t === 'overall' ? '🌐 ภาพรวมทุกด่าน' : '🗺️ แต่ละด่าน'}
+              {t === 'overall' ? '🌐 ภาพรวม' : t === 'level' ? '🗺️ แต่ละด่าน' : '∞ Endless'}
             </button>
           ))}
         </div>
@@ -244,8 +298,8 @@ export default function Leaderboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {sortedOverall.slice(0, 50).map((entry) => {
                     const isTop3 = entry.rank <= 3;
-                    const isMe   = entry.playerId === player?.id;
-                    const cfg    = OVERALL_SORTS.find((s) => s.key === overallSort)!;
+                    const isMe = entry.playerId === player?.id;
+                    const cfg = OVERALL_SORTS.find((s) => s.key === overallSort)!;
                     return (
                       <OverallRow
                         key={entry.playerId}
@@ -342,13 +396,97 @@ export default function Leaderboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {sortedLevel.slice(0, 50).map((entry) => {
                     const isTop3 = entry.rank <= 3;
-                    const isMe   = entry.playerId === player?.id;
+                    const isMe = entry.playerId === player?.id;
                     return (
                       <LevelRow
                         key={entry.playerId}
                         entry={entry}
                         isTop3={isTop3} isMe={isMe}
                         sortKey={levelSort}
+                      />
+                    );
+                  })}
+                </div>
+              )
+            }
+          </>
+        )}
+
+        {/* ============================= ENDLESS TAB ============================= */}
+        {tab === 'endless' && (
+          <>
+            {/* Endless header */}
+            <div style={{
+              background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)',
+              borderRadius: 10, padding: '8px 14px', marginBottom: 12,
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <span style={{
+                background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#e0d7ff',
+                fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
+              }}>∞ ENDLESS</span>
+              <span style={{ color: colors.text, fontWeight: 700, fontSize: 13 }}>Survival Mode</span>
+              <span style={{ color: colors.textMuted, fontSize: 11 }}>อยู่รอดให้นานที่สุด!</span>
+            </div>
+
+            {/* Sort chips */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              {ENDLESS_SORTS.map((s) => (
+                <button key={s.key} onClick={() => setEndlessSort(s.key)} style={{
+                  padding: '5px 11px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: 700,
+                  background: endlessSort === s.key
+                    ? 'rgba(233,69,96,0.25)'
+                    : colors.bgSurface,
+                  color: endlessSort === s.key ? '#f87171' : colors.textSub,
+                  outline: endlessSort === s.key ? '1px solid rgba(233,69,96,0.5)' : 'none',
+                }}>
+                  {s.icon} {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* My rank banner */}
+            {myEndless && (
+              <div style={{
+                background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.35)',
+                borderRadius: 12, padding: '10px 16px', marginBottom: 14,
+                display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              }}>
+                <span style={{ color: '#a78bfa', fontSize: 11, fontWeight: 700 }}>YOUR RANK</span>
+                <span style={{ color: colors.text, fontWeight: 900, fontSize: 20 }}>#{myEndless.rank}</span>
+                <span style={{ color: colors.textMuted, fontSize: 12 }}>·</span>
+                <span style={{ color: colors.textSub, fontSize: 12 }}>
+                  🏆 {myEndless.score.toLocaleString()} pts · 🌊 Wave {myEndless.wavesCleared}
+                </span>
+              </div>
+            )}
+
+            {/* List */}
+            {endlessLoading ? <LoadingState /> : endlessError ? <ErrorState msg={endlessError} /> :
+              sortedEndless.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>∞</div>
+                  <p style={{ color: colors.textSub, fontSize: 14 }}>
+                    ยังไม่มีใครเล่น Endless Mode!
+                  </p>
+                  <button onClick={() => { useFlowchartStore.getState().clearToStartEnd(); navigate('/battle/level_endless'); }} style={{
+                    marginTop: 16, padding: '10px 24px', borderRadius: 12, border: 'none',
+                    background: 'linear-gradient(135deg,#7c3aed,#4f46e5)',
+                    color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 13,
+                  }}>เล่น Endless Mode →</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {sortedEndless.slice(0, 50).map((entry) => {
+                    const isTop3 = entry.rank <= 3;
+                    const isMe = entry.playerId === player?.id;
+                    return (
+                      <EndlessRow
+                        key={entry.playerId}
+                        entry={entry}
+                        isTop3={isTop3} isMe={isMe}
+                        sortKey={endlessSort}
                       />
                     );
                   })}
@@ -370,7 +508,7 @@ function OverallRow({
   entry: LeaderboardEntry; isTop3: boolean; isMe: boolean; sortKey: OverallSort; sortCfg: (typeof OVERALL_SORTS)[0];
 }) {
   const { colors } = useTheme();
-  const bg     = isTop3 ? RANK_BG[entry.rank - 1]     : isMe ? 'rgba(124,58,237,0.08)' : colors.bgSurface;
+  const bg = isTop3 ? RANK_BG[entry.rank - 1] : isMe ? 'rgba(124,58,237,0.08)' : colors.bgSurface;
   const border = isTop3 ? `1px solid ${RANK_BORDER[entry.rank - 1]}` : isMe ? '1px solid rgba(124,58,237,0.3)' : `1px solid ${colors.borderSubtle}`;
 
   return (
@@ -430,7 +568,7 @@ function LevelRow({
   entry: LevelLeaderboardEntry; isTop3: boolean; isMe: boolean; sortKey: LevelSort;
 }) {
   const { colors } = useTheme();
-  const bg     = isTop3 ? RANK_BG[entry.rank - 1]     : isMe ? 'rgba(124,58,237,0.08)' : colors.bgSurface;
+  const bg = isTop3 ? RANK_BG[entry.rank - 1] : isMe ? 'rgba(124,58,237,0.08)' : colors.bgSurface;
   const border = isTop3 ? `1px solid ${RANK_BORDER[entry.rank - 1]}` : isMe ? '1px solid rgba(124,58,237,0.3)' : `1px solid ${colors.borderSubtle}`;
 
   return (
@@ -489,6 +627,62 @@ function LevelStatChips({ entry, exclude }: { entry: LevelLeaderboardEntry; excl
       )}
     </div>
   );
+}
+
+// ===== Endless row =====
+function EndlessRow({
+  entry, isTop3, isMe, sortKey,
+}: {
+  entry: EndlessLeaderboardEntry; isTop3: boolean; isMe: boolean; sortKey: EndlessSort;
+}) {
+  const { colors } = useTheme();
+  const bg = isTop3 ? RANK_BG[entry.rank - 1] : isMe ? 'rgba(124,58,237,0.08)' : colors.bgSurface;
+  const border = isTop3 ? `1px solid ${RANK_BORDER[entry.rank - 1]}` : isMe ? '1px solid rgba(124,58,237,0.3)' : `1px solid ${colors.borderSubtle}`;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: bg, border, borderRadius: 14, padding: '10px 14px' }}>
+      <div style={{ width: 32, textAlign: 'center', flexShrink: 0 }}>
+        <RankBadge rank={entry.rank} />
+      </div>
+      <CharAvatar cls={entry.characterClass} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+          <span style={{ color: colors.text, fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {entry.playerName}
+          </span>
+          {isMe && <span style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>YOU</span>}
+        </div>
+        <span style={{ color: colors.textMuted, fontSize: 10, textTransform: 'capitalize' }}>
+          {entry.characterName} · {entry.characterClass}
+        </span>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+        <PrimaryEndlessStat entry={entry} sortKey={sortKey} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {sortKey !== 'score' && (
+            <span style={{ color: '#c4b5fd', fontSize: 10, fontWeight: 700 }}>🏆 {entry.score.toLocaleString()}</span>
+          )}
+          {sortKey !== 'wavesCleared' && (
+            <span style={{ color: '#7dd3fc', fontSize: 10 }}>🌊 W{entry.wavesCleared}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrimaryEndlessStat({ entry, sortKey }: { entry: EndlessLeaderboardEntry; sortKey: EndlessSort }) {
+  if (sortKey === 'score')
+    return <span style={{ color: '#c4b5fd', fontWeight: 900, fontSize: 14 }}>🏆 {entry.score.toLocaleString()}</span>;
+  if (sortKey === 'wavesCleared')
+    return <span style={{ color: '#7dd3fc', fontWeight: 900, fontSize: 14 }}>🌊 Wave {entry.wavesCleared}</span>;
+  if (sortKey === 'totalDamageDealt')
+    return <span style={{ color: '#f87171', fontWeight: 700, fontSize: 13 }}>⚔️ {(entry.totalDamageDealt ?? 0).toLocaleString()}</span>;
+  if (sortKey === 'totalDamageTaken')
+    return <span style={{ color: '#60a5fa', fontWeight: 700, fontSize: 13 }}>🛡️ {(entry.totalDamageTaken ?? 0).toLocaleString()}</span>;
+  return null;
 }
 
 // ===== Shared UI =====

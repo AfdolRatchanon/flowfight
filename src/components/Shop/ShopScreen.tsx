@@ -124,8 +124,8 @@ export default function ShopScreen({ goldEarned, characterClass, characterLevel 
     if (ok) {
       showFlash(`ซื้อ ${item.name} สำเร็จ!`, true);
       if (player) {
-        const { gold, purchasedEquipment } = useShopStore.getState();
-        saveShopData(player.id, gold, purchasedEquipment).catch(() => {});
+        const { gold, purchasedEquipment, lastRestockTime } = useShopStore.getState();
+        saveShopData(player.id, gold, purchasedEquipment, lastRestockTime).catch(() => {});
       }
     } else {
       showFlash(`เงินไม่พอ! ต้องการ ${item.cost}g (มี ${shop.gold}g)`);

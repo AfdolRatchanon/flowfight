@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Component } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LEVELS, ENDLESS_LEVEL, getEndlessWaveEnemy, PASSIVE_BONUSES } from '../../utils/constants';
 import { useBattle } from '../../hooks/useBattle';
@@ -7,7 +7,7 @@ import { useGameStore } from '../../stores/gameStore';
 import { useFlowchartStore } from '../../stores/flowchartStore';
 import { useShopStore } from '../../stores/shopStore';
 import ShopScreen from '../Shop/ShopScreen';
-import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry, saveShopData } from '../../services/authService';
+import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry, saveShopData, saveEndlessLeaderboardEntry, saveEndlessProgress } from '../../services/authService';
 import type { LevelBattleStats } from '../../services/authService';
 import { gainXP, levelProgressPct, xpToNextLevel, LEVEL_XP_TABLE, MAX_LEVEL } from '../../utils/levelSystem';
 import FlowchartEditor from '../FlowchartEditor/FlowchartEditor';
@@ -15,6 +15,49 @@ import { previewFlowchart, calcFlowchartManaCost, calcTurnManaMax, executeEnemyA
 import type { BattleState, PreviewStep } from '../../engines/FlowchartEngine';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ThemeColors } from '../../contexts/ThemeContext';
+import TutorialGuide from '../Tutorial/TutorialGuide';
+import type { TutorialTarget } from '../Tutorial/TutorialGuide';
+import BagButton from '../UI/BagButton';
+
+// ===== Error Boundary for FlowchartEditor =====
+class FlowchartErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: '' };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error?.message ?? String(error) };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[FlowchartErrorBoundary] Error caught:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          height: '100%', background: '#1a0a0a', color: '#f87171', gap: 12, padding: 20,
+        }}>
+          <span style={{ fontSize: 32 }}>⚠️</span>
+          <p style={{ fontWeight: 800, fontSize: 14, margin: 0 }}>FlowchartEditor Error</p>
+          <p style={{ fontSize: 11, color: '#fca5a5', textAlign: 'center', margin: 0, maxWidth: 400, wordBreak: 'break-word' }}>
+            {this.state.error}
+          </p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: '' })}
+            style={{ background: '#dc2626', border: 'none', color: 'white', padding: '6px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}
+          >
+            ลองอีกครั้ง
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Speed levels: 1=ช้ามาก ... 5=เร็วมาก
 const SPEED_LEVELS = [
@@ -56,6 +99,10 @@ const ANIM_CSS = `
   65%     { transform: translateX(-8px) rotate(-3deg); }
   82%     { transform: translateX(5px) rotate(2deg); }
 }
+@keyframes enemyHeal {
+  0%,100% { transform: scale(1); filter: none; }
+  40%     { transform: scale(1.2); filter: drop-shadow(0 0 22px rgba(74,222,128,1)) brightness(1.4); }
+}
 @keyframes floatUp {
   0%   { opacity: 1; transform: translateY(0) scale(1.3); }
   60%  { opacity: 1; }
@@ -69,6 +116,10 @@ const ANIM_CSS = `
   0%   { transform: scale(0.3) translateY(40px); opacity: 0; }
   60%  { transform: scale(1.08) translateY(-5px); opacity: 1; }
   100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+@keyframes tutorialGlow {
+  0%,100% { box-shadow: 0 0 0 2px rgba(251,191,36,0.5), 0 0 16px rgba(251,191,36,0.25); }
+  50%     { box-shadow: 0 0 0 3px rgba(251,191,36,0.9), 0 0 28px rgba(251,191,36,0.5); }
 }
 `;
 
@@ -110,32 +161,37 @@ const ENEMY_ICONS: Record<string, string> = {
   fire_elemental: '🔥', lich: '💀', shadow_demon: '👁️', overlord: '💀',
 };
 
-// Map enemy id → image filename (only for enemies that have an image)
-const ENEMY_IMAGE: Record<string, string> = {
-  slime:        'slime.png',
-  goblin:       'goblin.png',
-  goblin_knight:'goblin_knight.png',
-  kobold:       'Kobold.png',
-  orc:          'Orc.png',
-  orc_warlord:  'Orc.png',
-  ghost:        'Haunted.png',
-  troll:        'Troll.png',
-  spider:       'Spider.png',
-  ice_giant:    'Ice.png',
+// Map level.id → image filename (1 ภาพต่อ 1 ด่าน ไม่ซ้ำกัน)
+const LEVEL_IMAGE: Record<string, string> = {
+  level_1:  'slime.png',
+  level_2:  'Bigger Slime.png',
+  level_3:  'Goblin Scout.png',
+  level_4:  'Goblin Heal When Low.png',
+  level_5:  'Spider.png',
+  level_6:  'Kobold.png',
+  level_7:  'Forest Wraith.png',
+  level_8:  'Goblin Knight.png',
+  level_9:  'Orc Warrior.png',
+  level_10: 'Stone Troll.png',
+  level_11: 'Orc.png',
+  level_12: 'Ice Giant.png',
+  level_13: "Dragon's Lair.png",
+  level_14: 'The Lich Lord.png',
+  level_15: 'The Dark Overlord.png',
 };
 
-function EnemySprite({ id }: { id: string }) {
-  const [useImg, setUseImg] = useState(!!ENEMY_IMAGE[id]);
-  const imgFile = ENEMY_IMAGE[id];
+function EnemySprite({ enemyId, levelId }: { enemyId: string; levelId: string }) {
+  const imgFile = LEVEL_IMAGE[levelId];
+  const [useImg, setUseImg] = useState(!!imgFile);
   return useImg && imgFile ? (
     <img
       src={`/enemies/${imgFile}`}
-      alt={id}
-      style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+      alt={enemyId}
+      style={{ width:'100%', height:'100%', objectFit:'contain', objectPosition:'bottom', imageRendering:'pixelated' }}
       onError={() => setUseImg(false)}
     />
   ) : (
-    <span style={{ fontSize: 'var(--enemy-font)', lineHeight: 1 }}>{ENEMY_ICONS[id] ?? '👹'}</span>
+    <span style={{ fontSize: 'var(--enemy-font)', lineHeight: 1 }}>{ENEMY_ICONS[enemyId] ?? '👹'}</span>
   );
 }
 
@@ -143,31 +199,31 @@ function EnemySprite({ id }: { id: string }) {
 function renderPreviewSteps(steps: PreviewStep[], heroMaxHP: number, enemyMaxHP: number, colors: ThemeColors, depth = 0): React.ReactElement[] {
   return steps.map((step, i) => {
     const isAction = step.type === 'action';
-    const isCond   = step.type === 'condition' || step.type === 'loop';
-    const isEdge   = step.type === 'start' || step.type === 'end';
+    const isCond = step.type === 'condition' || step.type === 'loop';
+    const isEdge = step.type === 'start' || step.type === 'end';
 
     const accentColor =
-      isEdge                                  ? '#22c55e'
-      : step.actionType === 'heal'            ? '#4ade80'
-      : step.actionType === 'dodge'           ? '#94a3b8'
-      : step.actionType === 'cast_spell'      ? '#c084fc'
-      : step.actionType === 'power_strike'    ? '#7c3aed'
-      : isAction                              ? '#3b82f6'
-      : isCond                                ? '#d97706'
-      : '#475569';
+      isEdge ? '#22c55e'
+        : step.actionType === 'heal' ? '#4ade80'
+          : step.actionType === 'dodge' ? '#94a3b8'
+            : step.actionType === 'cast_spell' ? '#c084fc'
+              : step.actionType === 'power_strike' ? '#7c3aed'
+                : isAction ? '#3b82f6'
+                  : isCond ? '#d97706'
+                    : '#475569';
 
     const icon =
-      isEdge && step.type === 'start'         ? '▶'
-      : isEdge                                ? '⏹'
-      : step.actionType === 'heal'            ? '💚'
-      : step.actionType === 'dodge'           ? '🌀'
-      : step.actionType === 'cast_spell'      ? '✨'
-      : step.actionType === 'power_strike'    ? '💥'
-      : isAction                              ? '⚔️'
-      : step.type === 'loop'                  ? '◈'
-      : '◇';
+      isEdge && step.type === 'start' ? '▶'
+        : isEdge ? '⏹'
+          : step.actionType === 'heal' ? '💚'
+            : step.actionType === 'dodge' ? '🌀'
+              : step.actionType === 'cast_spell' ? '✨'
+                : step.actionType === 'power_strike' ? '💥'
+                  : isAction ? '⚔️'
+                    : step.type === 'loop' ? '◈'
+                      : '◇';
 
-    const heroHPPct  = Math.max(0, (step.heroHPAfter  / heroMaxHP)  * 100);
+    const heroHPPct = Math.max(0, (step.heroHPAfter / heroMaxHP) * 100);
     const enemyHPPct = Math.max(0, (step.enemyHPAfter / enemyMaxHP) * 100);
 
     const hasBranches =
@@ -279,110 +335,20 @@ interface LevelUpData { oldLevel: number; newLevel: number; hpGain: number; atkG
 function parseLogAction(action: string) {
   const l = action.toLowerCase();
   const enemyDmg = action.match(/enemy -(\d+)/i)?.[1] ?? null;
-  const heroDmg  = action.match(/hero -(\d+)/i)?.[1] ?? null;
-  const healAmt  = action.match(/\+(\d+)/i)?.[1] ?? null;
-  if (l.includes('attacks'))     return { heroAnim: 'heroAttack', enemyAnim: 'enemyHit', enemyDmg, heroDmg, healAmt: null };
-  if (l.includes('heals'))       return { heroAnim: 'heroHeal',   enemyAnim: null,        enemyDmg: null, heroDmg: null, healAmt };
-  if (l.includes('dodges'))      return { heroAnim: 'heroDodge',  enemyAnim: null,        enemyDmg: null, heroDmg: null, healAmt: null };
-  if (l.includes('casts spell')) return { heroAnim: 'heroSpell',  enemyAnim: 'enemyHit',  enemyDmg, heroDmg: null, healAmt: null };
-  if (l.includes('failed'))      return { heroAnim: null,          enemyAnim: 'enemyHit',  enemyDmg: null, heroDmg, healAmt: null };
+  const heroDmg = action.match(/hero -(\d+)/i)?.[1] ?? null;
+  const healAmt = action.match(/\+(\d+)/i)?.[1] ?? null;
+  if (l.includes('attacks')) return { heroAnim: 'heroAttack', enemyAnim: 'enemyHit', enemyDmg, heroDmg, healAmt: null };
+  if (l.includes('enemy heals')) return { heroAnim: null, enemyAnim: 'enemyHeal', enemyDmg: null, heroDmg: null, healAmt };
+  if (l.includes('heals')) return { heroAnim: 'heroHeal', enemyAnim: null, enemyDmg: null, heroDmg: null, healAmt };
+  if (l.includes('dodges')) return { heroAnim: 'heroDodge', enemyAnim: null, enemyDmg: null, heroDmg: null, healAmt: null };
+  if (l.includes('casts spell')) return { heroAnim: 'heroSpell', enemyAnim: 'enemyHit', enemyDmg, heroDmg: null, healAmt: null };
+  if (l.includes('failed')) return { heroAnim: null, enemyAnim: 'enemyHit', enemyDmg: null, heroDmg, healAmt: null };
   return { heroAnim: null, enemyAnim: null, enemyDmg: null, heroDmg: null, healAmt: null };
 }
 
-// ===== Tutorial hints per level =====
-const TUTORIAL_HINTS: Record<string, string[]> = {
-  // Level 1: Sequence
-  level_1: [
-    '1/3 — คลิก "Attack" ในแผง Blocks (ซ้ายมือ) เพื่อเพิ่ม block ลงใน canvas',
-    '2/3 — ลากปลายลูกศรจาก Start ไปยัง Attack แล้วต่อ Attack → End',
-    '3/3 — กด ▶ Play แล้วดูผลการต่อสู้! นี่คือ Sequence — ทำงานตามลำดับจากบนลงล่าง',
-  ],
-  // Level 2: Sequence (longer)
-  level_2: [
-    '1/3 — วาง Attack หลายตัวต่อกัน: Start → Attack → Attack → Attack → End',
-    '2/3 — ยิ่งวาง Attack มาก ยิ่งโจมตีได้มากครั้งต่อรอบ',
-    '3/3 — กด Step เพื่อดูทีละขั้นตอน แล้วสังเกตลำดับการทำงาน',
-  ],
-  // Level 3: While Loop
-  level_3: [
-    '1/4 — วาง "Enemy Alive?" (Condition) แล้วเชื่อม Start → Enemy Alive?',
-    '2/4 — จาก YES → Attack → ลูกศรกลับไปที่ Enemy Alive? (สร้าง loop!)',
-    '3/4 — จาก NO → End (ออกจาก loop เมื่อศัตรูตาย)',
-    '4/4 — นี่คือ While Loop: "ทำซ้ำ ตราบที่ศัตรูยังมีชีวิต"',
-  ],
-  // Level 4: If/Else
-  level_4: [
-    '1/4 — สร้าง While Loop ก่อน: Enemy Alive? → YES: ... → กลับไป, NO: End',
-    '2/4 — ใน YES branch วาง "HP < 50?" แล้วแยก 2 ทาง',
-    '3/4 — YES (HP ต่ำ) → Heal, NO (HP ปกติ) → Attack',
-    '4/4 — นี่คือ If/Else: ตัดสินใจ 2 ทางตามเงื่อนไข',
-  ],
-  // Level 5: Nested If
-  level_5: [
-    '1/4 — วาง While Loop (Enemy Alive?) ก่อน',
-    '2/4 — ใน YES branch: วาง "HP < 30?" → YES: Dodge, NO: ต่อ',
-    '3/4 — ต่อจาก NO: วาง "HP < 60?" → YES: Heal, NO: Attack',
-    '4/4 — Nested If = Condition ซ้อนใน Condition — ตรวจหลายระดับ!',
-  ],
-  // Level 6: Counter Loop
-  level_6: [
-    '1/3 — วาง While Loop (Enemy Alive?) ก่อน',
-    '2/3 — ใน YES branch: วาง "Turn ≥ 4?" → YES: Power Strike, NO: Attack',
-    '3/3 — Turn ≥ N เหมือน for-loop counter — นับรอบ แล้วทำท่าพิเศษเมื่อถึง!',
-  ],
-  // Level 7: Resource Management
-  level_7: [
-    '1/3 — วาง While Loop (Enemy Alive?) ก่อน',
-    '2/3 — ใน YES branch: วาง "MP > 25?" → YES: Cast Spell, NO: Attack',
-    '3/3 — ตรวจ resource ก่อนใช้ — เหมือน if (mana >= cost) useSpell() ใน code!',
-  ],
-};
 
-function TutorialOverlay({ levelId, onClose }: { levelId: string; onClose: () => void }) {
-  const hints = TUTORIAL_HINTS[levelId];
-  const [step, setStep] = useState(0);
-  if (!hints) return null;
-  return (
-    <div style={{
-      position: 'absolute', bottom: 8, left: 8, zIndex: 20,
-      background: 'rgba(15,15,40,0.95)', border: '1px solid rgba(251,191,36,0.4)',
-      borderRadius: 12, padding: '10px 14px', maxWidth: 260,
-      boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ color: '#fbbf24', fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>💡 TUTORIAL</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 12, padding: 0 }}>✕</button>
-      </div>
-      <p style={{ color: '#fde68a', fontSize: 11, margin: '0 0 8px', lineHeight: 1.5 }}>
-        {hints[step]}
-      </p>
-      <div style={{ display: 'flex', gap: 6 }}>
-        {step > 0 && (
-          <button onClick={() => setStep(s => s - 1)} style={{
-            flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-            color: '#cbd5e1', fontSize: 10, padding: '4px 0', borderRadius: 6, cursor: 'pointer',
-          }}>← ก่อนหน้า</button>
-        )}
-        {step < hints.length - 1 ? (
-          <button onClick={() => setStep(s => s + 1)} style={{
-            flex: 1, background: 'linear-gradient(135deg,#d97706,#b45309)',
-            border: 'none', color: 'white', fontSize: 10, padding: '4px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 700,
-          }}>ถัดไป →</button>
-        ) : (
-          <button onClick={onClose} style={{
-            flex: 1, background: 'linear-gradient(135deg,#16a34a,#15803d)',
-            border: 'none', color: 'white', fontSize: 10, padding: '4px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 700,
-          }}>เข้าใจแล้ว ✓</button>
-        )}
-      </div>
-      <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 6 }}>
-        {hints.map((_, i) => (
-          <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i === step ? '#fbbf24' : 'rgba(255,255,255,0.2)' }} />
-        ))}
-      </div>
-    </div>
-  );
-}
+// Stable empty array — avoids new [] reference on every render (prevents infinite loop)
+const EMPTY_REQUIRED_BLOCKS: string[] = [];
 
 // ===== Main Component =====
 export default function BattleScreen() {
@@ -391,11 +357,12 @@ export default function BattleScreen() {
   const navigate = useNavigate();
   const { character, player, setPlayer, setCharacter } = useGameStore();
   const { status, heroHP, heroMaxHP, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, heroBurnRounds, heroFreezeRounds, heroPoisonRounds, enemyStunnedRounds, enemyBurnRounds, enemyFreezeRounds, enemyPoisonRounds, heroBerserkRounds, healCharges, comboCount, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
-  const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold, addGold, purchasedEquipment } = useShopStore();
+  const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold, addGold, purchasedEquipment, lastRestockTime } = useShopStore();
   const { validationError, nodes: flowNodes, clearToStartEnd } = useFlowchartStore();
   const [speedIdx, setSpeedIdx] = useState(1);
   const progressSaved = useRef(false);
   const battleStartTime = useRef<number>(0);
+  const battleReady = useRef(false); // true after startBattle fires; guards stale-status effects
 
   // Turn-based state
   const [currentTurn, setCurrentTurn] = useState(1);
@@ -403,10 +370,6 @@ export default function BattleScreen() {
   const [enemyBehaviorIdx, setEnemyBehaviorIdx] = useState(0);
   // Phase 4: extra action-budget debuff carried over from virus effect
   const [extraManaDebuff, setExtraManaDebuff] = useState(0);
-
-  // Action budget per turn
-  const turnManaMax  = Math.max(1, calcTurnManaMax(currentTurn) - extraManaDebuff);
-  const turnManaUsed = useMemo(() => calcFlowchartManaCost(flowNodes), [flowNodes]);
 
   // Live battle state ref for enemy turn
   const liveBattleStateRef = useRef<BattleState | null>(null);
@@ -420,11 +383,23 @@ export default function BattleScreen() {
   const [waveNumber, setWaveNumber] = useState(1);
   const [endlessScore, setEndlessScore] = useState(0);
   const [showWaveClear, setShowWaveClear] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(true);
+  const [endlessDmgDealt, setEndlessDmgDealt] = useState(0);
+  const [endlessDmgTaken, setEndlessDmgTaken] = useState(0);
+  const [showTutorial, setShowTutorial] = useState(() => {
+    if (!levelId || levelId === 'level_endless') return false;
+    return true;
+  });
+  const [tutorialTarget, setTutorialTarget] = useState<TutorialTarget>(null);
 
-  const level = (isEndless
+  // useMemo prevents new object reference every render (would cause infinite loop via shieldRequiredTypes)
+  const level = useMemo(() => (isEndless
     ? { ...ENDLESS_LEVEL, enemy: getEndlessWaveEnemy(waveNumber) }
-    : LEVELS.find((l) => l.id === levelId)) as (typeof LEVELS)[0] | undefined;
+    : LEVELS.find((l) => l.id === levelId)
+  ) as (typeof LEVELS)[0] | undefined, [isEndless, waveNumber, levelId]);
+
+  // Action budget per turn — scales with turn; base 5 for level ≥ 11
+  const turnManaMax = Math.max(1, calcTurnManaMax(currentTurn, level?.number ?? 1) - extraManaDebuff);
+  const turnManaUsed = useMemo(() => calcFlowchartManaCost(flowNodes), [flowNodes]);
 
   // Enemy intention (needs level to be defined first)
   const enemyIntention = level?.enemy.behaviors?.[enemyBehaviorIdx % (level?.enemy.behaviors?.length ?? 1)] ?? 'attack';
@@ -449,32 +424,22 @@ export default function BattleScreen() {
   const [missingBlocks, setMissingBlocks] = useState<string[]>([]);
   const [showSimPreview, setShowSimPreview] = useState(true);
 
-  // Shield: enemy shielded when required blocks are missing
-  const isEnemyShielded = useMemo(() => {
-    if (!level?.requiredBlocks?.length) return false;
-    return level.requiredBlocks.some((req) => {
-      if (req === 'condition')    return !flowNodes.some((n) => n.type === 'condition');
-      if (req === 'heal')         return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
-      if (req === 'dodge')        return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
-      if (req === 'cast_spell')   return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
-      if (req === 'power_strike') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'power_strike');
-      return false;
+  // Shield: compute all missing required block types
+  const SHIELD_ICONS: Record<string, string> = { condition: '◇', heal: '💚', dodge: '🌀', cast_spell: '✨', power_strike: '💥' };
+  const SHIELD_LABELS: Record<string, string> = { condition: 'Condition', heal: 'Heal', dodge: 'Dodge', cast_spell: 'Cast Spell', power_strike: 'Power Strike' };
+
+  const missingRequiredTypes = useMemo(() => {
+    if (!level?.requiredBlocks?.length) return EMPTY_REQUIRED_BLOCKS;
+    return level.requiredBlocks.filter((req) => {
+      if (req === 'condition') return !flowNodes.some((n) => n.type === 'condition');
+      return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === req);
     });
   }, [level, flowNodes]);
 
-  const shieldMissing = useMemo(() => {
-    if (!level?.requiredBlocks?.length) return '';
-    const labels: Record<string, string> = { condition: 'Condition', heal: 'Heal', dodge: 'Dodge', cast_spell: 'Cast Spell', power_strike: 'Power Strike' };
-    const first = level.requiredBlocks.find((req) => {
-      if (req === 'condition')    return !flowNodes.some((n) => n.type === 'condition');
-      if (req === 'heal')         return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
-      if (req === 'dodge')        return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
-      if (req === 'cast_spell')   return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
-      if (req === 'power_strike') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'power_strike');
-      return false;
-    });
-    return first ? `ต้องใช้ ${labels[first]} block` : '';
-  }, [level, flowNodes]);
+  const isEnemyShielded = missingRequiredTypes.length > 0;
+  const shieldMissing = missingRequiredTypes.length > 0
+    ? `ต้องใช้ ${missingRequiredTypes.map((r) => SHIELD_LABELS[r] ?? r).join(' + ')} block`
+    : '';
 
   // Preview: compute expected HP changes from current flowchart
   const previewState = useMemo<BattleState>(() => ({
@@ -482,34 +447,34 @@ export default function BattleScreen() {
     heroMaxHP,
     enemyHP: level?.enemy.stats.maxHP ?? 100,
     enemyMaxHP: level?.enemy.stats.maxHP ?? 100,
-    heroAttack:  character?.stats.attack  ?? 12,
+    heroAttack: character?.stats.attack ?? 12,
     heroDefense: character?.stats.defense ?? 8,
     heroParry: 10,
-    enemyAttack:      level?.enemy.stats.attack  ?? 8,
-    enemyBaseAttack:  level?.enemy.stats.attack  ?? 8,
-    enemyDefense:     level?.enemy.stats.defense ?? 3,
-    enemyArmor:       (level?.enemy.stats as any)?.armor ?? 0,
-    enemyParry:       (level?.enemy.stats as any)?.parry ?? 0,
-    enemyShielded:    isEnemyShielded,
-    shieldReason:     shieldMissing,
-    enemyEnraged:     false,
-    enrageThreshold:  (level?.enemy.stats as any)?.enrageThreshold ?? 0,
-    healCharges:      3,
+    enemyAttack: level?.enemy.stats.attack ?? 8,
+    enemyBaseAttack: level?.enemy.stats.attack ?? 8,
+    enemyDefense: level?.enemy.stats.defense ?? 3,
+    enemyArmor: (level?.enemy.stats as any)?.armor ?? 0,
+    enemyParry: (level?.enemy.stats as any)?.parry ?? 0,
+    enemyShielded: isEnemyShielded,
+    shieldReason: shieldMissing,
+    enemyEnraged: false,
+    enrageThreshold: (level?.enemy.stats as any)?.enrageThreshold ?? 0,
+    healCharges: 3,
     powerStrikeCooldown: 0,
-    lastActionType:   '',
-    comboCount:       0,
-    heroBurnRounds:   0,
+    lastActionType: '',
+    comboCount: 0,
+    heroBurnRounds: 0,
     heroFreezeRounds: 0,
     heroPoisonRounds: 0,
     enemyStunnedRounds: 0,
     enemyBurnRounds: 0,
     enemyFreezeRounds: 0,
     enemyPoisonRounds: 0,
-    enemyAilmentType:   (level?.enemy.stats as any)?.ailmentType  ?? '',
+    enemyAilmentType: (level?.enemy.stats as any)?.ailmentType ?? '',
     enemyAilmentChance: (level?.enemy.stats as any)?.ailmentChance ?? 0,
     antidotes: shopAntidotes,
-    potions:   shopPotions,
-    gold:      shopGold,
+    potions: shopPotions,
+    gold: shopGold,
     round: 1,
     currentTurn: 1,
     turnManaMax: 3,
@@ -544,9 +509,9 @@ export default function BattleScreen() {
   const passiveBonusSummary = (() => {
     const passives = PASSIVE_BONUSES.filter(p => p.class === heroChar.class && p.requiredLevel <= heroChar.level);
     return passives.reduce((acc, p) => ({
-      atkBonus:   acc.atkBonus   + p.atkBonus,
-      defBonus:   acc.defBonus   + p.defBonus,
-      hpBonus:    acc.hpBonus    + p.hpBonus,
+      atkBonus: acc.atkBonus + p.atkBonus,
+      defBonus: acc.defBonus + p.defBonus,
+      hpBonus: acc.hpBonus + p.hpBonus,
       speedBonus: acc.speedBonus + p.speedBonus,
     }), { atkBonus: 0, defBonus: 0, hpBonus: 0, speedBonus: 0 });
   })();
@@ -554,9 +519,9 @@ export default function BattleScreen() {
   const getBoostedChar = () => {
     const passives = PASSIVE_BONUSES.filter(p => p.class === heroChar.class && p.requiredLevel <= heroChar.level);
     const totalPassive = passives.reduce((acc, p) => ({
-      atkBonus:   acc.atkBonus   + p.atkBonus,
-      defBonus:   acc.defBonus   + p.defBonus,
-      hpBonus:    acc.hpBonus    + p.hpBonus,
+      atkBonus: acc.atkBonus + p.atkBonus,
+      defBonus: acc.defBonus + p.defBonus,
+      hpBonus: acc.hpBonus + p.hpBonus,
       speedBonus: acc.speedBonus + p.speedBonus,
     }), { atkBonus: 0, defBonus: 0, hpBonus: 0, speedBonus: 0 });
 
@@ -564,17 +529,18 @@ export default function BattleScreen() {
       ...heroChar,
       stats: {
         ...heroChar.stats,
-        attack:    heroChar.stats.attack    + totalPassive.atkBonus,
-        defense:   heroChar.stats.defense   + totalPassive.defBonus,
-        maxHP:     heroChar.stats.maxHP     + totalPassive.hpBonus,
-        currentHP: heroChar.stats.maxHP     + totalPassive.hpBonus,
-        speed:     heroChar.stats.speed     + totalPassive.speedBonus,
+        attack: heroChar.stats.attack + totalPassive.atkBonus,
+        defense: heroChar.stats.defense + totalPassive.defBonus,
+        maxHP: heroChar.stats.maxHP + totalPassive.hpBonus,
+        currentHP: heroChar.stats.maxHP + totalPassive.hpBonus,
+        speed: heroChar.stats.speed + totalPassive.speedBonus,
       },
     };
   };
 
   // Init battle on level change
   useEffect(() => {
+    battleReady.current = false;
     if (level) {
       progressSaved.current = false;
       setLevelUpData(null);
@@ -585,6 +551,7 @@ export default function BattleScreen() {
       setEnemyBehaviorIdx(0);
       liveBattleStateRef.current = null;
       startBattle(getBoostedChar() as any, level.enemy as any, level.id);
+      battleReady.current = true;
     }
   }, [levelId]);
 
@@ -599,8 +566,8 @@ export default function BattleScreen() {
 
     const newFloats: FloatNum[] = [];
     if (enemyDmg) newFloats.push({ id: ++floatId.current, text: `-${enemyDmg}`, color: '#f87171', side: 'enemy' });
-    if (heroDmg)  newFloats.push({ id: ++floatId.current, text: `-${heroDmg}`,  color: '#fda4af', side: 'hero'  });
-    if (healAmt)  newFloats.push({ id: ++floatId.current, text: `+${healAmt}`,  color: '#4ade80', side: 'hero'  });
+    if (heroDmg) newFloats.push({ id: ++floatId.current, text: `-${heroDmg}`, color: '#fda4af', side: 'hero' });
+    if (healAmt) newFloats.push({ id: ++floatId.current, text: `+${healAmt}`, color: '#4ade80', side: ea === 'enemyHeal' ? 'enemy' : 'hero' });
     if (newFloats.length > 0) {
       setFloats(p => [...p, ...newFloats]);
       const ids = newFloats.map(f => f.id);
@@ -644,13 +611,13 @@ export default function BattleScreen() {
           useFlowchartStore.getState().removeVirusNodes();
         }
 
-        const charStats  = useBattleStore.getState().battle?.character.stats;
+        const charStats = useBattleStore.getState().battle?.character.stats;
         const enemyStats = useBattleStore.getState().battle?.enemy.stats;
         const store = useBattleStore.getState();
 
         // Phase 4: handle virusTurnWasted and manaDebuff from final engine state
         const virusTurnWasted = liveBattleStateRef.current?.virusTurnWasted ?? false;
-        const manaDebuffVal   = liveBattleStateRef.current?.manaDebuff ?? 0;
+        const manaDebuffVal = liveBattleStateRef.current?.manaDebuff ?? 0;
         if (manaDebuffVal > 0) {
           setExtraManaDebuff((prev) => prev + manaDebuffVal);
         }
@@ -668,14 +635,14 @@ export default function BattleScreen() {
           heroMaxHP: store.heroMaxHP,
           enemyHP: store.enemyHP,
           enemyMaxHP: store.enemyMaxHP,
-          heroAttack:  (charStats?.attack ?? 10),
+          heroAttack: (charStats?.attack ?? 10),
           heroDefense: charStats?.defense ?? 5,
           heroParry: 10,
-          enemyAttack:  enragedAtk,
+          enemyAttack: enragedAtk,
           enemyBaseAttack: baseEnemyAtk,
           enemyDefense: (enemyStats as any)?.defense ?? 3,
-          enemyArmor:   (enemyStats as any)?.armor ?? 0,
-          enemyParry:   (enemyStats as any)?.parry ?? 0,
+          enemyArmor: (enemyStats as any)?.armor ?? 0,
+          enemyParry: (enemyStats as any)?.parry ?? 0,
           enemyShielded: false,
           shieldReason: '',
           enemyEnraged: isEnemyEnragedNow,
@@ -726,10 +693,14 @@ export default function BattleScreen() {
 
   // Endless wave: on victory, show wave-clear overlay instead of normal flow
   useEffect(() => {
-    if (isEndless && status === 'victory' && !progressSaved.current) {
+    if (isEndless && status === 'victory' && !progressSaved.current && battleReady.current) {
       progressSaved.current = true;
       const score = waveNumber * Math.round((heroHP / heroMaxHP) * 100);
       setEndlessScore((prev) => prev + score);
+      // Accumulate damage stats across waves
+      const waveDmgDealt = Math.max(0, (level?.enemy.stats.maxHP ?? 0) - Math.max(0, enemyHP));
+      setEndlessDmgDealt((prev) => prev + waveDmgDealt);
+      setEndlessDmgTaken((prev) => prev + totalDamageTaken);
       setShowWaveClear(true);
     }
   }, [isEndless, status]);
@@ -743,8 +714,24 @@ export default function BattleScreen() {
 
       progressSaved.current = true;
 
-      // Skip normal save logic for endless mode
-      if (isEndless) return;
+      // Save endless leaderboard on game-over (hero died)
+      if (isEndless) {
+        // Add damage from the final (losing) wave
+        const finalDmgDealt = endlessDmgDealt + Math.max(0, (level.enemy.stats.maxHP ?? 0) - Math.max(0, enemyHP));
+        const finalDmgTaken = endlessDmgTaken + totalDamageTaken;
+        saveEndlessLeaderboardEntry(player, heroChar, {
+          score: endlessScore,
+          wavesCleared: Math.max(0, waveNumber - 1),
+          damageDealt: finalDmgDealt,
+          damageTaken: finalDmgTaken,
+        }).catch((e) => console.error('[Endless] leaderboard save error:', e));
+        saveEndlessProgress(player.id, endlessScore, Math.max(0, waveNumber - 1))
+          .then(({ highScore, highWave }) => {
+            setPlayer({ ...player, endlessHighScore: highScore, endlessHighWave: highWave });
+          })
+          .catch((e) => console.error('[Endless] progress save error:', e));
+        return;
+      }
 
       // Check required blocks — if any are missing, don't count as victory
       let won = status === 'victory';
@@ -757,10 +744,10 @@ export default function BattleScreen() {
           power_strike: 'Power Strike',
         };
         const missing = level.requiredBlocks.filter((req) => {
-          if (req === 'condition')    return !flowNodes.some((n) => n.type === 'condition');
-          if (req === 'heal')         return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
-          if (req === 'dodge')        return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
-          if (req === 'cast_spell')   return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+          if (req === 'condition') return !flowNodes.some((n) => n.type === 'condition');
+          if (req === 'heal') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
+          if (req === 'dodge') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
+          if (req === 'cast_spell') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
           if (req === 'power_strike') return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === 'power_strike');
           return false;
         });
@@ -778,7 +765,7 @@ export default function BattleScreen() {
           setGoldEarned(earnedGold);
           addGold(earnedGold);
           const newGold = shopGold + earnedGold;
-          saveShopData(player.id, newGold, purchasedEquipment).catch(() => {});
+          saveShopData(player.id, newGold, purchasedEquipment, lastRestockTime).catch(() => { });
         }
 
         const xp = level.rewards.experience;
@@ -805,17 +792,17 @@ export default function BattleScreen() {
         if (leveledUp) {
           setLevelUpData({ oldLevel, newLevel, hpGain: (newLevel - oldLevel) * 10, atkGain: (newLevel - oldLevel) * 2 });
         }
-        saveCharacterProgress(player.id, newCharacter).catch(() => {});
+        saveCharacterProgress(player.id, newCharacter).catch(() => { });
       }
 
       const battleStats: LevelBattleStats = {
-        levelId:         level.id,
-        levelNumber:     level.number,
-        damageDealt:     Math.max(0, (level.enemy.stats.maxHP) - Math.max(0, enemyHP)),
-        damageTaken:     totalDamageTaken,
-        timeMs:          battleStartTime.current > 0 ? (Date.now() - battleStartTime.current) * (speedIdx + 1) : 0,
+        levelId: level.id,
+        levelNumber: level.number,
+        damageDealt: Math.max(0, (level.enemy.stats.maxHP) - Math.max(0, enemyHP)),
+        damageTaken: totalDamageTaken,
+        timeMs: battleStartTime.current > 0 ? (Date.now() - battleStartTime.current) * (speedIdx + 1) : 0,
         heroHPRemaining: Math.max(0, heroHP),
-        heroMaxHP:       heroMaxHP,
+        heroMaxHP: heroMaxHP,
       };
 
       savePlayerProgress(player.id, level.id, won, player.username ?? undefined).then((updated) => {
@@ -828,7 +815,7 @@ export default function BattleScreen() {
             saveLevelLeaderboardEntry(mergedPlayer, savedChar, battleStats).catch((e) => console.error('[Leaderboard] level save error:', e));
           }
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [status]);
 
@@ -852,7 +839,7 @@ export default function BattleScreen() {
 
     // Check end conditions
     if (s.enemyHP <= 0) { battleStore.setStatus('victory'); setBattlePhase('planning'); return; }
-    if (s.heroHP <= 0)  { battleStore.setStatus('defeat');  setBattlePhase('planning'); return; }
+    if (s.heroHP <= 0) { battleStore.setStatus('defeat'); setBattlePhase('planning'); return; }
 
     // Advance turn
     setCurrentTurn(t => t + 1);
@@ -948,18 +935,18 @@ export default function BattleScreen() {
     waiting: { label: '⏸ รอ flowchart...', color: colors.textSub },
     running: { label: '⚡ กำลังรัน...', color: '#fbbf24' },
     victory: { label: '🏆 ชนะ!', color: '#4ade80' },
-    defeat:  { label: '💀 แพ้...', color: '#f87171' },
+    defeat: { label: '💀 แพ้...', color: '#f87171' },
   };
   const stat = statusConfig[status] ?? statusConfig.waiting;
-  const xpPct  = levelProgressPct(heroChar.level, heroChar.experience);
+  const xpPct = levelProgressPct(heroChar.level, heroChar.experience);
   const xpLeft = xpToNextLevel(heroChar.level, heroChar.experience);
 
   // Overlay state derived from status + missingBlocks
-  const isIncomplete  = status === 'victory' && missingBlocks.length > 0;
+  const isIncomplete = status === 'victory' && missingBlocks.length > 0;
   const isRealVictory = status === 'victory' && missingBlocks.length === 0;
-  const overlayIcon   = isRealVictory ? '🏆' : isIncomplete ? '⚠️' : '💀';
-  const overlayTitle  = isRealVictory ? 'Victory!' : isIncomplete ? 'ยังไม่ผ่านด่าน!' : 'Defeated!';
-  const overlayColor  = isRealVictory ? '#fbbf24' : isIncomplete ? '#fb923c' : '#f87171';
+  const overlayIcon = isRealVictory ? '🏆' : isIncomplete ? '⚠️' : '💀';
+  const overlayTitle = isRealVictory ? 'Victory!' : isIncomplete ? 'ยังไม่ผ่านด่าน!' : 'Defeated!';
+  const overlayColor = isRealVictory ? '#fbbf24' : isIncomplete ? '#fb923c' : '#f87171';
   const overlayBorder = isRealVictory ? 'rgba(251,191,36,0.3)' : isIncomplete ? 'rgba(251,146,60,0.35)' : 'rgba(255,255,255,0.15)';
 
   return (
@@ -997,362 +984,223 @@ export default function BattleScreen() {
               <p style={{ color: colors.text, fontWeight: 700, fontSize: 14, margin: 0 }}>{level.name}</p>
               <p style={{ color: stat.color, fontSize: 12, margin: 0 }}>{stat.label}</p>
             </div>
-            <div style={{ width: 80 }} />
+            <BagButton compact overlayTop={120} />
           </div>
 
-          {/* Level info bar */}
+          {/* Level info bar — compact */}
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
             position: 'relative', zIndex: 1,
-            background: 'rgba(0,0,0,0.35)', borderRadius: 10,
-            padding: '5px 12px', flexWrap: 'wrap',
+            background: 'rgba(0,0,0,0.35)', borderRadius: 8,
+            padding: '4px 10px',
           }}>
             <span style={{
               background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.4)',
-              color: '#c4b5fd', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5, whiteSpace: 'nowrap',
+              color: '#c4b5fd', fontSize: 10, fontWeight: 800, padding: '1px 7px', borderRadius: 5, whiteSpace: 'nowrap',
             }}>LEVEL {level.number}</span>
-            <span style={{ color: colors.textSub, fontSize: 11, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {level.description}
+            <span style={{ color: colors.textSub, fontSize: 10, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {level.name}
             </span>
-            <span style={{
-              background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)',
-              color: '#fbbf24', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 5, whiteSpace: 'nowrap',
-            }}>📚 {level.concept}</span>
           </div>
 
-          {/* Tutorial hint */}
-          {level.tutorialText && (
-            <div style={{
-              position: 'relative', zIndex: 1, flexShrink: 0,
-              background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
-              borderRadius: 8, padding: '4px 12px',
-            }}>
-              <p style={{ color: '#fde68a', fontSize: 10, margin: 0 }}>💡 {level.tutorialText}</p>
-            </div>
-          )}
+          {/* Fighters — restructured: sprites on top, status bar below */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1, minHeight: 0 }}>
 
-          {/* Objectives */}
-          <div style={{
-            position: 'relative', zIndex: 1, flexShrink: 0,
-            background: 'rgba(0,0,0,0.30)', borderRadius: 8, padding: '5px 12px',
-            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-          }}>
-            <span style={{ color: colors.textSub, fontSize: 9, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>ภารกิจ</span>
-            {level.objectives.map((obj, i) => (
-              <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ color: status === 'victory' ? '#4ade80' : colors.textMuted, fontSize: 11 }}>
-                  {status === 'victory' ? '✅' : '⬜'}
-                </span>
-                <span style={{ color: status === 'victory' ? '#4ade80' : colors.textSub, fontSize: 10 }}>{obj}</span>
-              </span>
-            ))}
-            {level.bonusObjective && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 11 }}>⭐</span>
-                <span style={{ color: '#fbbf24', fontSize: 10, fontStyle: 'italic' }}>{level.bonusObjective}</span>
-              </span>
-            )}
-          </div>
+            {/* ── Row 1: Sprites + center controls ── */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', gap: 4, minHeight: 0 }}>
 
-          {/* Fighters */}
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-around', position: 'relative', zIndex: 1 }}>
-
-            {/* ===== Hero ===== */}
-            <div style={{ textAlign: 'center', minWidth: 'clamp(100px, 12vw, 160px)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: 4 }}>
-                <span style={{
-                  background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                  color: '#1c1917', fontSize: 9, fontWeight: 900, padding: '2px 7px', borderRadius: 5,
-                }}>Lv.{heroChar.level}</span>
-                <span style={{ color: colors.text, fontWeight: 700, fontSize: 12 }}>{heroChar.name}</span>
-              </div>
-
-              {/* Passive bonus indicator */}
-              {(passiveBonusSummary.atkBonus > 0 || passiveBonusSummary.defBonus > 0 || passiveBonusSummary.hpBonus > 0 || passiveBonusSummary.speedBonus > 0) && (
-                <div style={{
-                  display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 2, marginBottom: 3,
-                }}>
-                  <span style={{
-                    background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.4)',
-                    color: '#c084fc', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                  }}>
-                    Passive: {[
-                      passiveBonusSummary.atkBonus > 0 && `ATK+${passiveBonusSummary.atkBonus}`,
-                      passiveBonusSummary.defBonus > 0 && `DEF+${passiveBonusSummary.defBonus}`,
-                      passiveBonusSummary.hpBonus > 0 && `HP+${passiveBonusSummary.hpBonus}`,
-                      passiveBonusSummary.speedBonus > 0 && `SPD+${passiveBonusSummary.speedBonus}`,
-                    ].filter(Boolean).join(' ')}
-                  </span>
-                </div>
-              )}
-
-              {/* Animated hero icon */}
-              <div
-                key={`hero-${heroAnimKey}`}
-                style={{
-                  width: 'var(--hero-size)', height: 'var(--hero-size)', marginBottom: 4, display: 'inline-block',
+              {/* Hero sprite — clean, no HP overlay */}
+              <div style={{ flex: 1, position: 'relative', minWidth: 0, overflow: 'hidden' }}>
+                <div key={`hero-${heroAnimKey}`} style={{
+                  position: 'absolute', inset: 0,
                   animation: heroAnim ? `${heroAnim} 0.52s ease` : undefined,
                   filter: heroHP < heroMaxHP * 0.3 ? 'grayscale(0.5)' : undefined,
-                }}
-              >
-                <img
-                  src={`/characters/${heroChar.class}.png`}
-                  alt={heroChar.class}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
-                />
-              </div>
-
-              <HPBar current={heroHP} max={heroMaxHP} color="#4ade80" />
-              <p style={{ color: heroHP < heroMaxHP * 0.3 ? '#ef4444' : '#4ade80', fontSize: 11, marginTop: 3, fontWeight: 600 }}>
-                {heroHP} / {heroMaxHP} HP
-              </p>
-
-              {/* Heal charges + Combo + Berserk */}
-              <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 3, flexWrap: 'wrap' }}>
-                <span style={{
-                  background: healCharges > 0 ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${healCharges > 0 ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                  color: healCharges > 0 ? '#4ade80' : 'rgba(255,255,255,0.3)',
-                  fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                }}>💊 {healCharges}/3</span>
-                {comboCount >= 2 && (
-                  <span style={{
-                    background: 'rgba(251,191,36,0.2)', border: '1px solid rgba(251,191,36,0.5)',
-                    color: '#fbbf24', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4,
-                  }}>⚡ Combo x{comboCount + 1}</span>
-                )}
-                {heroBerserkRounds > 0 && (
-                  <span title={`Berserk: ${heroBerserkRounds} turns`} style={{
-                    background: 'rgba(220,38,38,0.25)', border: '1px solid rgba(220,38,38,0.6)',
-                    color: '#fca5a5', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4,
-                  }}>💢 Berserk {heroBerserkRounds}</span>
-                )}
-              </div>
-
-              {/* Ailment badges */}
-              {(heroBurnRounds > 0 || heroFreezeRounds > 0 || heroPoisonRounds > 0) && (
-                <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 3 }}>
-                  {heroBurnRounds > 0 && (
-                    <span title={`Burn: ${heroBurnRounds} turns`} style={{
-                      background: 'rgba(220,38,38,0.25)', border: '1px solid rgba(220,38,38,0.5)',
-                      color: '#fca5a5', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                    }}>🔥{heroBurnRounds}</span>
-                  )}
-                  {heroFreezeRounds > 0 && (
-                    <span title={`Freeze: ${heroFreezeRounds} turns`} style={{
-                      background: 'rgba(37,99,235,0.25)', border: '1px solid rgba(37,99,235,0.5)',
-                      color: '#93c5fd', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                    }}>❄️{heroFreezeRounds}</span>
-                  )}
-                  {heroPoisonRounds > 0 && (
-                    <span title={`Poison: ${heroPoisonRounds} turns`} style={{
-                      background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.5)',
-                      color: '#c4b5fd', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                    }}>🟣{heroPoisonRounds}</span>
-                  )}
-                </div>
-              )}
-
-              {/* XP bar */}
-              <XPBar pct={xpPct} />
-              <p style={{ color: colors.textMuted, fontSize: 9, marginTop: 2 }}>
-                {heroChar.level >= MAX_LEVEL ? 'MAX LEVEL' : `${xpLeft} XP → Lv.${heroChar.level + 1}`}
-              </p>
-            </div>
-
-            {/* Center controls */}
-            <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: colors.textSub, fontWeight: 800, fontSize: 12 }}>VS</span>
-
-              {/* Turn counter */}
-              <div style={{
-                background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.4)',
-                borderRadius: 8, padding: '2px 10px', textAlign: 'center',
-              }}>
-                <span style={{ color: '#c4b5fd', fontSize: 11, fontWeight: 800 }}>Turn {currentTurn}</span>
-              </div>
-
-              {/* Phase 4: Virus warning banner */}
-              {flowNodes.some((n) => n.data.isVirus) && (
-                <div style={{
-                  background: 'rgba(150,0,30,0.8)', border: '1px solid rgba(220,0,80,0.6)',
-                  borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700,
-                  color: '#ff4070', textAlign: 'center',
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
                 }}>
-                  ☠️ VIRUS DETECTED in flowchart! Place Debug Block to remove.
+                  <img src={`/characters/${heroChar.class}.png`} alt={heroChar.class}
+                    style={{ height: '100%', width: '100%', objectFit: 'contain', objectPosition: 'bottom', imageRendering: 'pixelated' }} />
                 </div>
-              )}
+                {/* Name + Level badge */}
+                <div style={{ position: 'absolute', top: 4, left: 4, display: 'flex', alignItems: 'center', gap: 3, zIndex: 2 }}>
+                  <span style={{ background:'linear-gradient(135deg,#fbbf24,#f59e0b)', color:'#1c1917', fontSize:9, fontWeight:900, padding:'1px 5px', borderRadius:4 }}>Lv.{heroChar.level}</span>
+                  <span style={{ background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)', color:'#fff', fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:4 }}>{heroChar.name}</span>
+                </div>
+                {/* Ailment badges — horizontal row top-right */}
+                <div style={{ position:'absolute', top:4, right:4, display:'flex', flexDirection:'row', gap:2, flexWrap:'wrap', justifyContent:'flex-end', zIndex:2 }}>
+                  {heroBurnRounds   > 0 && <span style={{ background:'rgba(220,38,38,0.8)',   color:'#fff', fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>🔥{heroBurnRounds}</span>}
+                  {heroFreezeRounds > 0 && <span style={{ background:'rgba(37,99,235,0.8)',   color:'#fff', fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>❄️{heroFreezeRounds}</span>}
+                  {heroPoisonRounds > 0 && <span style={{ background:'rgba(124,58,237,0.8)', color:'#fff', fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>🟣{heroPoisonRounds}</span>}
+                  {heroBerserkRounds > 0 && <span style={{ background:'rgba(220,38,38,0.8)', color:'#fff', fontSize:8, fontWeight:800, padding:'1px 5px', borderRadius:4 }}>💢{heroBerserkRounds}</span>}
+                  {comboCount >= 2   && <span style={{ background:'rgba(161,98,7,0.85)',     color:'#fef08a', fontSize:8, fontWeight:800, padding:'1px 5px', borderRadius:4 }}>⚡x{comboCount+1}</span>}
+                </div>
+              </div>
 
-              {/* Play / Stop */}
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button
-                  onClick={() => {
-                    battleStartTime.current = Date.now();
-                    setBattlePhase('running');
-                    executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as any, turnManaMax);
-                  }}
-                  disabled={isExecuting || status === 'victory' || status === 'defeat' || battlePhase !== 'planning'}
-                  style={{
-                    background: isExecuting ? 'rgba(74,222,128,0.15)' : 'linear-gradient(135deg, #16a34a, #15803d)',
-                    border: 'none',
-                    color: 'white', padding: '9px 16px', borderRadius: 10,
-                    cursor: (isExecuting || battlePhase !== 'planning') ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 14,
-                    opacity: status === 'victory' || status === 'defeat' ? 0.4 : 1,
-                    boxShadow: isExecuting ? 'none' : '0 4px 15px rgba(22,163,74,0.4)',
-                    minWidth: 76,
-                  }}>
-                  {isExecuting ? '⏳' : battlePhase === 'enemy_turn' ? '👹 Enemy...' : battlePhase === 'resolution' ? '⚙️...' : '▶ Execute Turn'}
-                </button>
-                <button
-                  onClick={stopBattle}
-                  disabled={!isExecuting}
-                  style={{
-                    background: isExecuting ? 'linear-gradient(135deg, #dc2626, #991b1b)' : colors.bgSurface,
-                    border: isExecuting ? 'none' : `1px solid ${colors.border}`,
-                    color: isExecuting ? colors.text : colors.textMuted,
-                    padding: '9px 12px', borderRadius: 10,
-                    cursor: isExecuting ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: 14,
-                    boxShadow: isExecuting ? '0 4px 15px rgba(220,38,38,0.4)' : 'none',
-                    transition: 'all 0.15s',
+              {/* Center controls */}
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, flexShrink:0, width:110, zIndex:2, borderRadius:12, transition:'box-shadow 0.3s', boxShadow: tutorialTarget === 'run-btn' ? '0 0 0 3px rgba(74,222,128,0.7), 0 0 20px rgba(74,222,128,0.4)' : undefined }}>
+                <span style={{ color:colors.textSub, fontWeight:800, fontSize:11 }}>VS</span>
+                <div style={{ background:'rgba(124,58,237,0.2)', border:'1px solid rgba(124,58,237,0.4)', borderRadius:7, padding:'2px 8px' }}>
+                  <span style={{ color:'#c4b5fd', fontSize:10, fontWeight:800 }}>Turn {currentTurn}</span>
+                </div>
+                {flowNodes.some(n => n.data.isVirus) && (
+                  <div style={{ background:'rgba(150,0,30,0.85)', border:'1px solid rgba(220,0,80,0.6)', borderRadius:5, padding:'2px 6px', fontSize:8, fontWeight:700, color:'#ff4070', textAlign:'center' }}>☠️ VIRUS!</div>
+                )}
+                <div style={{ display:'flex', gap:4 }}>
+                  <button
+                    onClick={() => { battleStartTime.current=Date.now(); setBattlePhase('running'); executeBattle(SPEED_LEVELS[speedIdx].ms,(level.requiredBlocks??[]) as any,turnManaMax); }}
+                    disabled={isExecuting||status==='victory'||status==='defeat'||battlePhase!=='planning'}
+                    style={{
+                      background: isExecuting ? 'rgba(74,222,128,0.15)' : 'linear-gradient(135deg,#16a34a,#15803d)',
+                      border:'none', color:'white', padding:'7px 10px', borderRadius:9,
+                      cursor:(isExecuting||battlePhase!=='planning')?'not-allowed':'pointer',
+                      fontWeight:700, fontSize:12, opacity:status==='victory'||status==='defeat'?0.4:1,
+                      boxShadow:isExecuting?'none':'0 4px 12px rgba(22,163,74,0.4)', minWidth:56,
+                    }}>
+                    {isExecuting?'⏳':battlePhase==='enemy_turn'?'👹...':battlePhase==='resolution'?'⚙️...':'▶ Run'}
+                  </button>
+                  <button onClick={stopBattle} disabled={!isExecuting} style={{
+                    background:isExecuting?'linear-gradient(135deg,#dc2626,#991b1b)':colors.bgSurface,
+                    border:isExecuting?'none':`1px solid ${colors.border}`,
+                    color:isExecuting?colors.text:colors.textMuted,
+                    padding:'7px 9px', borderRadius:9, cursor:isExecuting?'pointer':'not-allowed',
+                    fontWeight:700, fontSize:12, boxShadow:isExecuting?'0 4px 12px rgba(220,38,38,0.4)':'none',
                   }}>⏹</button>
+                </div>
+                <div style={{ display:'flex', gap:2, alignItems:'center' }}>
+                  <span style={{ color:colors.textMuted, fontSize:7 }}>ช้า</span>
+                  {SPEED_LEVELS.map((s,i) => (
+                    <button key={i} onClick={()=>setSpeedIdx(i)} disabled={isExecuting} style={{
+                      width:20, height:16, borderRadius:3, border:'none',
+                      background:speedIdx===i?'linear-gradient(135deg,#e94560,#7c3aed)':colors.bgSurfaceHover,
+                      color:speedIdx===i?colors.text:colors.textSub,
+                      fontSize:7, fontWeight:700, cursor:isExecuting?'not-allowed':'pointer',
+                    }}>{s.label}</button>
+                  ))}
+                  <span style={{ color:colors.textMuted, fontSize:7 }}>เร็ว</span>
+                </div>
+                {validationError && <p style={{ color:'#f87171', fontSize:8, maxWidth:100, textAlign:'center', margin:0 }}>{validationError}</p>}
               </div>
 
-              {/* Speed control */}
-              <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                <span style={{ color: colors.textMuted, fontSize: 9 }}>ช้า</span>
-                {SPEED_LEVELS.map((s, i) => (
-                  <button key={i} onClick={() => setSpeedIdx(i)} disabled={isExecuting} style={{
-                    width: 24, height: 20, borderRadius: 4, border: 'none',
-                    background: speedIdx === i ? 'linear-gradient(135deg, #e94560, #7c3aed)' : colors.bgSurfaceHover,
-                    color: speedIdx === i ? colors.text : colors.textSub,
-                    fontSize: 9, fontWeight: 700, cursor: isExecuting ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
-                  }}>{s.label}</button>
-                ))}
-                <span style={{ color: colors.textMuted, fontSize: 9 }}>เร็ว</span>
+              {/* Enemy sprite — clean, no HP overlay */}
+              <div style={{ flex: 1, position: 'relative', minWidth: 0, overflow: 'hidden' }}>
+                <div key={`enemy-${enemyAnimKey}`} style={{
+                  position:'absolute', inset:0,
+                  animation: enemyAnim ? `${enemyAnim} 0.52s ease` : undefined,
+                  filter: isEnemyShielded && status==='waiting'
+                    ? 'grayscale(0.3) drop-shadow(0 0 12px rgba(99,102,241,0.8))'
+                    : enemyHP < enemyMaxHP*0.3 ? 'grayscale(0.5)' : undefined,
+                  display:'flex', alignItems:'flex-end', justifyContent:'center',
+                }}>
+                  <EnemySprite enemyId={level.enemy.id} levelId={levelId??''} />
+                </div>
+                {/* Name + ENEMY badge */}
+                <div style={{ position:'absolute', top:4, right:4, display:'flex', alignItems:'center', gap:3, zIndex:2 }}>
+                  <span style={{ background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)', color:'#fff', fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:4 }}>{level.enemy.name}</span>
+                  <span style={{ background:'rgba(248,113,113,0.3)', border:'1px solid rgba(248,113,113,0.4)', color:'#f87171', fontSize:9, fontWeight:900, padding:'1px 5px', borderRadius:4 }}>ENEMY</span>
+                </div>
+                {/* Ailment badges — horizontal row top-left */}
+                <div style={{ position:'absolute', top:4, left:4, display:'flex', flexDirection:'row', gap:2, flexWrap:'wrap', zIndex:2 }}>
+                  {isEnemyShielded && status==='waiting' && (
+                    <span style={{ background:'rgba(99,102,241,0.9)', color:'#e0e7ff', fontSize:10, fontWeight:800, padding:'2px 7px', borderRadius:5 }}>🛡️</span>
+                  )}
+                  {enemyStunnedRounds > 0 && <span style={{ background:'rgba(161,98,7,0.85)',   color:'#fef08a', fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>⚡{enemyStunnedRounds}</span>}
+                  {enemyBurnRounds   > 0 && <span style={{ background:'rgba(220,38,38,0.8)',   color:'#fff',    fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>🔥{enemyBurnRounds}</span>}
+                  {enemyFreezeRounds > 0 && <span style={{ background:'rgba(37,99,235,0.8)',   color:'#fff',    fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>❄️{enemyFreezeRounds}</span>}
+                  {enemyPoisonRounds > 0 && <span style={{ background:'rgba(124,58,237,0.8)', color:'#fff',    fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4 }}>🟣{enemyPoisonRounds}</span>}
+                </div>
               </div>
-
-              {validationError && (
-                <p style={{ color: '#f87171', fontSize: 10, maxWidth: 130, textAlign: 'center', margin: 0 }}>
-                  {validationError}
-                </p>
-              )}
             </div>
 
-            {/* ===== Enemy ===== */}
-            <div style={{ textAlign: 'center', minWidth: 'clamp(100px, 12vw, 160px)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: 4 }}>
-                <span style={{
-                  background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.3)',
-                  color: '#f87171', fontSize: 9, fontWeight: 900, padding: '2px 7px', borderRadius: 5,
-                }}>ENEMY</span>
-                <span style={{ color: colors.text, fontWeight: 700, fontSize: 12 }}>{level.enemy.name}</span>
+            {/* ── Row 2: Status bar — HP bars, shield info, XP ── */}
+            <div style={{ flexShrink:0, display:'flex', gap:4, padding:'4px 2px 2px', borderTop:`1px solid ${colors.borderSubtle}` }}>
+
+              {/* Hero status */}
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', gap:3, marginBottom:2, flexWrap:'wrap' }}>
+                  <span style={{
+                    background: healCharges > 0 ? 'rgba(74,222,128,0.3)' : 'rgba(255,255,255,0.1)',
+                    color: healCharges > 0 ? '#4ade80' : 'rgba(255,255,255,0.3)',
+                    fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:3,
+                  }}>💊{healCharges}/3</span>
+                  {(passiveBonusSummary.atkBonus > 0 || passiveBonusSummary.defBonus > 0) && (
+                    <span style={{ background:'rgba(168,85,247,0.35)', color:'#e9d5ff', fontSize:7, fontWeight:700, padding:'1px 4px', borderRadius:3 }}>
+                      {[passiveBonusSummary.atkBonus>0&&`ATK+${passiveBonusSummary.atkBonus}`,passiveBonusSummary.defBonus>0&&`DEF+${passiveBonusSummary.defBonus}`].filter(Boolean).join(' ')}
+                    </span>
+                  )}
+                </div>
+                <HPBar current={heroHP} max={heroMaxHP} color="#4ade80" />
+                <span style={{ color: heroHP < heroMaxHP*0.3 ? '#ef4444' : '#4ade80', fontSize:9, fontWeight:700 }}>{heroHP}/{heroMaxHP}</span>
+                <XPBar pct={xpPct} />
+                <p style={{ color:'rgba(255,255,255,0.45)', fontSize:7, margin:'1px 0 0' }}>
+                  {heroChar.level >= MAX_LEVEL ? 'MAX' : `${xpLeft}xp→Lv.${heroChar.level+1}`}
+                </p>
               </div>
 
-              {/* Shield indicator — above icon */}
-              {isEnemyShielded && status === 'waiting' && (
-                <div style={{
-                  background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.5)',
-                  borderRadius: 8, padding: '3px 8px', marginBottom: 4, display: 'inline-block',
-                }}>
-                  <span style={{ color: '#a5b4fc', fontSize: 10, fontWeight: 700 }}>🛡️ Shielded</span>
-                  <p style={{ color: 'rgba(165,180,252,0.7)', fontSize: 9, margin: '1px 0 0', whiteSpace: 'nowrap' }}>
-                    {shieldMissing}
-                  </p>
-                </div>
-              )}
+              {/* Spacer aligns with center controls */}
+              <div style={{ width:110, flexShrink:0 }} />
 
-              {/* Animated enemy icon */}
-              <div
-                key={`enemy-${enemyAnimKey}`}
-                style={{
-                  width: 'var(--hero-size)', height: 'var(--hero-size)', marginBottom: 4, display: 'inline-block',
-                  animation: enemyAnim ? `${enemyAnim} 0.52s ease` : undefined,
-                  filter: isEnemyShielded && status === 'waiting'
-                    ? 'grayscale(0.3) drop-shadow(0 0 12px rgba(99,102,241,0.8))'
-                    : enemyHP < enemyMaxHP * 0.3 ? 'grayscale(0.5)' : undefined,
-                }}
-              ><EnemySprite id={level.enemy.id} /></div>
-
-              <HPBar current={enemyHP} max={enemyMaxHP} color="#f87171" />
-              <p style={{ color: enemyHP < enemyMaxHP * 0.3 ? '#ef4444' : '#f87171', fontSize: 11, marginTop: 3, fontWeight: 600 }}>
-                {enemyHP} / {enemyMaxHP} HP
-              </p>
-              {(enemyStunnedRounds > 0 || enemyBurnRounds > 0 || enemyFreezeRounds > 0 || enemyPoisonRounds > 0) && (
-                <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 3, flexWrap: 'wrap' }}>
-                  {enemyStunnedRounds > 0 && (
-                    <span title={`Stunned: ${enemyStunnedRounds} turns`} style={{
-                      background: 'rgba(251,191,36,0.2)', border: '1px solid rgba(251,191,36,0.5)',
-                      color: '#fbbf24', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                    }}>⚡ {enemyStunnedRounds}</span>
-                  )}
-                  {enemyBurnRounds > 0 && (
-                    <span title={`Enemy Burn: ${enemyBurnRounds} turns`} style={{
-                      background: 'rgba(220,38,38,0.25)', border: '1px solid rgba(220,38,38,0.5)',
-                      color: '#fca5a5', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                    }}>🔥 {enemyBurnRounds}</span>
-                  )}
-                  {enemyFreezeRounds > 0 && (
-                    <span title={`Enemy Freeze: ${enemyFreezeRounds} turns`} style={{
-                      background: 'rgba(37,99,235,0.25)', border: '1px solid rgba(37,99,235,0.5)',
-                      color: '#93c5fd', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                    }}>❄️ {enemyFreezeRounds}</span>
-                  )}
-                  {enemyPoisonRounds > 0 && (
-                    <span title={`Enemy Poison: ${enemyPoisonRounds} turns`} style={{
-                      background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.5)',
-                      color: '#c4b5fd', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                    }}>🟣 {enemyPoisonRounds}</span>
-                  )}
-                </div>
-              )}
-
-              {/* Enemy intention — below HP and status effects */}
-              {level?.enemy.behaviors && status !== 'victory' && status !== 'defeat' && (
-                <div style={{
-                  background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
-                  borderRadius: 8, padding: '3px 8px', marginTop: 4, display: 'inline-block',
-                }}>
-                  <span style={{ color: '#fca5a5', fontSize: 9, fontWeight: 700 }}>ท่าต่อไป: {enemyIntentionLabel}</span>
-                </div>
-              )}
+              {/* Enemy status */}
+              <div style={{ flex:1, minWidth:0 }}>
+                {isEnemyShielded && status==='waiting' && (
+                  <div style={{
+                    background:'rgba(79,70,229,0.3)', border:'1px solid rgba(99,102,241,0.7)',
+                    borderRadius:5, padding:'2px 6px', marginBottom:3,
+                    display:'flex', alignItems:'center', gap:4, flexWrap:'wrap',
+                  }}>
+                    <span style={{ color:'#a5b4fc', fontSize:9, fontWeight:700 }}>วาง</span>
+                    {missingRequiredTypes.map((req) => (
+                      <span key={req} style={{
+                        background:'rgba(99,102,241,0.5)', border:'1px solid rgba(165,180,252,0.6)',
+                        borderRadius:3, padding:'1px 5px', color:'#e0e7ff', fontSize:10, fontWeight:800,
+                      }}>{SHIELD_ICONS[req]}{SHIELD_LABELS[req]}</span>
+                    ))}
+                    <span style={{ color:'#a5b4fc', fontSize:9, fontWeight:700 }}>เพื่อทะลุโล!</span>
+                  </div>
+                )}
+                {level?.enemy.behaviors && status!=='victory' && status!=='defeat' && (
+                  <div style={{ marginBottom:2 }}>
+                    <span style={{ background:'rgba(239,68,68,0.35)', color:'#fca5a5', fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3 }}>ท่าต่อไป: {enemyIntentionLabel}</span>
+                  </div>
+                )}
+                <HPBar current={enemyHP} max={enemyMaxHP} color="#f87171" />
+                <span style={{ color:enemyHP<enemyMaxHP*0.3?'#ef4444':'#f87171', fontSize:9, fontWeight:700, display:'block', textAlign:'right' }}>{enemyHP}/{enemyMaxHP}</span>
+              </div>
             </div>
 
             {/* Floating damage/heal numbers */}
             {floats.map(f => (
               <div key={f.id} style={{
-                position: 'absolute',
-                [f.side === 'hero' ? 'left' : 'right']: '11%',
-                top: '8%',
-                color: f.color,
-                fontSize: 24, fontWeight: 900,
-                pointerEvents: 'none',
-                animation: 'floatUp 0.88s ease forwards',
-                textShadow: `0 2px 10px ${f.color}, 0 0 24px ${f.color}`,
-                zIndex: 10,
+                position:'absolute',
+                [f.side==='hero'?'left':'right']: '11%',
+                top:'8%',
+                color:f.color, fontSize:24, fontWeight:900,
+                pointerEvents:'none',
+                animation:'floatUp 0.88s ease forwards',
+                textShadow:`0 2px 10px ${f.color}, 0 0 24px ${f.color}`,
+                zIndex:10,
               }}>{f.text}</div>
             ))}
           </div>
 
           {/* Battle log — hidden */}
           {false && (
-          <div className="battle-log" style={{ maxHeight: 52, flexShrink: 0, position: 'relative', zIndex: 1 }}>
-            {battleLog.length === 0
-              ? <p style={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', margin: 0, fontSize: 12 }}>
+            <div className="battle-log" style={{ maxHeight: 52, flexShrink: 0, position: 'relative', zIndex: 1 }}>
+              {battleLog.length === 0
+                ? <p style={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', margin: 0, fontSize: 12 }}>
                   วาง flowchart แล้วกด Play!
                 </p>
-              : battleLog.slice(-4).map((log, i) => (
-                <p key={i} style={{
-                  color: i === Math.min(battleLog.length, 4) - 1 ? 'white' : 'rgba(255,255,255,0.45)',
-                  margin: '0 0 2px', fontSize: 12,
-                }}>{log.action}</p>
-              ))
-            }
-          </div>
+                : battleLog.slice(-4).map((log, i) => (
+                  <p key={i} style={{
+                    color: i === Math.min(battleLog.length, 4) - 1 ? 'white' : 'rgba(255,255,255,0.45)',
+                    margin: '0 0 2px', fontSize: 12,
+                  }}>{log.action}</p>
+                ))
+              }
+            </div>
           )}
 
-          {/* Tutorial overlay for levels 1–5 */}
-          {showTutorial && TUTORIAL_HINTS[levelId ?? ''] && status === 'waiting' && (
-            <TutorialOverlay levelId={levelId!} onClose={() => setShowTutorial(false)} />
+          {/* Tutorial overlay */}
+          {showTutorial && !isEndless && battlePhase === 'planning' && (
+            <TutorialGuide levelId={levelId!} onClose={() => setShowTutorial(false)} onTargetChange={setTutorialTarget} />
           )}
 
           {/* Endless wave badge */}
@@ -1370,12 +1218,14 @@ export default function BattleScreen() {
         </div>
 
         {/* ===== FLOWCHART SECTION ===== */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', borderRadius: 12, transition: 'box-shadow 0.3s', boxShadow: tutorialTarget === 'canvas' ? '0 0 0 3px rgba(96,165,250,0.7), 0 0 24px rgba(96,165,250,0.35)' : undefined }}>
 
           {/* ===== FLOWCHART EDITOR ===== */}
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ flex: 1, overflow: 'hidden' }}>
-              <FlowchartEditor key={level.id} allowedBlocks={(level as any).allowedBlocks} turnManaMax={turnManaMax} turnManaUsed={turnManaUsed} characterClass={heroChar.class} characterLevel={heroChar.level} />
+              <FlowchartErrorBoundary key={level.id}>
+                <FlowchartEditor key={level.id} allowedBlocks={(level as any).allowedBlocks} shieldRequiredTypes={missingRequiredTypes} turnManaMax={turnManaMax} turnManaUsed={turnManaUsed} characterClass={heroChar.class} characterLevel={heroChar.level} />
+              </FlowchartErrorBoundary>
             </div>
             {/* Reset flowchart to Start + End only */}
             <div style={{ flexShrink: 0, padding: '6px 10px', borderTop: `1px solid ${colors.borderSubtle}`, display: 'flex', justifyContent: 'flex-end' }}>
@@ -1490,7 +1340,7 @@ export default function BattleScreen() {
         )}
 
         {/* ===== Endless Game Over Overlay ===== */}
-        {isEndless && status === 'defeat' && (
+        {isEndless && status === 'defeat' && heroHP <= 0 && (
           <div style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
             backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
@@ -1524,6 +1374,8 @@ export default function BattleScreen() {
                     progressSaved.current = false;
                     setWaveNumber(1);
                     setEndlessScore(0);
+                    setEndlessDmgDealt(0);
+                    setEndlessDmgTaken(0);
                     setCurrentTurn(1);
                     setEnemyBehaviorIdx(0);
                     setExtraManaDebuff(0);
@@ -1543,7 +1395,7 @@ export default function BattleScreen() {
           <div style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)',
             backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', zIndex: 50,
+            justifyContent: 'center', zIndex: 200,
           }}>
             <div style={{
               background: 'linear-gradient(135deg, #1a1a3e, #12122a)',

@@ -33,6 +33,11 @@ export function useBattle() {
   const flowchartStore = useFlowchartStore();
   const shopStore = useShopStore();
   const stopRef = useRef(false);
+  const snapshotRef = useRef<{
+    heroHP: number; enemyHP: number;
+    burn: number; freeze: number; poison: number; enemyStun: number;
+    healCharges: number; comboCount: number;
+  } | null>(null);
 
   const startBattle = useCallback((character: Character, enemy: Enemy, levelId: string) => {
     stopRef.current = false;
@@ -50,6 +55,16 @@ export function useBattle() {
 
   const stopBattle = useCallback(() => {
     stopRef.current = true;
+    // Restore HP/state to what it was before execution started
+    if (snapshotRef.current) {
+      const s = snapshotRef.current;
+      battleStore.updateHeroHP(s.heroHP);
+      battleStore.updateEnemyHP(s.enemyHP);
+      battleStore.setAilments({ burn: s.burn, freeze: s.freeze, poison: s.poison, enemyStun: s.enemyStun });
+      battleStore.setHealCharges(s.healCharges);
+      battleStore.setComboCount(s.comboCount);
+      snapshotRef.current = null;
+    }
     battleStore.setExecuting(false);
     battleStore.setStatus('waiting');
     battleStore.setCurrentNode(null);
@@ -58,6 +73,17 @@ export function useBattle() {
 
   const executeBattle = useCallback(async (speedMs: number = STEP_DELAY_MS, requiredBlocks: RequiredBlock[] = [], actionsMax: number = 3) => {
     stopRef.current = false;
+    // Snapshot current state so Stop can revert
+    snapshotRef.current = {
+      heroHP:      battleStore.heroHP,
+      enemyHP:     battleStore.enemyHP,
+      burn:        battleStore.heroBurnRounds    ?? 0,
+      freeze:      battleStore.heroFreezeRounds  ?? 0,
+      poison:      battleStore.heroPoisonRounds  ?? 0,
+      enemyStun:   battleStore.enemyStunnedRounds ?? 0,
+      healCharges: battleStore.healCharges        ?? 3,
+      comboCount:  battleStore.comboCount         ?? 0,
+    };
     const { nodes, edges } = flowchartStore;
     const engine = new FlowchartEngine(nodes, edges);
 
@@ -169,12 +195,14 @@ export function useBattle() {
     }
 
     if (stopRef.current) {
-      // Stopped by user — clean up without changing outcome
+      // stopBattle() already restored state — just clean up UI
       battleStore.setExecuting(false);
       battleStore.setCurrentNode(null);
       flowchartStore.highlightNode(null);
       return;
     }
+
+    snapshotRef.current = null; // รันจบปกติ — ไม่ต้อง restore แล้ว
 
     // Compute gross damage taken (sum of all HP decreases, heals excluded)
     {

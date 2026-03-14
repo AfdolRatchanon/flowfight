@@ -199,7 +199,7 @@ export const LEVELS = [
     tutorialText: 'Enemy Alive? → YES: Attack → วนกลับที่ Condition = While Loop! แค่ 2 blocks แต่วนซ้ำได้ทุก turn จนศัตรูตาย',
     objectives: ['สังหาร Goblin', 'ใช้ Condition block'],
     bonusObjective: 'HP เหลือมากกว่า 70%',
-    allowedBlocks: ['attack', 'condition'],
+    allowedBlocks: ['attack', 'condition', 'enemy_alive'],
     requiredBlocks: ['condition'],
     enemy: {
       id: 'goblin', name: 'Goblin Scout', spriteId: 'enemy_goblin',
@@ -220,7 +220,7 @@ export const LEVELS = [
     tutorialText: 'HP < 50? → YES: Heal / NO: Attack — นี่คือ IF/ELSE! ตรวจ 1 เงื่อนไข แล้วแยกทำ 2 ทางต่างกัน',
     objectives: ['สังหาร Goblin', 'ใช้ Heal + Condition block'],
     bonusObjective: 'HP เหลือมากกว่า 60%',
-    allowedBlocks: ['attack', 'heal', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'condition', 'enemy_alive', 'hp_less'],
     requiredBlocks: ['condition', 'heal'],
     enemy: {
       id: 'goblin', name: 'Goblin', spriteId: 'enemy_goblin',
@@ -241,7 +241,7 @@ export const LEVELS = [
     tutorialText: 'HP<30→Dodge / HP<60→Heal / else→Attack — Nested If คือ Condition ที่อยู่ใน branch ของ Condition อื่น!',
     objectives: ['สังหาร Spider', 'ใช้ Dodge + Heal + Condition'],
     bonusObjective: 'HP เหลือมากกว่า 40%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'condition', 'enemy_alive', 'hp_less'],
     requiredBlocks: ['condition', 'heal', 'dodge'],
     enemy: {
       id: 'spider', name: 'Spider', spriteId: 'enemy_spider',
@@ -262,7 +262,7 @@ export const LEVELS = [
     tutorialText: 'Turn ≥ 4? → Power Strike / else → Attack — Turn ≥ N เหมือน for-loop counter: "เมื่อนับถึง N รอบ ทำสิ่งพิเศษ"',
     objectives: ['สังหาร Kobold Pack', 'ใช้ Turn ≥ N? Condition'],
     bonusObjective: 'HP เหลือมากกว่า 50%',
-    allowedBlocks: ['attack', 'heal', 'power_strike', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'power_strike', 'condition', 'enemy_alive', 'turn_gte'],
     requiredBlocks: ['condition', 'power_strike'],
     enemy: {
       id: 'kobold', name: 'Kobold Pack', spriteId: 'enemy_kobold',
@@ -283,7 +283,7 @@ export const LEVELS = [
     tutorialText: 'HP > 50? → Cast Spell / else → Attack — ตรวจสถานะก่อนใช้ท่าแรง เหมือน "ถ้ามีพลังพอ ใช้ท่าหนัก ไม่งั้น โจมตีธรรมดา"',
     objectives: ['สังหาร Forest Wraith', 'ใช้ Cast Spell + HP Condition'],
     bonusObjective: 'HP เหลือมากกว่า 45%',
-    allowedBlocks: ['attack', 'heal', 'cast_spell', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'cast_spell', 'condition', 'enemy_alive', 'hp_greater'],
     requiredBlocks: ['cast_spell', 'condition'],
     enemy: {
       id: 'ghost', name: 'Forest Wraith', spriteId: 'enemy_ghost',
@@ -304,7 +304,7 @@ export const LEVELS = [
     tutorialText: 'Goblin Knight มีเกราะหนา (Armor 6) — Power Strike (2x dmg) และ Spell (ทะลุเกราะ) ดีกว่า Attack ธรรมดามาก! ใช้ Condition เลือก action ที่เหมาะสม',
     objectives: ['สังหาร Goblin Knight', 'ใช้ Power Strike หรือ Cast Spell'],
     bonusObjective: 'HP เหลือมากกว่า 40%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hp_greater'],
     requiredBlocks: ['condition', 'power_strike'],
     enemy: {
       id: 'goblin_knight', name: 'Goblin Knight', spriteId: 'enemy_goblin',
@@ -325,7 +325,7 @@ export const LEVELS = [
     tutorialText: 'Orc Warrior ทำให้ Poisoned! Hero Poisoned? → Heal / else → Attack — ตรวจ "สถานะ" เหมือน boolean flag: if (isPoisoned) heal();',
     objectives: ['สังหาร Orc Warrior', 'ใช้ Hero Poisoned? Condition'],
     bonusObjective: 'HP เหลือมากกว่า 35%',
-    allowedBlocks: ['attack', 'heal', 'cast_spell', 'power_strike', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_poisoned'],
     requiredBlocks: ['condition', 'heal'],
     enemy: {
       id: 'orc', name: 'Orc Warrior', spriteId: 'enemy_orc',
@@ -346,7 +346,7 @@ export const LEVELS = [
     tutorialText: 'Stone Troll Enrage เมื่อ HP ต่ำ — ใช้ HP Condition ของตัวเอง: HP<40→Dodge (หลบความโกรธ) / HP<65→Heal / else→Attack',
     objectives: ['สังหาร Stone Troll', 'ใช้ Dodge + Heal ตาม HP Condition'],
     bonusObjective: 'HP เหลือมากกว่า 30%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hp_less'],
     requiredBlocks: ['condition', 'heal', 'dodge'],
     enemy: {
       id: 'troll', name: 'Stone Troll', spriteId: 'enemy_troll',
@@ -367,7 +367,7 @@ export const LEVELS = [
     tutorialText: 'ผสม HP + สถานะ + หลาย Condition — Decision Tree คือ Flowchart ที่มี branch ซ้อนกันหลายชั้น เหมือน if-elif-elif-else ใน code!',
     objectives: ['สังหาร Orc Warlord', 'ใช้ Condition อย่างน้อย 3 แบบต่างกัน'],
     bonusObjective: 'HP เหลือมากกว่า 25%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_poisoned', 'hp_less'],
     requiredBlocks: ['power_strike', 'cast_spell', 'condition', 'heal'],
     enemy: {
       id: 'orc_warlord', name: 'Orc Warlord', spriteId: 'enemy_orc',
@@ -388,7 +388,7 @@ export const LEVELS = [
     tutorialText: 'Turn ≥ 5 → ตรวจ HP > 50? → Power Strike / else → Spell — ผสม counter กับ condition: "เมื่อครบ N รอบ ถ้า HP พอ ใช้ท่าแรง" = AND condition!',
     objectives: ['สังหาร Ice Giant', 'ใช้ Turn ≥ N? ร่วมกับ HP Condition'],
     bonusObjective: 'HP เหลือมากกว่า 20%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_frozen', 'hp_less', 'turn_gte'],
     requiredBlocks: ['cast_spell', 'power_strike', 'condition'],
     enemy: {
       id: 'ice_giant', name: 'Ice Giant', spriteId: 'enemy_ice_giant',
@@ -544,7 +544,7 @@ export const PASSIVE_BONUSES: PassiveBonus[] = [
 /** สร้าง enemy สำหรับ Endless mode wave ที่ N (เริ่มจาก 1) */
 export function getEndlessWaveEnemy(wave: number) {
   const hp    = Math.floor(20 * Math.pow(1.32, wave - 1));
-  const atk   = Math.floor(3  * Math.pow(1.15, wave - 1));
+  const atk   = Math.floor(8  * Math.pow(1.15, wave - 1));
   const def   = Math.floor(0  + wave * 0.5);
   const armor = wave > 5  ? Math.floor((wave - 5) * 1.5) : 0;
   const parry = wave > 8  ? Math.min(35, (wave - 8) * 4) : 0;

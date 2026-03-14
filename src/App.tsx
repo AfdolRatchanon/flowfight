@@ -5,6 +5,7 @@ import { useGameStore } from './stores/gameStore';
 import { useTheme } from './contexts/ThemeContext';
 import LoginPage from './components/Auth/LoginPage';
 import MainMenu from './components/UI/MainMenu';
+import ModeSelect from './components/UI/ModeSelect';
 import LevelSelect from './components/UI/LevelSelect';
 import BattleScreen from './components/Battle/BattleScreen';
 import CharacterCustomizer from './components/Character/CharacterCustomizer';
@@ -52,7 +53,8 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<ProtectedRoute><MainMenu /></ProtectedRoute>} />
-        <Route path="/levels" element={<ProtectedRoute><LevelSelect /></ProtectedRoute>} />
+        <Route path="/levels" element={<ProtectedRoute><ModeSelect /></ProtectedRoute>} />
+        <Route path="/levels/tutorial" element={<ProtectedRoute><LevelSelect /></ProtectedRoute>} />
         <Route path="/battle/:levelId" element={<ProtectedRoute><BattleScreen /></ProtectedRoute>} />
         <Route path="/character" element={<ProtectedRoute><CharacterCustomizer /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
