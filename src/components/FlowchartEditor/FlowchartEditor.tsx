@@ -37,20 +37,20 @@ const ACTION_GROUPS = [
   {
     key: 'combat', label: 'COMBAT', icon: '⚔️',
     items: [
-      { type: 'attack',       icon: '⚔️', label: 'Attack' },
-      { type: 'power_strike', icon: '💥', label: 'Power Strike' },
-      { type: 'dodge',        icon: '🌀', label: 'Dodge' },
-      { type: 'cast_spell',   icon: '✨', label: 'Cast Spell' },
+      { type: 'attack',       icon: '⚔️', label: 'Attack',       description: 'โจมตีศัตรูด้วยพลังปกติ' },
+      { type: 'power_strike', icon: '💥', label: 'Power Strike',  description: 'โจมตีหนัก 2× แต่ราคาสูง' },
+      { type: 'dodge',        icon: '🌀', label: 'Dodge',         description: 'หลบหนีการโจมตีครั้งถัดไป' },
+      { type: 'cast_spell',   icon: '✨', label: 'Cast Spell',    description: 'เวทมนตร์ดาเมจสูงมาก' },
     ],
   },
   {
     key: 'support', label: 'SUPPORT', icon: '💚',
     items: [
-      { type: 'heal',         icon: '💚', label: 'Heal' },
-      { type: 'berserk',      icon: '💢', label: 'Berserk' },
-      { type: 'use_potion',   icon: '🧪', label: 'Use Potion' },
-      { type: 'use_antidote', icon: '💊', label: 'Use Antidote' },
-      { type: 'debug_block',  icon: '🔧', label: 'Debug' },
+      { type: 'heal',         icon: '💚', label: 'Heal',          description: 'ฟื้นฟู HP ของตัวเอง' },
+      { type: 'berserk',      icon: '💢', label: 'Berserk',       description: 'เพิ่ม ATK แต่ลด DEF ชั่วคราว' },
+      { type: 'use_potion',   icon: '🧪', label: 'Use Potion',    description: 'ดื่มยาฟื้นฟู HP ทันที' },
+      { type: 'use_antidote', icon: '💊', label: 'Use Antidote',  description: 'แก้พิษ / Poisoned ทันที' },
+      { type: 'debug_block',  icon: '🔧', label: 'Debug',         description: 'หยุด execution ชั่วคราว' },
     ],
   },
 ];
@@ -656,7 +656,12 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
                       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
                     >
                       <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
-                      <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{item.label}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>{item.label}</div>
+                        {isAction && item.description && (
+                          <div style={{ color: colors.textMuted, fontSize: 10 }}>{item.description}</div>
+                        )}
+                      </div>
                       {isAction && (() => {
                         const cost = BLOCK_MANA_COST[item.type] ?? 1;
                         return (

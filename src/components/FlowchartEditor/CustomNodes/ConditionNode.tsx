@@ -85,31 +85,34 @@ export default function ConditionNode({
           {data.label}
         </div>
 
-        {/* Threshold ±10 — only for HP/MP/Gold conditions */}
-        {hasThreshold && (
-          <div style={{ display: 'flex', gap: 3 }} onMouseDown={stopProp} onClick={stopProp}>
-            <button
-              onClick={() => adjustThreshold(-10)}
-              style={{
-                fontSize: 9, fontWeight: 700, padding: '1px 5px',
-                borderRadius: 3, border: 'none', cursor: 'pointer',
-                background: 'rgba(0,0,0,0.15)', color: '#1c1917',
-              }}
-            >
-              −10
-            </button>
-            <button
-              onClick={() => adjustThreshold(10)}
-              style={{
-                fontSize: 9, fontWeight: 700, padding: '1px 5px',
-                borderRadius: 3, border: 'none', cursor: 'pointer',
-                background: 'rgba(0,0,0,0.15)', color: '#1c1917',
-              }}
-            >
-              +10
-            </button>
-          </div>
-        )}
+        {/* Threshold buttons — ±1 for turn_gte, ±10 for HP/Gold conditions */}
+        {hasThreshold && (() => {
+          const step = condType === 'turn_gte' ? 1 : 10;
+          return (
+            <div style={{ display: 'flex', gap: 3 }} onMouseDown={stopProp} onClick={stopProp}>
+              <button
+                onClick={() => adjustThreshold(-step)}
+                style={{
+                  fontSize: 9, fontWeight: 700, padding: '1px 5px',
+                  borderRadius: 3, border: 'none', cursor: 'pointer',
+                  background: 'rgba(0,0,0,0.15)', color: '#1c1917',
+                }}
+              >
+                −{step}
+              </button>
+              <button
+                onClick={() => adjustThreshold(step)}
+                style={{
+                  fontSize: 9, fontWeight: 700, padding: '1px 5px',
+                  borderRadius: 3, border: 'none', cursor: 'pointer',
+                  background: 'rgba(0,0,0,0.15)', color: '#1c1917',
+                }}
+              >
+                +{step}
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Handles */}

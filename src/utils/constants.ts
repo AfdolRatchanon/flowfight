@@ -132,31 +132,25 @@ export const ACCESSORIES = [
 
 // Game levels
 // ─────────────────────────────────────────────────────────────────────────
-// แต่ละด่านสอน concept ของ Flowchart ทีละอย่างตามลำดับ:
-//  1-2  : Sequence          — ลำดับขั้นตอน
-//  3    : While Loop        — วนซ้ำผ่าน Condition
-//  4    : If/Else           — เงื่อนไขสองทาง
-//  5    : Nested If         — เงื่อนไขซ้อนกัน
-//  6    : Counter Loop      — ตัวนับรอบ (Turn ≥ N)
-//  7    : Resource Mgmt     — ตรวจทรัพยากร (HP Condition)
-//  8    : Skill Selection   — เลือก action ตามสถานการณ์
-//  9    : State Condition   — ตรวจสถานะตัวเอง (ailment)
-// 10    : HP Threshold      — ตัดสินใจที่จุดวิกฤต
-// 11    : Complex Tree      — ต้นไม้การตัดสินใจหลายระดับ
-// 12    : Counter+Resource  — ผสม counter กับ resource condition
-// 13    : Full Algorithm    — ออกแบบ algorithm ครบถ้วน
-// 14    : Optimization      — ปรับ algorithm ให้สมบูรณ์
-// 15    : Master Flowchart  — ทุก concept รวมกัน
+// ลำดับการสอน: Sequence → Decision (HP → Ailment → Counter) → Loop → Combine → Mastery
+//  1-3  : Sequence          — Attack, Heal (Process Support), Dodge
+//  4-6  : Decision HP       — If/Else, Nested HP, HP Greater + Spell
+//  7-8  : Decision Ailment  — Hero Poisoned?, Hero Frozen? + Dodge
+//  9-10 : Decision Counter  — Turn ≥ N, Counter + HP Threshold
+// 11-14 : Loop              — While Loop, Loop+HP, Loop+Counter, Loop+Ailment
+// 15    : Combine           — Full Algorithm (รวมทุก concept)
+// 16-17 : Advanced          — Class Skills, Counter Precision
+// 18-20 : Mastery           — ไม่มีคำแนะนำ ออกแบบเอง (incl. Sub-Boss & Final Boss)
 // ─────────────────────────────────────────────────────────────────────────
 export const LEVELS = [
-  // ── 1: SEQUENCE ─────────────────────────────────────────────────────────
+  // ── PHASE 1: SEQUENCE ─────────────────────────────────────────────────────
   {
     id: 'level_1', number: 1,
     name: 'The Slime Cave',
     description: 'เรียนรู้ Sequence — ต่อ block เป็นเส้นตรงจาก Start ถึง End',
     difficultyEstimate: 1,
     concept: 'Sequence (ลำดับขั้นตอน)',
-    tutorialText: 'ต่อ Start → Attack → Attack → End — Flowchart ทำงานทีละขั้น ตามลำดับจากบนลงล่าง ไม่ข้ามขั้นตอน!',
+    tutorialText: 'ต่อ Start → Attack → End — Flowchart ทำงานทีละขั้น ตามลำดับจากบนลงล่าง ไม่ข้ามขั้นตอน!',
     objectives: ['สังหาร Slime'],
     bonusObjective: 'ไม่รับดาเมจเลย (HP คงที่)',
     allowedBlocks: ['attack'],
@@ -169,227 +163,221 @@ export const LEVELS = [
     rewards: { experience: 40, gold: 15 },
   },
 
-  // ── 2: SEQUENCE (LONGER) ─────────────────────────────────────────────────
   {
     id: 'level_2', number: 2,
-    name: 'Bigger Slime',
-    description: 'Sequence ยาวขึ้น — ยิ่งวาง block มาก ยิ่งโจมตีได้มากต่อรอบ',
+    name: 'Heal Up!',
+    description: 'เรียนรู้ Process Support — Heal ฟื้น HP ต้องใช้ให้เป็นใน Sequence',
     difficultyEstimate: 1,
-    concept: 'Sequence (ลำดับยาวขึ้น)',
-    tutorialText: 'Slime ใหญ่กว่าเดิม วาง Attack หลายตัวต่อกัน — Flowchart ยิ่งยาว ยิ่งทำงานได้มากขึ้น!',
-    objectives: ['สังหาร Slime'],
+    concept: 'Process: Combat vs Support (Heal)',
+    tutorialText: 'Slime ใหญ่ขึ้น HP หายเร็ว! วาง Heal ใน Flowchart — Process แบ่งเป็น Combat (โจมตี) กับ Support (ช่วยตัวเอง) ใช้ Heal เพื่อฟื้น HP!',
+    objectives: ['สังหาร Slime', 'ใช้ Heal อย่างน้อย 1 ครั้ง'],
     bonusObjective: 'HP เหลือมากกว่า 85%',
-    allowedBlocks: ['attack'],
+    allowedBlocks: ['attack', 'heal'],
+    requiredBlocks: ['heal'],
     enemy: {
-      id: 'slime', name: 'Slime', spriteId: 'enemy_slime',
-      stats: { maxHP: 38, currentHP: 38, attack: 5, defense: 0, speed: 4 },
-      behaviors: ['attack'],
+      id: 'slime', name: 'Bigger Slime', spriteId: 'enemy_slime',
+      stats: { maxHP: 42, currentHP: 42, attack: 6, defense: 0, speed: 4 },
+      behaviors: ['attack', 'attack'],
     },
     unlockRequirements: { levelRequired: 1, previousLevelComplete: true },
-    rewards: { experience: 60, gold: 20 },
+    rewards: { experience: 65, gold: 20 },
   },
 
-  // ── 3: WHILE LOOP VIA CONDITION ──────────────────────────────────────────
   {
     id: 'level_3', number: 3,
-    name: 'Goblin Scout',
-    description: 'เรียนรู้ Loop — ใช้ Condition สร้างการวนซ้ำ (While Loop)',
+    name: 'Dodge Roll',
+    description: 'เรียนรู้ Dodge — หลบดาเมจ 1 ครั้ง เหมาะตอน HP ต่ำ',
     difficultyEstimate: 1,
-    concept: 'While Loop (การวนซ้ำผ่าน Condition)',
-    tutorialText: 'Enemy Alive? → YES: Attack → วนกลับที่ Condition = While Loop! แค่ 2 blocks แต่วนซ้ำได้ทุก turn จนศัตรูตาย',
-    objectives: ['สังหาร Goblin', 'ใช้ Condition block'],
+    concept: 'Process Support: Dodge (หลบหลีก)',
+    tutorialText: 'Goblin โจมตีแรง! Dodge หลบดาเมจได้ 1 ครั้ง — วาง Attack → Dodge → Attack ใน Sequence ลองดูว่า HP หายน้อยลงไหม!',
+    objectives: ['สังหาร Goblin', 'ใช้ Dodge อย่างน้อย 1 ครั้ง'],
     bonusObjective: 'HP เหลือมากกว่า 70%',
-    allowedBlocks: ['attack', 'condition', 'enemy_alive'],
-    requiredBlocks: ['condition'],
+    allowedBlocks: ['attack', 'heal', 'dodge'],
+    requiredBlocks: ['dodge'],
     enemy: {
       id: 'goblin', name: 'Goblin Scout', spriteId: 'enemy_goblin',
-      stats: { maxHP: 65, currentHP: 65, attack: 7, defense: 2, speed: 6 },
+      stats: { maxHP: 58, currentHP: 58, attack: 9, defense: 1, speed: 6 },
       behaviors: ['attack', 'attack'],
     },
     unlockRequirements: { levelRequired: 2, previousLevelComplete: true },
     rewards: { experience: 90, gold: 25 },
   },
 
-  // ── 4: IF/ELSE ───────────────────────────────────────────────────────────
+  // ── PHASE 2: DECISION — HP ────────────────────────────────────────────────
   {
     id: 'level_4', number: 4,
     name: 'Heal When Low',
-    description: 'เรียนรู้ If/Else — ตรวจเงื่อนไข ถ้าจริงทำ A ถ้าเท็จทำ B',
+    description: 'เรียนรู้ Decision (If/Else) — ตรวจ HP ก่อนตัดสินใจ Heal หรือ Attack',
     difficultyEstimate: 2,
-    concept: 'If/Else Branch (เงื่อนไขสองทาง)',
-    tutorialText: 'HP < 50? → YES: Heal / NO: Attack — นี่คือ IF/ELSE! ตรวจ 1 เงื่อนไข แล้วแยกทำ 2 ทางต่างกัน',
-    objectives: ['สังหาร Goblin', 'ใช้ Heal + Condition block'],
+    concept: 'Decision: If/Else HP (เงื่อนไขสองทาง)',
+    tutorialText: 'HP < 50? → YES: Heal / NO: Attack — นี่คือ IF/ELSE! Decision มี 2 ทาง: YES (เงื่อนไขจริง) และ NO (เงื่อนไขเท็จ) เหมือน if-else ในโปรแกรม!',
+    objectives: ['สังหาร Goblin', 'ใช้ Decision + Heal'],
     bonusObjective: 'HP เหลือมากกว่า 60%',
-    allowedBlocks: ['attack', 'heal', 'condition', 'enemy_alive', 'hp_less'],
+    allowedBlocks: ['attack', 'heal', 'condition', 'hp_less'],
     requiredBlocks: ['condition', 'heal'],
     enemy: {
       id: 'goblin', name: 'Goblin', spriteId: 'enemy_goblin',
-      stats: { maxHP: 78, currentHP: 78, attack: 10, defense: 3, speed: 7 },
+      stats: { maxHP: 78, currentHP: 78, attack: 10, defense: 2, speed: 7 },
       behaviors: ['attack', 'attack'],
     },
     unlockRequirements: { levelRequired: 3, previousLevelComplete: true },
     rewards: { experience: 120, gold: 30 },
   },
 
-  // ── 5: NESTED IF ─────────────────────────────────────────────────────────
   {
     id: 'level_5', number: 5,
     name: 'Spider Den',
-    description: 'เรียนรู้ Nested If — เงื่อนไขซ้อนกัน ตรวจหลายระดับ',
+    description: 'เรียนรู้ Nested Decision — เงื่อนไขซ้อนกัน ตรวจหลายระดับ',
     difficultyEstimate: 2,
     concept: 'Nested Conditions (เงื่อนไขซ้อน)',
-    tutorialText: 'HP<30→Dodge / HP<60→Heal / else→Attack — Nested If คือ Condition ที่อยู่ใน branch ของ Condition อื่น!',
-    objectives: ['สังหาร Spider', 'ใช้ Dodge + Heal + Condition'],
+    tutorialText: 'HP<30→Dodge / HP<60→Heal / else→Attack — Nested Decision คือ Condition ใน Branch ของ Condition อื่น เหมือน if-elif-else ในโปรแกรม!',
+    objectives: ['สังหาร Spider', 'ใช้ Dodge + Heal + Decision'],
     bonusObjective: 'HP เหลือมากกว่า 40%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'condition', 'enemy_alive', 'hp_less'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'condition', 'hp_less'],
     requiredBlocks: ['condition', 'heal', 'dodge'],
     enemy: {
       id: 'spider', name: 'Spider', spriteId: 'enemy_spider',
-      stats: { maxHP: 100, currentHP: 100, attack: 14, defense: 4, speed: 10, ailmentType: 'poison', ailmentChance: 0.25 },
+      stats: { maxHP: 100, currentHP: 100, attack: 14, defense: 3, speed: 10, ailmentType: 'poison', ailmentChance: 0.25 },
       behaviors: ['attack', 'attack', 'attack'],
     },
     unlockRequirements: { levelRequired: 4, previousLevelComplete: true },
     rewards: { experience: 155, gold: 38 },
   },
 
-  // ── 6: COUNTER-CONTROLLED LOOP ───────────────────────────────────────────
   {
     id: 'level_6', number: 6,
-    name: 'Kobold Pack',
-    description: 'เรียนรู้ Counter — Turn ≥ N? สอนการนับรอบเหมือน for-loop counter',
-    difficultyEstimate: 2,
-    concept: 'Counter-Controlled Loop (ตัวนับรอบ)',
-    tutorialText: 'Turn ≥ 4? → Power Strike / else → Attack — Turn ≥ N เหมือน for-loop counter: "เมื่อนับถึง N รอบ ทำสิ่งพิเศษ"',
-    objectives: ['สังหาร Kobold Pack', 'ใช้ Turn ≥ N? Condition'],
-    bonusObjective: 'HP เหลือมากกว่า 50%',
-    allowedBlocks: ['attack', 'heal', 'power_strike', 'condition', 'enemy_alive', 'turn_gte'],
-    requiredBlocks: ['condition', 'power_strike'],
-    enemy: {
-      id: 'kobold', name: 'Kobold Pack', spriteId: 'enemy_kobold',
-      stats: { maxHP: 115, currentHP: 115, attack: 11, defense: 4, speed: 9 },
-      behaviors: ['attack', 'attack', 'attack'],
-    },
-    unlockRequirements: { levelRequired: 5, previousLevelComplete: true },
-    rewards: { experience: 195, gold: 45 },
-  },
-
-  // ── 7: RESOURCE MANAGEMENT (MANA) ────────────────────────────────────────
-  {
-    id: 'level_7', number: 7,
     name: 'Forest Wraith',
-    description: 'เรียนรู้ Resource Condition — ตรวจ HP ก่อนใช้ Spell',
-    difficultyEstimate: 3,
-    concept: 'Resource Condition (ตรวจทรัพยากร)',
-    tutorialText: 'HP > 50? → Cast Spell / else → Attack — ตรวจสถานะก่อนใช้ท่าแรง เหมือน "ถ้ามีพลังพอ ใช้ท่าหนัก ไม่งั้น โจมตีธรรมดา"',
-    objectives: ['สังหาร Forest Wraith', 'ใช้ Cast Spell + HP Condition'],
+    description: 'เรียนรู้ Decision HP Greater — ตรวจว่ามีพลังพอก่อนใช้ Cast Spell',
+    difficultyEstimate: 2,
+    concept: 'Decision: HP Greater + Cast Spell',
+    tutorialText: 'HP > 50? → Cast Spell / else → Attack — ตรวจ HP "มากกว่า" เหมือน if (energy >= cost) useSkill() ใน code! Spell ทะลุเกราะแต่ต้องมี HP พอ',
+    objectives: ['สังหาร Forest Wraith', 'ใช้ Cast Spell + HP > Condition'],
     bonusObjective: 'HP เหลือมากกว่า 45%',
-    allowedBlocks: ['attack', 'heal', 'cast_spell', 'condition', 'enemy_alive', 'hp_greater'],
+    allowedBlocks: ['attack', 'heal', 'cast_spell', 'condition', 'hp_greater'],
     requiredBlocks: ['cast_spell', 'condition'],
     enemy: {
       id: 'ghost', name: 'Forest Wraith', spriteId: 'enemy_ghost',
       stats: { maxHP: 120, currentHP: 120, attack: 13, defense: 5, speed: 11, ailmentType: 'freeze', ailmentChance: 0.25 },
       behaviors: ['attack', 'attack', 'attack'],
     },
+    unlockRequirements: { levelRequired: 5, previousLevelComplete: true },
+    rewards: { experience: 195, gold: 45 },
+  },
+
+  // ── PHASE 3: DECISION — AILMENT ──────────────────────────────────────────
+  {
+    id: 'level_7', number: 7,
+    name: "Orc's Poison",
+    description: 'เรียนรู้ Decision Ailment — ตรวจสถานะ Poisoned ด้วย Condition',
+    difficultyEstimate: 3,
+    concept: 'Decision: Ailment State (Poisoned)',
+    tutorialText: 'Orc ทำให้ Poisoned! Hero Poisoned? → Heal เพื่อหยุด Poison / else → Attack — Ailment คือ "boolean flag": if (isPoisoned) heal(); ไม่ตรวจ = โดน Poison ตลอด!',
+    objectives: ['สังหาร Orc Warrior', 'ใช้ Hero Poisoned? Condition'],
+    bonusObjective: 'HP เหลือมากกว่า 35%',
+    allowedBlocks: ['attack', 'heal', 'cast_spell', 'power_strike', 'condition', 'hero_poisoned', 'hp_less'],
+    requiredBlocks: ['condition', 'heal', 'hero_poisoned'],
+    enemy: {
+      id: 'orc', name: 'Orc Warrior', spriteId: 'enemy_orc',
+      stats: { maxHP: 148, currentHP: 148, attack: 16, defense: 6, speed: 5, ailmentType: 'poison', ailmentChance: 0.40 },
+      behaviors: ['attack', 'attack'],
+    },
     unlockRequirements: { levelRequired: 6, previousLevelComplete: true },
     rewards: { experience: 245, gold: 55 },
   },
 
-  // ── 8: SKILL SELECTION (ARMOR) ───────────────────────────────────────────
   {
     id: 'level_8', number: 8,
-    name: 'Goblin Knight',
-    description: 'เรียนรู้ Skill Selection — เลือก action ที่เหมาะสมกับสถานการณ์',
+    name: 'Frozen in Place',
+    description: 'เรียนรู้ Decision Frozen — Freeze ทำให้ action miss ใช้ Dodge หลีกเลี่ยง!',
     difficultyEstimate: 3,
-    concept: 'Skill Selection (เลือก action ตามสถานการณ์)',
-    tutorialText: 'Goblin Knight มีเกราะหนา (Armor 6) — Power Strike (2x dmg) และ Spell (ทะลุเกราะ) ดีกว่า Attack ธรรมดามาก! ใช้ Condition เลือก action ที่เหมาะสม',
-    objectives: ['สังหาร Goblin Knight', 'ใช้ Power Strike หรือ Cast Spell'],
+    concept: 'Decision: Ailment State (Frozen + Dodge)',
+    tutorialText: 'Kobold ทำให้ Frozen! Hero Frozen? → Dodge (หลบก่อน miss ไปเปล่า!) / else → Power Strike — Frozen ทำให้ action miss ดังนั้นต้องตรวจก่อนใช้ท่า!',
+    objectives: ['สังหาร Kobold', 'ใช้ Hero Frozen? Condition + Dodge'],
     bonusObjective: 'HP เหลือมากกว่า 40%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hp_greater'],
-    requiredBlocks: ['condition', 'power_strike'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'power_strike', 'condition', 'hero_frozen', 'hp_less'],
+    requiredBlocks: ['condition', 'dodge', 'hero_frozen'],
+    enemy: {
+      id: 'kobold', name: 'Kobold Pack', spriteId: 'enemy_kobold',
+      stats: { maxHP: 128, currentHP: 128, attack: 13, defense: 4, speed: 9, ailmentType: 'freeze', ailmentChance: 0.35 },
+      behaviors: ['attack', 'attack', 'attack'],
+    },
+    unlockRequirements: { levelRequired: 7, previousLevelComplete: true },
+    rewards: { experience: 300, gold: 65 },
+  },
+
+  // ── PHASE 4: DECISION — COUNTER ──────────────────────────────────────────
+  {
+    id: 'level_9', number: 9,
+    name: 'Turn Counter',
+    description: 'เรียนรู้ Counter — Turn ≥ N ปรับได้ทีละ 1 นับรอบเหมือน for-loop',
+    difficultyEstimate: 3,
+    concept: 'Decision: Counter (Turn ≥ N)',
+    tutorialText: 'Turn ≥ 3 → Power Strike / else → Attack — Counter นับรอบเหมือน for(i=0;i<N;i++) ในโปรแกรม! กด ±1 บน Counter node เพื่อหา timing ที่เหมาะ',
+    objectives: ['สังหาร Goblin Knight', 'ใช้ Turn ≥ N? + Power Strike'],
+    bonusObjective: 'HP เหลือมากกว่า 50%',
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'hp_less', 'turn_gte'],
+    requiredBlocks: ['condition', 'power_strike', 'turn_gte'],
     enemy: {
       id: 'goblin_knight', name: 'Goblin Knight', spriteId: 'enemy_goblin',
       stats: { maxHP: 140, currentHP: 140, attack: 16, defense: 6, speed: 6, armor: 6, parry: 15, enrageThreshold: 30 },
       behaviors: ['attack', 'attack', 'heal'],
     },
-    unlockRequirements: { levelRequired: 7, previousLevelComplete: true },
-    rewards: { experience: 305, gold: 65 },
-  },
-
-  // ── 9: STATE CONDITION (AILMENT) ──────────────────────────────────────────
-  {
-    id: 'level_9', number: 9,
-    name: 'Orc Warrior',
-    description: 'เรียนรู้ State Condition — ตรวจ "สถานะ" ตัวเอง เหมือน flag ใน programming',
-    difficultyEstimate: 3,
-    concept: 'State Condition (ตรวจสถานะ)',
-    tutorialText: 'Orc Warrior ทำให้ Poisoned! Hero Poisoned? → Heal / else → Attack — ตรวจ "สถานะ" เหมือน boolean flag: if (isPoisoned) heal();',
-    objectives: ['สังหาร Orc Warrior', 'ใช้ Hero Poisoned? Condition'],
-    bonusObjective: 'HP เหลือมากกว่า 35%',
-    allowedBlocks: ['attack', 'heal', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_poisoned'],
-    requiredBlocks: ['condition', 'heal'],
-    enemy: {
-      id: 'orc', name: 'Orc Warrior', spriteId: 'enemy_orc',
-      stats: { maxHP: 155, currentHP: 155, attack: 17, defense: 7, speed: 5, ailmentType: 'poison', ailmentChance: 0.40 },
-      behaviors: ['attack', 'attack'],
-    },
     unlockRequirements: { levelRequired: 8, previousLevelComplete: true },
-    rewards: { experience: 375, gold: 78 },
+    rewards: { experience: 365, gold: 78 },
   },
 
-  // ── 10: HP THRESHOLD + ENRAGE ─────────────────────────────────────────────
   {
     id: 'level_10', number: 10,
-    name: 'Stone Troll',
-    description: 'เรียนรู้ HP Threshold — ตัดสินใจที่จุดวิกฤต เมื่อศัตรู Enrage',
+    name: 'Troll Rampage',
+    description: 'ผสม Counter กับ HP Condition — Troll Enrage ต้องจับ timing!',
     difficultyEstimate: 3,
-    concept: 'HP Threshold Decision (ตัดสินใจที่ HP วิกฤต)',
-    tutorialText: 'Stone Troll Enrage เมื่อ HP ต่ำ — ใช้ HP Condition ของตัวเอง: HP<40→Dodge (หลบความโกรธ) / HP<65→Heal / else→Attack',
-    objectives: ['สังหาร Stone Troll', 'ใช้ Dodge + Heal ตาม HP Condition'],
+    concept: 'Counter + HP Threshold (ผสม Counter + HP)',
+    tutorialText: 'Troll Enrage เมื่อ HP น้อย! ผสม Counter + HP: HP<40→Dodge (หลบ Enrage) / Turn≥5→Power Strike / else→Attack — ปรับ Turn ≥ ทีละ 1 จนพอดี!',
+    objectives: ['สังหาร Stone Troll', 'ใช้ Counter + HP Condition พร้อมกัน'],
     bonusObjective: 'HP เหลือมากกว่า 30%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hp_less'],
-    requiredBlocks: ['condition', 'heal', 'dodge'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'hp_less', 'turn_gte'],
+    requiredBlocks: ['condition', 'turn_gte', 'dodge'],
     enemy: {
       id: 'troll', name: 'Stone Troll', spriteId: 'enemy_troll',
       stats: { maxHP: 182, currentHP: 182, attack: 20, defense: 9, speed: 4, armor: 7, parry: 15, enrageThreshold: 35 },
       behaviors: ['attack', 'heal', 'attack'],
     },
     unlockRequirements: { levelRequired: 9, previousLevelComplete: true },
-    rewards: { experience: 455, gold: 88 },
+    rewards: { experience: 450, gold: 88 },
   },
 
-  // ── 11: COMPLEX DECISION TREE ─────────────────────────────────────────────
+  // ── PHASE 5: LOOP ─────────────────────────────────────────────────────────
   {
     id: 'level_11', number: 11,
-    name: 'Orc Warlord',
-    description: 'เรียนรู้ Decision Tree — ผสม conditions หลายระดับในต้นไม้การตัดสินใจ',
+    name: 'While Loop',
+    description: 'เรียนรู้ While Loop — Enemy Alive? วนซ้ำจนศัตรูตาย',
     difficultyEstimate: 4,
-    concept: 'Complex Decision Tree (ต้นไม้การตัดสินใจ)',
-    tutorialText: 'ผสม HP + สถานะ + หลาย Condition — Decision Tree คือ Flowchart ที่มี branch ซ้อนกันหลายชั้น เหมือน if-elif-elif-else ใน code!',
-    objectives: ['สังหาร Orc Warlord', 'ใช้ Condition อย่างน้อย 3 แบบต่างกัน'],
+    concept: 'While Loop (การวนซ้ำผ่าน Enemy Alive?)',
+    tutorialText: 'Enemy Alive? → YES: Attack → วนกลับที่ Enemy Alive? / NO: End — นี่คือ While Loop! ทำงานซ้ำจนเงื่อนไขเป็น false เหมือน while(enemy.alive) attack();',
+    objectives: ['สังหาร Orc Warlord', 'ใช้ Enemy Alive? Loop'],
     bonusObjective: 'HP เหลือมากกว่า 25%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_poisoned', 'hp_less'],
-    requiredBlocks: ['power_strike', 'cast_spell', 'condition', 'heal'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive'],
+    requiredBlocks: ['condition', 'enemy_alive'],
     enemy: {
       id: 'orc_warlord', name: 'Orc Warlord', spriteId: 'enemy_orc',
-      stats: { maxHP: 218, currentHP: 218, attack: 23, defense: 11, speed: 7, armor: 9, parry: 20, enrageThreshold: 30, ailmentType: 'burn', ailmentChance: 0.30 },
+      stats: { maxHP: 218, currentHP: 218, attack: 22, defense: 10, speed: 7, armor: 8, parry: 18, enrageThreshold: 30, ailmentType: 'burn', ailmentChance: 0.30 },
       behaviors: ['attack', 'attack', 'cast_spell'],
     },
     unlockRequirements: { levelRequired: 10, previousLevelComplete: true },
     rewards: { experience: 555, gold: 105 },
   },
 
-  // ── 12: COUNTER + RESOURCE COMBINED ──────────────────────────────────────
   {
     id: 'level_12', number: 12,
-    name: 'Ice Giant',
-    description: 'ผสม Counter Loop กับ HP Condition — Turn ≥ N AND HP > X',
+    name: 'Loop + Heal',
+    description: 'ใส่ Decision ใน Loop — ตรวจ HP ทุกรอบที่วนซ้ำ',
     difficultyEstimate: 4,
-    concept: 'Counter + Resource (ผสม Counter กับ Condition)',
-    tutorialText: 'Turn ≥ 5 → ตรวจ HP > 50? → Power Strike / else → Spell — ผสม counter กับ condition: "เมื่อครบ N รอบ ถ้า HP พอ ใช้ท่าแรง" = AND condition!',
-    objectives: ['สังหาร Ice Giant', 'ใช้ Turn ≥ N? ร่วมกับ HP Condition'],
+    concept: 'Loop + If/Else Inside (Decision ใน While Loop)',
+    tutorialText: 'Loop (Enemy Alive?) → YES → HP < 50? → YES: Heal / NO: Cast Spell — นี่คือ "If/Else ใน While Loop": ทุกรอบที่วน ตรวจ HP แล้วตัดสินใจด้วย!',
+    objectives: ['สังหาร Ice Giant', 'ใช้ HP Condition ใน Loop'],
     bonusObjective: 'HP เหลือมากกว่า 20%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_frozen', 'hp_less', 'turn_gte'],
-    requiredBlocks: ['cast_spell', 'power_strike', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_frozen', 'hp_less'],
+    requiredBlocks: ['condition', 'enemy_alive', 'heal', 'hp_less'],
     enemy: {
       id: 'ice_giant', name: 'Ice Giant', spriteId: 'enemy_ice_giant',
       stats: { maxHP: 252, currentHP: 252, attack: 26, defense: 14, speed: 6, armor: 11, ailmentType: 'freeze', ailmentChance: 0.35 },
@@ -399,69 +387,170 @@ export const LEVELS = [
     rewards: { experience: 685, gold: 125 },
   },
 
-  // ── 13: FULL ALGORITHM DESIGN ─────────────────────────────────────────────
   {
     id: 'level_13', number: 13,
-    name: "Dragon's Lair",
-    description: 'ออกแบบ Algorithm ที่ครบถ้วน — ผสมทุก concept ที่เรียนมา',
-    difficultyEstimate: 5,
-    concept: 'Full Algorithm Design (ออกแบบ Algorithm)',
-    tutorialText: 'Dragon ใช้หลากหลายท่า — ต้องออกแบบ Flowchart ที่ครอบคลุมทุกสถานการณ์: HP, สถานะ, Turn counter ทั้งหมดใน Flowchart เดียว!',
-    objectives: ['สังหาร Young Dragon', 'ใช้ Heal + Dodge + Spell + Power Strike'],
+    name: "Dragon's Counter",
+    description: 'ใส่ Counter ใน Loop — burst ทุก N รอบ Dragon แรงมาก!',
+    difficultyEstimate: 4,
+    concept: 'Loop + Counter Inside (Counter ใน While Loop)',
+    tutorialText: 'Loop → Turn ≥ 3? → YES: Power Strike / NO: Attack → วนกลับ — Counter ใน Loop คือ "burst ทุก N รอบ" เหมือน if (turn % N == 0) burst(); ใน code!',
+    objectives: ['สังหาร Young Dragon', 'ใช้ Turn Counter ใน Loop'],
     bonusObjective: 'HP เหลือมากกว่า 20%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
-    requiredBlocks: ['cast_spell', 'power_strike', 'condition', 'heal', 'dodge'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'turn_gte', 'hp_less'],
+    requiredBlocks: ['condition', 'enemy_alive', 'turn_gte', 'power_strike'],
     enemy: {
       id: 'dragon', name: 'Young Dragon', spriteId: 'enemy_dragon',
       stats: { maxHP: 295, currentHP: 295, attack: 29, defense: 15, speed: 10, enrageThreshold: 35, ailmentType: 'burn', ailmentChance: 0.40 },
       behaviors: ['attack', 'cast_spell', 'attack', 'attack'],
     },
     unlockRequirements: { levelRequired: 12, previousLevelComplete: true },
-    rewards: { experience: 855, gold: 155 },
+    rewards: { experience: 850, gold: 155 },
   },
 
-  // ── 14: ALGORITHM OPTIMIZATION ───────────────────────────────────────────
   {
     id: 'level_14', number: 14,
-    name: 'The Lich Lord',
-    description: 'Optimize Flowchart — ทำให้ถูกต้องและมีประสิทธิภาพในทุกกรณี',
+    name: "Dragon's Fury",
+    description: 'ผสม Loop + Ailment + HP — Dragon Elder แรงกว่าเดิม แถม Poison!',
     difficultyEstimate: 5,
-    concept: 'Algorithm Optimization (ปรับ Algorithm ให้ดีที่สุด)',
-    tutorialText: 'Lich Lord มีทุกอย่าง — ต้องทำ Flowchart ที่ตอบสนองทุกสถานการณ์ทันที: HP วิกฤต, ติด Poison และ Enrage พร้อมกัน!',
-    objectives: ['สังหาร Lich Lord'],
+    concept: 'Loop + Ailment + HP (ผสมใน While Loop)',
+    tutorialText: 'Loop → Poisoned?→Heal / HP<50?→Dodge / Turn≥4?→Power Strike / else→Cast Spell — ผสมทุกอย่างใน Loop: ตรวจ Ailment + HP + Counter ทุกรอบ!',
+    objectives: ['สังหาร Dragon Elder', 'ใช้ Ailment Condition ใน Loop'],
     bonusObjective: 'HP เหลือมากกว่า 15%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
-    requiredBlocks: ['cast_spell', 'power_strike', 'condition', 'heal'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_poisoned', 'hp_less', 'turn_gte'],
+    requiredBlocks: ['condition', 'enemy_alive', 'hero_poisoned', 'heal', 'dodge'],
     enemy: {
-      id: 'lich', name: 'Lich Lord', spriteId: 'enemy_lich',
-      stats: { maxHP: 362, currentHP: 362, attack: 34, defense: 17, speed: 11, armor: 8, parry: 25, enrageThreshold: 40, ailmentType: 'poison', ailmentChance: 0.40 },
-      behaviors: ['cast_spell', 'attack', 'cast_spell', 'attack', 'heal'],
+      id: 'dragon', name: 'Dragon Elder', spriteId: 'enemy_dragon',
+      stats: { maxHP: 345, currentHP: 345, attack: 33, defense: 17, speed: 11, armor: 8, parry: 20, enrageThreshold: 40, ailmentType: 'poison', ailmentChance: 0.40 },
+      behaviors: ['cast_spell', 'attack', 'attack', 'cast_spell', 'attack'],
     },
     unlockRequirements: { levelRequired: 13, previousLevelComplete: true },
-    rewards: { experience: 1055, gold: 185 },
+    rewards: { experience: 1050, gold: 185 },
   },
 
-  // ── 15: MASTER FLOWCHART ──────────────────────────────────────────────────
+  // ── PHASE 6: COMBINE ─────────────────────────────────────────────────────
   {
     id: 'level_15', number: 15,
-    name: 'The Dark Overlord',
-    description: 'Final Boss — ใช้ทุก concept: Sequence, Loop, If/Else, Counter, Resource ในครั้งเดียว',
+    name: 'The Warlord Returns',
+    description: 'ออกแบบ Algorithm ที่ครบถ้วน — ผสมทุก concept จาก 14 ด่านที่ผ่านมา',
     difficultyEstimate: 5,
-    concept: 'Master Flowchart (รวมทุก concept)',
-    tutorialText: 'Dark Overlord ใช้ทุกทักษะ — แสดงให้เห็นว่าคุณเข้าใจ Flowchart ครบทุก concept: Sequence → Loop → If/Else → Nested → Counter → Resource!',
-    objectives: ['สังหาร Dark Overlord', 'ใช้ Flowchart ที่ครบทุก concept'],
+    concept: 'Full Algorithm (Sequence + Decision + Loop รวมกัน)',
+    tutorialText: 'Orc Warlord ใช้ทุกท่า — ต้องทำ Loop ที่มี Ailment + HP + Counter ครบ: Poisoned?→Heal / HP<40?→Dodge / Turn≥4?→Power Strike / else→Cast Spell!',
+    objectives: ['สังหาร Orc Warlord Elite', 'ใช้ครบ: Loop + HP + Ailment + Counter'],
     bonusObjective: 'HP เหลือมากกว่า 20%',
     allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
     requiredBlocks: ['cast_spell', 'power_strike', 'condition', 'heal', 'dodge'],
     enemy: {
-      id: 'overlord', name: 'Dark Overlord', spriteId: 'enemy_boss',
-      stats: { maxHP: 475, currentHP: 475, attack: 41, defense: 23, speed: 14, armor: 17, parry: 33, enrageThreshold: 40, ailmentType: 'burn', ailmentChance: 0.45 },
-      behaviors: ['attack', 'cast_spell', 'heal', 'cast_spell', 'attack', 'attack'],
+      id: 'orc_warlord', name: 'Orc Warlord Elite', spriteId: 'enemy_orc',
+      stats: { maxHP: 280, currentHP: 280, attack: 27, defense: 13, speed: 8, armor: 9, parry: 22, enrageThreshold: 30, ailmentType: 'poison', ailmentChance: 0.35 },
+      behaviors: ['attack', 'attack', 'cast_spell', 'attack'],
     },
     unlockRequirements: { levelRequired: 14, previousLevelComplete: true },
-    rewards: { experience: 1500, gold: 255 },
+    rewards: { experience: 1300, gold: 220 },
+  },
+
+  // ── PHASE 7: ADVANCED ─────────────────────────────────────────────────────
+  {
+    id: 'level_16', number: 16,
+    name: "Vampire's Curse",
+    description: 'ใช้ Class Skill ใน Flowchart — Vampire ดูด HP และทำ Poison ทุกรอบ!',
+    difficultyEstimate: 5,
+    concept: 'Class Skills + Ailment Combo',
+    tutorialText: 'Vampire ดูด HP ทุกรอบ! ใช้ Class Skill ของ Class ตัวเองใน Loop: ตรวจ Poisoned? + HP + สลับ Skill กับ Attack ให้เหมาะสม — Class Skill แต่ละอันแรงกว่า Attack มาก!',
+    objectives: ['สังหาร Vampire Lord'],
+    bonusObjective: 'HP เหลือมากกว่า 15%',
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    requiredBlocks: ['condition', 'enemy_alive', 'heal'],
+    enemy: {
+      id: 'vampire', name: 'Vampire Lord', spriteId: 'enemy_lich',
+      stats: { maxHP: 350, currentHP: 350, attack: 30, defense: 18, speed: 13, armor: 8, parry: 22, enrageThreshold: 35, ailmentType: 'poison', ailmentChance: 0.45 },
+      behaviors: ['attack', 'cast_spell', 'heal', 'attack', 'attack'],
+    },
+    unlockRequirements: { levelRequired: 15, previousLevelComplete: true },
+    rewards: { experience: 1600, gold: 260 },
+  },
+
+  {
+    id: 'level_17', number: 17,
+    name: 'Frost Titan',
+    description: 'Counter Precision — ปรับ threshold ทีละ 1 หา timing burst ที่แม่นยำ!',
+    difficultyEstimate: 5,
+    concept: 'Counter Precision + Frozen Management',
+    tutorialText: 'Frost Titan แข็งแกร่งมาก! ปรับ Turn ≥ N ทีละ 1 บน Counter node หา timing ที่ดีที่สุด Frozen?→Dodge ก่อนเสมอ จากนั้น burst เมื่อครบ turn ที่กำหนด!',
+    objectives: ['สังหาร Frost Titan'],
+    bonusObjective: 'HP เหลือมากกว่า 10%',
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    requiredBlocks: ['condition', 'enemy_alive', 'turn_gte', 'hero_frozen'],
+    enemy: {
+      id: 'frost_titan', name: 'Frost Titan', spriteId: 'enemy_ice_giant',
+      stats: { maxHP: 400, currentHP: 400, attack: 34, defense: 20, speed: 7, armor: 14, parry: 25, enrageThreshold: 40, ailmentType: 'freeze', ailmentChance: 0.45 },
+      behaviors: ['attack', 'attack', 'cast_spell', 'attack', 'attack'],
+    },
+    unlockRequirements: { levelRequired: 16, previousLevelComplete: true },
+    rewards: { experience: 2000, gold: 300 },
+  },
+
+  // ── PHASE 8: MASTERY (ไม่มีคำแนะนำ) ─────────────────────────────────────
+  {
+    id: 'level_18', number: 18,
+    name: 'Dark Commander',
+    description: 'Mastery Challenge — ไม่มีคำแนะนำ ออกแบบ Flowchart เองทั้งหมด!',
+    difficultyEstimate: 5,
+    concept: 'Mastery: Free Design',
+    tutorialText: 'Dark Commander ใช้ทุกท่า — ไม่มีคำแนะนำแล้ว! ใช้ทุกที่เรียนมา: Loop, HP, Ailment, Counter, Class Skills ออกแบบ Flowchart ที่ดีที่สุดด้วยตัวเอง!',
+    objectives: ['สังหาร Dark Commander'],
+    bonusObjective: 'HP เหลือมากกว่า 10%',
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    requiredBlocks: [],
+    enemy: {
+      id: 'dark_commander', name: 'Dark Commander', spriteId: 'enemy_boss',
+      stats: { maxHP: 450, currentHP: 450, attack: 38, defense: 22, speed: 12, armor: 15, parry: 28, enrageThreshold: 40, ailmentType: 'burn', ailmentChance: 0.40 },
+      behaviors: ['attack', 'cast_spell', 'attack', 'heal', 'attack', 'attack'],
+    },
+    unlockRequirements: { levelRequired: 17, previousLevelComplete: true },
+    rewards: { experience: 2500, gold: 350 },
+  },
+
+  {
+    id: 'level_19', number: 19,
+    name: 'The Lich Lord',
+    description: 'Sub-Boss — Lich Lord ไม่มีจุดอ่อน รู้จัก Ailment ทุกประเภท!',
+    difficultyEstimate: 5,
+    concept: 'Sub-Boss: Ultimate Mastery',
+    tutorialText: 'Lich Lord ไม่มีจุดอ่อน — ใช้ทุกที่เรียนมา: Loop ที่ครบ, ตรวจ Ailment ทุกประเภท, Counter precision, Class Skill ที่เหมาะสมกับสถานการณ์!',
+    objectives: ['สังหาร Lich Lord'],
+    bonusObjective: 'HP เหลือมากกว่า 10%',
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    requiredBlocks: [],
+    enemy: {
+      id: 'lich', name: 'Lich Lord', spriteId: 'enemy_lich',
+      stats: { maxHP: 500, currentHP: 500, attack: 42, defense: 24, speed: 13, armor: 12, parry: 30, enrageThreshold: 40, ailmentType: 'poison', ailmentChance: 0.45 },
+      behaviors: ['cast_spell', 'attack', 'cast_spell', 'attack', 'heal', 'attack'],
+    },
+    unlockRequirements: { levelRequired: 18, previousLevelComplete: true },
+    rewards: { experience: 3200, gold: 430 },
+  },
+
+  {
+    id: 'level_20', number: 20,
+    name: 'The Dark Overlord',
+    description: 'Final Boss — Dark Overlord ผู้ครองความมืด บทพิสูจน์ขั้นสุดท้าย!',
+    difficultyEstimate: 5,
+    concept: 'Final Boss: Ultimate Challenge',
+    tutorialText: 'Dark Overlord ใช้ทุกอย่าง — นี่คือบทพิสูจน์สุดท้าย! ออกแบบ Flowchart ที่สมบูรณ์แบบ ผสมทุก concept ทุก skill ให้ชนะ Final Boss!',
+    objectives: ['สังหาร Dark Overlord', 'แสดงว่าเข้าใจ Flowchart ครบทุก concept'],
+    bonusObjective: 'HP เหลือมากกว่า 15%',
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    requiredBlocks: [],
+    enemy: {
+      id: 'overlord', name: 'Dark Overlord', spriteId: 'enemy_boss',
+      stats: { maxHP: 650, currentHP: 650, attack: 50, defense: 28, speed: 15, armor: 20, parry: 35, enrageThreshold: 40, ailmentType: 'burn', ailmentChance: 0.50 },
+      behaviors: ['attack', 'cast_spell', 'heal', 'cast_spell', 'attack', 'attack', 'power_strike'],
+    },
+    unlockRequirements: { levelRequired: 19, previousLevelComplete: true },
+    rewards: { experience: 4000, gold: 600 },
   },
 ];
+
 
 // ===== Endless / Survival Mode =====
 export const ENDLESS_LEVEL = {

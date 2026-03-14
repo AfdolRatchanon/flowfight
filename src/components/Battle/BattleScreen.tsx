@@ -159,25 +159,27 @@ const ENEMY_ICONS: Record<string, string> = {
   orc: '👹', orc_warlord: '👹', ghost: '👻', troll: '🧌',
   spider: '🕷️', ice_giant: '🧊', dragon: '🐉',
   fire_elemental: '🔥', lich: '💀', shadow_demon: '👁️', overlord: '💀',
+  vampire: '🧛', frost_titan: '❄️', dark_commander: '⚔️',
 };
 
 // Map level.id → image filename (1 ภาพต่อ 1 ด่าน ไม่ซ้ำกัน)
 const LEVEL_IMAGE: Record<string, string> = {
-  level_1: 'slime.png',
-  level_2: 'Bigger Slime.png',
-  level_3: 'Goblin Scout.png',
-  level_4: 'Goblin Heal When Low.png',
-  level_5: 'Spider.png',
-  level_6: 'Kobold.png',
-  level_7: 'Forest Wraith.png',
-  level_8: 'Goblin Knight.png',
-  level_9: 'Orc Warrior.png',
+  level_1:  'slime.png',
+  level_2:  'Bigger Slime.png',
+  level_3:  'Goblin Scout.png',
+  level_4:  'Goblin Heal When Low.png',
+  level_5:  'Spider.png',
+  level_6:  'Forest Wraith.png',
+  level_7:  'Orc Warrior.png',
+  level_8:  'Goblin Knight.png',
+  level_9:  'Kobold.png',
   level_10: 'Stone Troll.png',
   level_11: 'Orc.png',
   level_12: 'Ice Giant.png',
   level_13: "Dragon's Lair.png",
-  level_14: 'The Lich Lord.png',
-  level_15: 'The Dark Overlord.png',
+  level_14: "Dragon's Lair.png",
+  level_15: 'Orc.png',
+  // level_16-20: no image → emoji fallback (images to be added later)
 };
 
 // Endless mode: กลุ่มละ 5 wave → 15 ศัตรู (ตามลำดับความยาก)
