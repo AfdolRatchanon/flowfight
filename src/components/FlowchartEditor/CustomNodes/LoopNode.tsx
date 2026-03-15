@@ -1,8 +1,12 @@
 import { Handle, Position } from 'reactflow';
+import { useFlowchartStore } from '../../../stores/flowchartStore';
 
-export default function LoopNode({ data }: {
+export default function LoopNode({ id, data }: {
+  id: string;
   data: { label: string; loopType?: string; loopCount?: number; isActive?: boolean }
 }) {
+  const activeHandleKey = useFlowchartStore((s) => s.activeHandleKey);
+  const setActiveHandleKey = useFlowchartStore((s) => s.setActiveHandleKey);
   const active = data.isActive;
   const W = 160, H = 72;
 
@@ -41,22 +45,25 @@ export default function LoopNode({ data }: {
       </div>
 
       {/* IN — top (target) */}
-      <Handle type="target" id="in" position={Position.Top} style={{
-        top: -4, left: '50%', transform: 'translateX(-50%)',
-        background: '#fed7aa', border: '2px solid #fff', width: 10, height: 10,
-      }} />
+      <Handle type="target" id="in" position={Position.Top}
+        className={`flow-handle${activeHandleKey === `${id}::in` ? ' flow-handle--active' : ''}`}
+        onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::in`)}
+        style={{ top: -4, left: '50%', transform: 'translateX(-50%)', background: '#fed7aa', border: '2px solid #fff', width: 10, height: 10 }}
+      />
 
       {/* LOOP — right (continue looping, orange) */}
-      <Handle type="source" id="loop" position={Position.Right} style={{
-        right: -4, top: '50%', transform: 'translateY(-50%)',
-        background: '#fb923c', border: '2px solid #fff', width: 10, height: 10,
-      }} />
+      <Handle type="source" id="loop" position={Position.Right}
+        className={`flow-handle${activeHandleKey === `${id}::loop` ? ' flow-handle--active' : ''}`}
+        onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::loop`)}
+        style={{ right: -4, top: '50%', transform: 'translateY(-50%)', background: '#fb923c', border: '2px solid #fff', width: 10, height: 10 }}
+      />
 
       {/* NEXT — bottom (exit loop, blue) */}
-      <Handle type="source" id="next" position={Position.Bottom} style={{
-        bottom: -4, left: '50%', transform: 'translateX(-50%)',
-        background: '#60a5fa', border: '2px solid #fff', width: 10, height: 10,
-      }} />
+      <Handle type="source" id="next" position={Position.Bottom}
+        className={`flow-handle${activeHandleKey === `${id}::next` ? ' flow-handle--active' : ''}`}
+        onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::next`)}
+        style={{ bottom: -4, left: '50%', transform: 'translateX(-50%)', background: '#60a5fa', border: '2px solid #fff', width: 10, height: 10 }}
+      />
 
       {/* Labels */}
       <span style={{

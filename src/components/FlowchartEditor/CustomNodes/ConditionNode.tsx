@@ -20,7 +20,7 @@ export default function ConditionNode({
   id: string;
   data: ConditionData;
 }) {
-  const { nodes, setNodes, visitedNodeIds, visitedConditionResults, shieldGlowTypes } = useFlowchartStore();
+  const { nodes, setNodes, visitedNodeIds, visitedConditionResults, shieldGlowTypes, activeHandleKey, setActiveHandleKey } = useFlowchartStore();
   const active = data.isActive;
   const wasVisited = visitedNodeIds.includes(id);
   const traceResult = wasVisited ? visitedConditionResults[id] : undefined; // true=YES, false=NO, undefined=not visited
@@ -118,14 +118,20 @@ export default function ConditionNode({
       {/* Handles */}
       <Handle
         type="target" position={Position.Top}
+        className={`flow-handle${activeHandleKey === `${id}::target` ? ' flow-handle--active' : ''}`}
+        onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::target`)}
         style={{ top: -4, left: '50%', transform: 'translateX(-50%)', background: '#fde68a', border: '2px solid #fff', width: 10, height: 10 }}
       />
       <Handle
         type="source" id="yes" position={Position.Right}
+        className={`flow-handle${activeHandleKey === `${id}::yes` ? ' flow-handle--active' : ''}`}
+        onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::yes`)}
         style={{ right: -4, top: '50%', transform: 'translateY(-50%)', background: '#4ade80', border: '2px solid #fff', width: 10, height: 10 }}
       />
       <Handle
         type="source" id="no" position={Position.Bottom}
+        className={`flow-handle${activeHandleKey === `${id}::no` ? ' flow-handle--active' : ''}`}
+        onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::no`)}
         style={{ bottom: -4, left: '50%', transform: 'translateX(-50%)', background: '#f87171', border: '2px solid #fff', width: 10, height: 10 }}
       />
       <span style={{

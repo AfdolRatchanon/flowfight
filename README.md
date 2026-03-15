@@ -472,6 +472,12 @@ src/
 
 ## Changelog
 
+### v0.10.1 (มีนาคม 2026)
+
+- แก้ **Handle highlight หายหลังปล่อยมือ** — ย้าย active handle state เข้า Zustand store แทนการใช้ `classList` โดยตรง (ReactFlow อัพเดต className ระหว่าง drag ทำให้ class หาย)
+- แก้ **Handle ตำแหน่งเพี้ยนเมื่อ highlight** — ลบ `transform: scale()` ออกจาก CSS ใช้เฉพาะ `box-shadow` glow แทน
+- เพิ่ม **SelfLoopEdge** — custom edge สำหรับ edge ที่วนกลับ node เดิม มี path ยาวขึ้น 80px และ invisible hitbox 24px คลิก/ลบง่ายกว่าเดิม
+
 ### v0.10.0 (มีนาคม 2026)
 
 - **Daily Farm Diminishing Returns** — จำนวนครั้งที่เล่นซ้ำรายวันเก็บใน Firestore (`dailyFarm.date` + `dailyFarm.plays`) รีเซ็ตทุกเที่ยงคืน UTC+7

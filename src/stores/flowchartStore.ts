@@ -15,6 +15,9 @@ interface FlowchartState {
   shieldGlowTypes: string[]; // action/condition types that need to be added to break shield
   setShieldGlowTypes: (types: string[]) => void;
 
+  activeHandleKey: string | null; // `${nodeId}::${handleId}` — which handle is highlighted
+  setActiveHandleKey: (key: string | null) => void;
+
   setNodes: (nodes: FlowNode[]) => void;
   setEdges: (edges: FlowEdge[]) => void;
   addNode: (node: FlowNode) => void;
@@ -62,6 +65,8 @@ export const useFlowchartStore = create<FlowchartState>((set, get) => ({
   shieldGlowTypes: [],
 
   setShieldGlowTypes: (types) => set({ shieldGlowTypes: types }),
+  activeHandleKey: null,
+  setActiveHandleKey: (key) => set({ activeHandleKey: key }),
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 

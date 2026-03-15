@@ -178,6 +178,30 @@ body {
 .react-flow__controls-button:hover { background: var(--rf-controls-btn-hover); }
 .react-flow__minimap { background: var(--rf-minimap-bg) !important; border: 1px solid var(--border); }
 
+/* ===== HANDLE HITBOX + HIGHLIGHT ===== */
+/* ขยาย clickable area โดยไม่เปลี่ยนขนาด visual */
+.flow-handle {
+  transition: transform 0.12s ease, box-shadow 0.12s ease !important;
+}
+.flow-handle::before {
+  content: '';
+  position: absolute;
+  inset: -15px;
+  border-radius: 50%;
+}
+/* Highlight เมื่อกด (ค้างหรือปล่อยแล้ว) */
+.flow-handle--active {
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.95), 0 0 16px rgba(255,255,255,0.7) !important;
+}
+/* Highlight เมื่อกำลัง drag เชื่อมสาย */
+.flow-handle.react-flow__handle-connecting {
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.9), 0 0 12px rgba(255,255,255,0.6) !important;
+}
+/* Highlight สีเขียวเมื่อ hover เหนือ handle ที่รับการเชื่อมได้ */
+.flow-handle.react-flow__handle-valid {
+  box-shadow: 0 0 0 3px #4ade80, 0 0 14px rgba(74,222,128,0.8) !important;
+}
+
 /* Glow effects */
 .glow-accent { box-shadow: 0 0 20px rgba(233, 69, 96, 0.3); }
 .glow-purple { box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); }

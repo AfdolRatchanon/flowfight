@@ -39,6 +39,8 @@ export default function ActionNode({
 }) {
   const visitedNodeIds = useFlowchartStore((s) => s.visitedNodeIds);
   const shieldGlowTypes = useFlowchartStore((s) => s.shieldGlowTypes);
+  const activeHandleKey = useFlowchartStore((s) => s.activeHandleKey);
+  const setActiveHandleKey = useFlowchartStore((s) => s.setActiveHandleKey);
   const wasVisited = visitedNodeIds.includes(id);
   const isShieldTarget = shieldGlowTypes.includes(data.actionType ?? '');
 
@@ -53,13 +55,13 @@ export default function ActionNode({
         display: 'flex', alignItems: 'center', gap: 10,
         cursor: 'default',
       }}>
-        <Handle type="target" position={Position.Top} style={{ background: '#dc0050', width: 8, height: 8 }} />
+        <Handle type="target" position={Position.Top} className={`flow-handle${activeHandleKey === `${id}::target` ? ' flow-handle--active' : ''}`} onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::target`)} style={{ background: '#dc0050', width: 8, height: 8 }} />
         <span style={{ fontSize: 20, flexShrink: 0 }}>☠️</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 7, color: 'rgba(220,0,80,0.9)', fontWeight: 900, letterSpacing: 1, textTransform: 'uppercase' }}>VIRUS</div>
           <div style={{ fontSize: 11, fontWeight: 800, color: '#ff4070', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{data.label}</div>
         </div>
-        <Handle type="source" position={Position.Bottom} style={{ background: '#dc0050', width: 8, height: 8 }} />
+        <Handle type="source" position={Position.Bottom} className={`flow-handle${activeHandleKey === `${id}::source` ? ' flow-handle--active' : ''}`} onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::source`)} style={{ background: '#dc0050', width: 8, height: 8 }} />
       </div>
     );
   }
@@ -90,6 +92,8 @@ export default function ActionNode({
     >
       <Handle
         type="target" position={Position.Top}
+        className={`flow-handle${activeHandleKey === `${id}::target` ? ' flow-handle--active' : ''}`}
+        onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::target`)}
         style={{ top: -6, background: '#93c5fd', border: '2px solid #fff', width: 10, height: 10 }}
       />
       <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
@@ -110,6 +114,8 @@ export default function ActionNode({
       </div>
       <Handle
         type="source" position={Position.Bottom}
+        className={`flow-handle${activeHandleKey === `${id}::source` ? ' flow-handle--active' : ''}`}
+        onContextMenu={(e) => e.stopPropagation()} onMouseDown={() => setActiveHandleKey(`${id}::source`)}
         style={{ bottom: -6, background: '#93c5fd', border: '2px solid #fff', width: 10, height: 10 }}
       />
     </div>

@@ -1,7 +1,10 @@
 import { Handle, Position } from 'reactflow';
+import { useFlowchartStore } from '../../../stores/flowchartStore';
 
-export default function EndNode({ data }: { data: { label: string; isActive?: boolean } }) {
+export default function EndNode({ id, data }: { id: string; data: { label: string; isActive?: boolean } }) {
   const active = data.isActive;
+  const activeHandleKey = useFlowchartStore((s) => s.activeHandleKey);
+  const setActiveHandleKey = useFlowchartStore((s) => s.setActiveHandleKey);
   return (
     <div style={{
       position: 'relative',
@@ -16,9 +19,12 @@ export default function EndNode({ data }: { data: { label: string; isActive?: bo
       fontWeight: 800, fontSize: 12, color: 'white', letterSpacing: 2,
       userSelect: 'none',
     }}>
-      <Handle type="target" position={Position.Top} style={{
-        top: -6, background: '#f87171', border: '2px solid #fff', width: 10, height: 10,
-      }} />
+      <Handle type="target" position={Position.Top}
+        className={`flow-handle${activeHandleKey === `${id}::target` ? ' flow-handle--active' : ''}`}
+        onContextMenu={(e) => e.stopPropagation()}
+        onMouseDown={() => setActiveHandleKey(`${id}::target`)}
+        style={{ top: -6, background: '#f87171', border: '2px solid #fff', width: 10, height: 10 }}
+      />
       END
     </div>
   );

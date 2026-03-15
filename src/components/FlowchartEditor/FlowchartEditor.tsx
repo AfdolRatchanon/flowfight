@@ -20,6 +20,7 @@ import EndNode from './CustomNodes/EndNode';
 import ActionNode from './CustomNodes/ActionNode';
 import ConditionNode from './CustomNodes/ConditionNode';
 import LoopNode from './CustomNodes/LoopNode';
+import SelfLoopEdge from './SelfLoopEdge';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ThemeColors } from '../../contexts/ThemeContext';
 
@@ -29,6 +30,10 @@ const nodeTypes = {
   action: ActionNode,
   condition: ConditionNode,
   loop: LoopNode,
+};
+
+const edgeTypes = {
+  selfloop: SelfLoopEdge,
 };
 
 // ── Submenu data ──────────────────────────────────────────────────────────────
@@ -91,7 +96,8 @@ const CONDITION_GROUPS = [
   },
 ];
 
-function getEdgeType(sourceHandle: string | null | undefined): string {
+function getEdgeType(sourceHandle: string | null | undefined, isSelfLoop = false): string {
+  if (isSelfLoop) return 'selfloop';
   if (sourceHandle === 'yes' || sourceHandle === 'no') return 'smoothstep';
   if (sourceHandle === 'loop' || sourceHandle === 'next') return 'smoothstep';
   return 'step';
@@ -127,6 +133,7 @@ interface FlowchartEditorProps {
 export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, nodeLimit, turnManaMax, turnManaUsed, characterClass, characterLevel }: FlowchartEditorProps = {}) {
   const storeNodes = useFlowchartStore((s) => s.nodes);
   const storeEdges = useFlowchartStore((s) => s.edges);
+  const setActiveHandleKey = useFlowchartStore((s) => s.setActiveHandleKey);
   const store = useFlowchartStore();
   const { colors } = useTheme();
 
@@ -170,6 +177,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
 
   const onConnect = useCallback(
     (params: Connection) => {
+      setActiveHandleKey(null);
       const sh = params.sourceHandle;
       const isYes  = sh === 'yes';
       const isNo   = sh === 'no';
@@ -187,7 +195,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
         source: params.source ?? '',
         target: params.target ?? '',
         sourceHandle: sh ?? undefined,
-        type: getEdgeType(sh),
+        type: getEdgeType(sh, params.source === params.target),
         label: isYes ? 'YES' : isNo ? 'NO' : isLoopContinue ? 'LOOP' : isLoopNext ? 'NEXT' : undefined,
         markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: strokeColor },
         style: { stroke: strokeColor, strokeWidth: 2 },
@@ -410,6 +418,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
           onEdgesChange={onEdgesChangeHandler}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           proOptions={{ hideAttribution: true }}
           connectionLineType={ConnectionLineType.Step}
           connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 2, strokeDasharray: '5,3' }}
@@ -424,6 +433,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
           onNodeClick={(e, node) => {
             e.stopPropagation();
             if ((e.target as HTMLElement).closest('button')) return;
+            if ((e.target as HTMLElement).closest('.flow-handle')) return;
             setSubmenu(null);
             setCtxMenu({ kind: 'node', x: e.clientX, y: e.clientY, id: node.id, label: (node.data as any).label ?? node.type ?? '', nodeType: node.type ?? '' });
           }}
@@ -433,6 +443,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
             setCtxMenu({ kind: 'edge', x: e.clientX, y: e.clientY, id: edge.id });
           }}
           onPaneClick={(e) => {
+            setActiveHandleKey(null);
             if (ctxMenu) { closeAll(); return; }
             setCtxMenu({ kind: 'pane', x: e.clientX, y: e.clientY });
           }}

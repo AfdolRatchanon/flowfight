@@ -416,6 +416,7 @@ export default function InfinityDevBattle() {
       name: enemyData.name,
       stats: {
         maxHP: enemyData.hp,
+        currentHP: enemyData.hp,
         attack: enemyData.atk,
         defense: enemyData.def,
         speed: 10,
