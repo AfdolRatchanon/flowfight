@@ -75,10 +75,12 @@ export function calcFlowchartManaCost(nodes: FlowNode[]): number {
     .reduce((sum, n) => sum + (ACTION_COST[n.data.actionType ?? ''] ?? 1), 0);
 }
 
-/** Max action budget per turn — scales with turn, base 5 for level ≥ 11 */
+/** Max action budget per turn — base 3 for all levels, +1 per turn
+ *  Exceptions: level 14–15 start at 4 (heal+dodge+power_strike worst-case path)
+ *  Turn scaling handles the rest: turn 2 = base+1, turn 3 = base+2, etc.
+ */
 export function calcTurnManaMax(turn: number, levelNumber: number = 1): number {
-  const base = levelNumber >= 11 ? 5 : 3;
-  // const base = levelNumber >= 11 ? 3 : 3;
+  const base = (levelNumber === 14 || levelNumber === 15) ? 4 : 3;
   return base + (turn - 1);  // turn 1 = base, turn 2 = base+1, ...
 }
 
@@ -1049,9 +1051,99 @@ export function executeEnemyAction(
       const berserkTag2 = s.heroBerserkRounds > 0 ? ' (🛡️ Berserk -20%)' : '';
       return { newState: s, log: tickPrefix + `✨ Enemy casts spell! Hero -${finalSpellDmg} HP${evadeTag2}${berserkTag2}` };
     }
+    // Guaranteed ailment strikes (cost 1 budget each)
+    case 'poison_strike': {
+      const rawDmg = Math.max(0, Math.floor(s.enemyAttack * 0.7 + variance()) - Math.floor(s.heroDefense * 0.5));
+      const heroParried = Math.random() * 100 < s.heroParry;
+      let finalDmg = heroParried ? 0 : heroEvades ? Math.floor(rawDmg * 0.35) : rawDmg;
+      if (s.heroBerserkRounds > 0 && finalDmg > 0) finalDmg = Math.max(1, Math.floor(finalDmg * 0.8));
+      if (!heroParried) s.heroPoisonRounds = Math.max(s.heroPoisonRounds, 5);
+      s.heroHP = Math.max(0, s.heroHP - finalDmg);
+      const bTag = s.heroBerserkRounds > 0 ? ' (🛡️ Berserk -20%)' : '';
+      return { newState: s, log: tickPrefix + (heroParried ? '🛡️ Hero parries the poison strike!' : `🟣 Enemy poison strike! Hero -${finalDmg} HP${bTag} + Poison (5 rounds)`) };
+    }
+    case 'freeze_strike': {
+      const rawDmg = Math.max(0, Math.floor(s.enemyAttack * 0.6 + variance()) - Math.floor(s.heroDefense * 0.5));
+      const heroParried = Math.random() * 100 < s.heroParry;
+      let finalDmg = heroParried ? 0 : heroEvades ? Math.floor(rawDmg * 0.35) : rawDmg;
+      if (s.heroBerserkRounds > 0 && finalDmg > 0) finalDmg = Math.max(1, Math.floor(finalDmg * 0.8));
+      if (!heroParried) s.heroFreezeRounds = Math.max(s.heroFreezeRounds, 2);
+      s.heroHP = Math.max(0, s.heroHP - finalDmg);
+      const bTag = s.heroBerserkRounds > 0 ? ' (🛡️ Berserk -20%)' : '';
+      return { newState: s, log: tickPrefix + (heroParried ? '🛡️ Hero parries the freeze strike!' : `❄️ Enemy freeze strike! Hero -${finalDmg} HP${bTag} + Freeze (2 rounds)`) };
+    }
+    case 'burn_strike': {
+      const rawDmg = Math.max(0, Math.floor(s.enemyAttack * 0.65 + variance()) - Math.floor(s.heroDefense * 0.5));
+      const heroParried = Math.random() * 100 < s.heroParry;
+      let finalDmg = heroParried ? 0 : heroEvades ? Math.floor(rawDmg * 0.35) : rawDmg;
+      if (s.heroBerserkRounds > 0 && finalDmg > 0) finalDmg = Math.max(1, Math.floor(finalDmg * 0.8));
+      if (!heroParried) s.heroBurnRounds = Math.max(s.heroBurnRounds, 3);
+      s.heroHP = Math.max(0, s.heroHP - finalDmg);
+      const bTag = s.heroBerserkRounds > 0 ? ' (🛡️ Berserk -20%)' : '';
+      return { newState: s, log: tickPrefix + (heroParried ? '🛡️ Hero parries the burn strike!' : `🔥 Enemy burn strike! Hero -${finalDmg} HP${bTag} + Burn (3 rounds)`) };
+    }
+    case 'power_strike': {
+      const rawDmg = Math.max(1, Math.floor(s.enemyAttack * 2.0 + variance()) - Math.floor(s.heroDefense * 0.5));
+      const heroParried = Math.random() * 100 < s.heroParry;
+      let finalDmg = heroParried ? 0 : heroEvades ? Math.floor(rawDmg * 0.35) : rawDmg;
+      if (s.heroBerserkRounds > 0 && finalDmg > 0) finalDmg = Math.max(1, Math.floor(finalDmg * 0.8));
+      s.heroHP = Math.max(0, s.heroHP - finalDmg);
+      const evTag = heroEvades ? ' (Evaded! -65%)' : '';
+      const bTag = s.heroBerserkRounds > 0 ? ' (🛡️ Berserk -20%)' : '';
+      return { newState: s, log: tickPrefix + (heroParried ? '🛡️ Hero parries the power strike!' : `💥 Enemy power strike! Hero -${finalDmg} HP${evTag}${bTag}`) };
+    }
     default:
       return { newState: s, log: tickPrefix + '👹 Enemy prepares...' };
   }
+}
+
+/** Cost of each enemy behavior in budget points */
+export const ENEMY_ACTION_COST: Record<string, number> = {
+  attack: 1, poison_strike: 1, freeze_strike: 1, burn_strike: 1,
+  heal: 2, cast_spell: 2, power_strike: 2,
+};
+
+/** Execute all enemy actions for one turn given a budget, returns all results */
+export function executeEnemyTurn(
+  behaviors: string[],
+  behaviorIdx: number,
+  budget: number,
+  state: BattleState,
+): { newState: BattleState; logs: string[]; actionsUsed: number } {
+  let s = { ...state };
+  const logs: string[] = [];
+  let budgetLeft = budget;
+  let used = 0;
+
+  // Process enemy status ticks once at turn start
+  if (s.enemyFreezeRounds > 0) {
+    s.enemyFreezeRounds--;
+    return { newState: s, logs: [`❄️ Enemy is frozen! Skips turn. (${s.enemyFreezeRounds} left)`], actionsUsed: 0 };
+  }
+
+  while (budgetLeft > 0) {
+    const behavior = behaviors[(behaviorIdx + used) % behaviors.length];
+    const cost = ENEMY_ACTION_COST[behavior] ?? 1;
+    if (cost > budgetLeft) break; // can't afford next action
+
+    const { newState, log } = executeEnemyAction(behavior, s);
+    s = newState;
+    logs.push(log);
+    used++;
+    budgetLeft -= cost;
+
+    if (s.enemyHP <= 0 || s.heroHP <= 0) break; // battle ended
+  }
+
+  if (used === 0) {
+    // budget too small for cheapest action, execute one attack anyway
+    const { newState, log } = executeEnemyAction('attack', s);
+    s = newState;
+    logs.push(log);
+    used = 1;
+  }
+
+  return { newState: s, logs, actionsUsed: used };
 }
 
 /** Resolve hero status effects at end of turn (burn, poison, freeze, berserk) */

@@ -2,7 +2,7 @@
 // FlowFight - Game Constants
 // ===========================
 
-export const GAME_VERSION = '0.9.0';
+export const GAME_VERSION = '0.10.0';
 
 // Battle
 export const STEP_DELAY_MS = 800;
@@ -276,10 +276,12 @@ export const LEVELS = [
     bonusObjective: 'HP เหลือมากกว่า 35%',
     allowedBlocks: ['attack', 'heal', 'cast_spell', 'power_strike', 'condition', 'hero_poisoned', 'hp_less'],
     requiredBlocks: ['condition', 'heal', 'hero_poisoned'],
+    initialHeroHPPercent: 0.70,
+    initialHeroStatus: { poisonRounds: 4 },
     enemy: {
       id: 'orc', name: 'Orc Warrior', spriteId: 'enemy_orc',
       stats: { maxHP: 148, currentHP: 148, attack: 16, defense: 6, speed: 5, ailmentType: 'poison', ailmentChance: 0.40 },
-      behaviors: ['attack', 'attack'],
+      behaviors: ['poison_strike', 'attack', 'poison_strike'],
     },
     unlockRequirements: { levelRequired: 6, previousLevelComplete: true },
     rewards: { experience: 245, gold: 55 },
@@ -296,10 +298,11 @@ export const LEVELS = [
     bonusObjective: 'HP เหลือมากกว่า 40%',
     allowedBlocks: ['attack', 'heal', 'dodge', 'power_strike', 'condition', 'hero_frozen', 'hp_less'],
     requiredBlocks: ['condition', 'dodge', 'hero_frozen'],
+    initialHeroStatus: { freezeRounds: 2 },
     enemy: {
       id: 'kobold', name: 'Kobold Pack', spriteId: 'enemy_kobold',
       stats: { maxHP: 128, currentHP: 128, attack: 13, defense: 4, speed: 9, ailmentType: 'freeze', ailmentChance: 0.35 },
-      behaviors: ['attack', 'attack', 'attack'],
+      behaviors: ['freeze_strike', 'attack', 'freeze_strike', 'attack'],
     },
     unlockRequirements: { levelRequired: 7, previousLevelComplete: true },
     rewards: { experience: 300, gold: 65 },
@@ -320,7 +323,7 @@ export const LEVELS = [
     enemy: {
       id: 'goblin_knight', name: 'Goblin Knight', spriteId: 'enemy_goblin',
       stats: { maxHP: 140, currentHP: 140, attack: 16, defense: 6, speed: 6, armor: 6, parry: 15, enrageThreshold: 30 },
-      behaviors: ['attack', 'attack', 'heal'],
+      behaviors: ['attack', 'power_strike', 'heal', 'attack'],
     },
     unlockRequirements: { levelRequired: 8, previousLevelComplete: true },
     rewards: { experience: 365, gold: 78 },
@@ -340,7 +343,7 @@ export const LEVELS = [
     enemy: {
       id: 'troll', name: 'Stone Troll', spriteId: 'enemy_troll',
       stats: { maxHP: 182, currentHP: 182, attack: 20, defense: 9, speed: 4, armor: 7, parry: 15, enrageThreshold: 35 },
-      behaviors: ['attack', 'heal', 'attack'],
+      behaviors: ['attack', 'heal', 'power_strike', 'attack', 'heal'],
     },
     unlockRequirements: { levelRequired: 9, previousLevelComplete: true },
     rewards: { experience: 450, gold: 88 },
@@ -360,8 +363,9 @@ export const LEVELS = [
     requiredBlocks: ['condition', 'enemy_alive'],
     enemy: {
       id: 'orc_warlord', name: 'Orc Warlord', spriteId: 'enemy_orc',
+      budgetPerTurn: 2,
       stats: { maxHP: 218, currentHP: 218, attack: 22, defense: 10, speed: 7, armor: 8, parry: 18, enrageThreshold: 30, ailmentType: 'burn', ailmentChance: 0.30 },
-      behaviors: ['attack', 'attack', 'cast_spell'],
+      behaviors: ['attack', 'burn_strike', 'attack', 'cast_spell', 'attack'],
     },
     unlockRequirements: { levelRequired: 10, previousLevelComplete: true },
     rewards: { experience: 555, gold: 105 },
@@ -378,10 +382,12 @@ export const LEVELS = [
     bonusObjective: 'HP เหลือมากกว่า 20%',
     allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_frozen', 'hp_less'],
     requiredBlocks: ['condition', 'enemy_alive', 'heal', 'hp_less'],
+    initialHeroHPPercent: 0.45,
     enemy: {
       id: 'ice_giant', name: 'Ice Giant', spriteId: 'enemy_ice_giant',
+      budgetPerTurn: 2,
       stats: { maxHP: 252, currentHP: 252, attack: 26, defense: 14, speed: 6, armor: 11, ailmentType: 'freeze', ailmentChance: 0.35 },
-      behaviors: ['attack', 'attack', 'cast_spell'],
+      behaviors: ['freeze_strike', 'attack', 'cast_spell', 'freeze_strike', 'attack'],
     },
     unlockRequirements: { levelRequired: 11, previousLevelComplete: true },
     rewards: { experience: 685, gold: 125 },
@@ -400,8 +406,9 @@ export const LEVELS = [
     requiredBlocks: ['condition', 'enemy_alive', 'turn_gte', 'power_strike'],
     enemy: {
       id: 'dragon', name: 'Young Dragon', spriteId: 'enemy_dragon',
+      budgetPerTurn: 2,
       stats: { maxHP: 295, currentHP: 295, attack: 29, defense: 15, speed: 10, enrageThreshold: 35, ailmentType: 'burn', ailmentChance: 0.40 },
-      behaviors: ['attack', 'cast_spell', 'attack', 'attack'],
+      behaviors: ['burn_strike', 'attack', 'cast_spell', 'attack', 'power_strike'],
     },
     unlockRequirements: { levelRequired: 12, previousLevelComplete: true },
     rewards: { experience: 850, gold: 155 },
@@ -418,10 +425,13 @@ export const LEVELS = [
     bonusObjective: 'HP เหลือมากกว่า 15%',
     allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_poisoned', 'hp_less', 'turn_gte'],
     requiredBlocks: ['condition', 'enemy_alive', 'hero_poisoned', 'heal', 'dodge'],
+    initialHeroHPPercent: 0.65,
+    initialHeroStatus: { poisonRounds: 3 },
     enemy: {
       id: 'dragon', name: 'Dragon Elder', spriteId: 'enemy_dragon',
+      budgetPerTurn: 2,
       stats: { maxHP: 345, currentHP: 345, attack: 33, defense: 17, speed: 11, armor: 8, parry: 20, enrageThreshold: 40, ailmentType: 'poison', ailmentChance: 0.40 },
-      behaviors: ['cast_spell', 'attack', 'attack', 'cast_spell', 'attack'],
+      behaviors: ['poison_strike', 'attack', 'cast_spell', 'poison_strike', 'power_strike'],
     },
     unlockRequirements: { levelRequired: 13, previousLevelComplete: true },
     rewards: { experience: 1050, gold: 185 },
@@ -437,12 +447,13 @@ export const LEVELS = [
     tutorialText: 'Orc Warlord ใช้ทุกท่า — ต้องทำ Loop ที่มี Ailment + HP + Counter ครบ: Poisoned?→Heal / HP<40?→Dodge / Turn≥4?→Power Strike / else→Cast Spell!',
     objectives: ['สังหาร Orc Warlord Elite', 'ใช้ครบ: Loop + HP + Ailment + Counter'],
     bonusObjective: 'HP เหลือมากกว่า 20%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
-    requiredBlocks: ['cast_spell', 'power_strike', 'condition', 'heal', 'dodge'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_poisoned', 'hp_less', 'turn_gte'],
+    requiredBlocks: ['condition', 'enemy_alive', 'cast_spell', 'power_strike', 'heal', 'dodge'],
     enemy: {
       id: 'orc_warlord', name: 'Orc Warlord Elite', spriteId: 'enemy_orc',
+      budgetPerTurn: 2,
       stats: { maxHP: 280, currentHP: 280, attack: 27, defense: 13, speed: 8, armor: 9, parry: 22, enrageThreshold: 30, ailmentType: 'poison', ailmentChance: 0.35 },
-      behaviors: ['attack', 'attack', 'cast_spell', 'attack'],
+      behaviors: ['poison_strike', 'attack', 'cast_spell', 'power_strike', 'attack'],
     },
     unlockRequirements: { levelRequired: 14, previousLevelComplete: true },
     rewards: { experience: 1300, gold: 220 },
@@ -458,12 +469,13 @@ export const LEVELS = [
     tutorialText: 'Vampire ดูด HP ทุกรอบ! ใช้ Class Skill ของ Class ตัวเองใน Loop: ตรวจ Poisoned? + HP + สลับ Skill กับ Attack ให้เหมาะสม — Class Skill แต่ละอันแรงกว่า Attack มาก!',
     objectives: ['สังหาร Vampire Lord'],
     bonusObjective: 'HP เหลือมากกว่า 15%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'hero_poisoned', 'hp_less'],
     requiredBlocks: ['condition', 'enemy_alive', 'heal'],
     enemy: {
       id: 'vampire', name: 'Vampire Lord', spriteId: 'enemy_lich',
+      budgetPerTurn: 3,
       stats: { maxHP: 350, currentHP: 350, attack: 30, defense: 18, speed: 13, armor: 8, parry: 22, enrageThreshold: 35, ailmentType: 'poison', ailmentChance: 0.45 },
-      behaviors: ['attack', 'cast_spell', 'heal', 'attack', 'attack'],
+      behaviors: ['poison_strike', 'attack', 'cast_spell', 'heal', 'poison_strike', 'power_strike'],
     },
     unlockRequirements: { levelRequired: 15, previousLevelComplete: true },
     rewards: { experience: 1600, gold: 260 },
@@ -478,12 +490,13 @@ export const LEVELS = [
     tutorialText: 'Frost Titan แข็งแกร่งมาก! ปรับ Turn ≥ N ทีละ 1 บน Counter node หา timing ที่ดีที่สุด Frozen?→Dodge ก่อนเสมอ จากนั้น burst เมื่อครบ turn ที่กำหนด!',
     objectives: ['สังหาร Frost Titan'],
     bonusObjective: 'HP เหลือมากกว่า 10%',
-    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition'],
+    allowedBlocks: ['attack', 'heal', 'dodge', 'cast_spell', 'power_strike', 'condition', 'enemy_alive', 'turn_gte', 'hero_frozen'],
     requiredBlocks: ['condition', 'enemy_alive', 'turn_gte', 'hero_frozen'],
     enemy: {
       id: 'frost_titan', name: 'Frost Titan', spriteId: 'enemy_ice_giant',
+      budgetPerTurn: 3,
       stats: { maxHP: 400, currentHP: 400, attack: 34, defense: 20, speed: 7, armor: 14, parry: 25, enrageThreshold: 40, ailmentType: 'freeze', ailmentChance: 0.45 },
-      behaviors: ['attack', 'attack', 'cast_spell', 'attack', 'attack'],
+      behaviors: ['freeze_strike', 'attack', 'cast_spell', 'freeze_strike', 'power_strike', 'attack'],
     },
     unlockRequirements: { levelRequired: 16, previousLevelComplete: true },
     rewards: { experience: 2000, gold: 300 },
@@ -503,8 +516,9 @@ export const LEVELS = [
     requiredBlocks: [],
     enemy: {
       id: 'dark_commander', name: 'Dark Commander', spriteId: 'enemy_boss',
+      budgetPerTurn: 3,
       stats: { maxHP: 450, currentHP: 450, attack: 38, defense: 22, speed: 12, armor: 15, parry: 28, enrageThreshold: 40, ailmentType: 'burn', ailmentChance: 0.40 },
-      behaviors: ['attack', 'cast_spell', 'attack', 'heal', 'attack', 'attack'],
+      behaviors: ['burn_strike', 'attack', 'cast_spell', 'power_strike', 'heal', 'attack', 'burn_strike'],
     },
     unlockRequirements: { levelRequired: 17, previousLevelComplete: true },
     rewards: { experience: 2500, gold: 350 },
@@ -523,8 +537,9 @@ export const LEVELS = [
     requiredBlocks: [],
     enemy: {
       id: 'lich', name: 'Lich Lord', spriteId: 'enemy_lich',
+      budgetPerTurn: 3,
       stats: { maxHP: 500, currentHP: 500, attack: 42, defense: 24, speed: 13, armor: 12, parry: 30, enrageThreshold: 40, ailmentType: 'poison', ailmentChance: 0.45 },
-      behaviors: ['cast_spell', 'attack', 'cast_spell', 'attack', 'heal', 'attack'],
+      behaviors: ['poison_strike', 'cast_spell', 'attack', 'power_strike', 'heal', 'poison_strike', 'cast_spell'],
     },
     unlockRequirements: { levelRequired: 18, previousLevelComplete: true },
     rewards: { experience: 3200, gold: 430 },
@@ -543,8 +558,9 @@ export const LEVELS = [
     requiredBlocks: [],
     enemy: {
       id: 'overlord', name: 'Dark Overlord', spriteId: 'enemy_boss',
+      budgetPerTurn: 3,
       stats: { maxHP: 650, currentHP: 650, attack: 50, defense: 28, speed: 15, armor: 20, parry: 35, enrageThreshold: 40, ailmentType: 'burn', ailmentChance: 0.50 },
-      behaviors: ['attack', 'cast_spell', 'heal', 'cast_spell', 'attack', 'attack', 'power_strike'],
+      behaviors: ['burn_strike', 'power_strike', 'cast_spell', 'attack', 'heal', 'burn_strike', 'power_strike', 'cast_spell'],
     },
     unlockRequirements: { levelRequired: 19, previousLevelComplete: true },
     rewards: { experience: 4000, gold: 600 },

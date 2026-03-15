@@ -13,16 +13,24 @@ const BLOCK_LABELS: Record<RequiredBlock, string> = {
   dodge: 'Dodge block',
   cast_spell: 'Cast Spell block',
   power_strike: 'Power Strike block',
+  enemy_alive: 'Enemy Alive? Condition',
+  hp_less: 'HP < N? Condition',
+  turn_gte: 'Turn ≥ N? Condition',
+  hero_poisoned: 'Hero Poisoned? Condition',
+  hero_frozen: 'Hero Frozen? Condition',
 };
+
+const CONDITION_TYPES: RequiredBlock[] = ['enemy_alive', 'hp_less', 'turn_gte', 'hero_poisoned', 'hero_frozen'];
 
 function checkShield(nodes: ReturnType<typeof useFlowchartStore.getState>['nodes'], requiredBlocks: RequiredBlock[]): { shielded: boolean; reason: string } {
   for (const req of requiredBlocks) {
     let missing = false;
     if (req === 'condition')    missing = !nodes.some((n) => n.type === 'condition');
-    if (req === 'heal')         missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
-    if (req === 'dodge')        missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
-    if (req === 'cast_spell')   missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
-    if (req === 'power_strike') missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'power_strike');
+    else if (req === 'heal')         missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'heal');
+    else if (req === 'dodge')        missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'dodge');
+    else if (req === 'cast_spell')   missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'cast_spell');
+    else if (req === 'power_strike') missing = !nodes.some((n) => n.type === 'action' && n.data.actionType === 'power_strike');
+    else if (CONDITION_TYPES.includes(req)) missing = !nodes.some((n) => n.type === 'condition' && (n.data as any).conditionType === req);
     if (missing) return { shielded: true, reason: `ต้องใช้ ${BLOCK_LABELS[req]}` };
   }
   return { shielded: false, reason: '' };

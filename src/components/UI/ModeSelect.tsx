@@ -135,6 +135,7 @@ export default function ModeSelect() {
               useFlowchartStore.getState().clearToStartEnd();
               navigate('/battle/level_endless');
             }}
+
             style={{
               background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(239,68,68,0.07))',
               border: '1px solid rgba(124,58,237,0.35)',
@@ -175,6 +176,56 @@ export default function ModeSelect() {
               <span style={{ color: '#c4b5fd', fontSize: 28, flexShrink: 0 }}>›</span>
             </div>
           </div>
+
+          {/* Infinity Dev Mode */}
+          <div
+            onClick={() => navigate('/infinity-dev')}
+            style={{
+              background: 'linear-gradient(135deg, rgba(0,255,136,0.07), rgba(0,204,102,0.04))',
+              border: '1px solid rgba(0,255,136,0.3)',
+              borderRadius: 20, padding: '28px 32px',
+              cursor: 'pointer', transition: 'all 0.2s', position: 'relative', overflow: 'hidden',
+            }}
+            onMouseEnter={(e) => {
+              const d = e.currentTarget as HTMLDivElement;
+              d.style.background = 'linear-gradient(135deg, rgba(0,255,136,0.14), rgba(0,204,102,0.08))';
+              d.style.transform = 'translateY(-3px)';
+              d.style.boxShadow = '0 12px 40px rgba(0,255,136,0.15)';
+            }}
+            onMouseLeave={(e) => {
+              const d = e.currentTarget as HTMLDivElement;
+              d.style.background = 'linear-gradient(135deg, rgba(0,255,136,0.07), rgba(0,204,102,0.04))';
+              d.style.transform = 'none';
+              d.style.boxShadow = 'none';
+            }}
+          >
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: 'linear-gradient(180deg,#00ff88,#00cc66)', borderRadius: '20px 0 0 20px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+              <div style={{ fontSize: 56, flexShrink: 0, filter: 'drop-shadow(0 0 12px rgba(0,255,136,0.5))' }}>⚡</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <span style={{
+                    background: 'rgba(0,255,136,0.15)', color: '#00ff88',
+                    fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 6,
+                    border: '1px solid rgba(0,255,136,0.4)', letterSpacing: 1,
+                  }}>INFINITY DEV</span>
+                  <span style={{
+                    background: 'rgba(251,191,36,0.2)', color: '#fbbf24',
+                    fontSize: 9, fontWeight: 900, padding: '2px 8px', borderRadius: 4,
+                    border: '1px solid rgba(251,191,36,0.4)', letterSpacing: 1,
+                  }}>NEW</span>
+                </div>
+                <h2 style={{ color: colors.text, fontWeight: 800, fontSize: 22, margin: '0 0 6px' }}>
+                  Infinity Dev
+                </h2>
+                <p style={{ color: colors.textSub, fontSize: 14, margin: 0, lineHeight: 1.5 }}>
+                  Roguelite ไม่มีที่สิ้นสุด — เลือก Path, สะสม Cards, อัปเกรด Build ผ่าน Wave ไม่มีสิ้นสุด
+                </p>
+              </div>
+              <span style={{ color: '#00ff88', fontSize: 28, flexShrink: 0 }}>›</span>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

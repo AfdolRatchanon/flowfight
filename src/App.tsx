@@ -12,6 +12,7 @@ import CharacterCustomizer from './components/Character/CharacterCustomizer';
 import Leaderboard from './components/UI/Leaderboard';
 import ShopPage from './components/Shop/ShopPage';
 import ThemeToggle from './components/UI/ThemeToggle';
+import InfinityDevScreen from './modes/InfinityDev/InfinityDevScreen';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, player, character } = useGameStore();
@@ -59,6 +60,8 @@ export default function App() {
         <Route path="/character" element={<ProtectedRoute><CharacterCustomizer /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
         <Route path="/shop" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
+        <Route path="/infinity-dev" element={<ProtectedRoute><InfinityDevScreen /></ProtectedRoute>} />
+        <Route path="/infinity-dev/battle" element={<ProtectedRoute><InfinityDevScreen /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

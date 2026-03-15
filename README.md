@@ -433,17 +433,21 @@ src/
 - [x] Battle System — HP / Armor / Parry / Dodge / Ailment / Enrage / Combo
 - [x] Flowchart Editor — context menu 3 ระดับ, Windows-style submenu positioning
 - [x] 💎 Budget System — action points per turn (3 💎/turn), badge บน node
+- [x] Enemy Budget System — enemy โจมตีหลายครั้ง/turn ตาม `budgetPerTurn`
 - [x] 4 Classes + Class Skills (3 skills/class, unlock ตาม level)
 - [x] Passive bonuses (Lv.2 / Lv.4 / Lv.6)
 - [x] Character Progression — XP, Level 1–10, stat growth per class
 - [x] Shop System — 40+ items, 4 slots, gold rewards จากด่าน
 - [x] Equipment stat bonuses ผ่าน ShopEngine
 - [x] 20 Campaign Levels + Endless Mode (สอน Sequence → Decision → Loop → Combine → Mastery)
+- [x] Pre-set Hero Status ต่อด่าน — ด่านที่สอน ailment hero เริ่มด้วย poison/freeze + HP ต่ำ
 - [x] Firebase Auth — Google Sign-In
 - [x] Firestore — save player progress, character progress, leaderboard
+- [x] Firestore — Potions/Antidotes sync ทุกครั้งหลังสู้ (ชนะ + แพ้)
 - [x] Global Leaderboard + Per-level Leaderboard
 - [x] Light / Dark Theme
-- [x] Enemy Shield mechanic — ป้องกันเมื่อขาด required blocks
+- [x] Enemy Shield mechanic — ป้องกันเมื่อขาด required blocks (รองรับ Condition-type blocks ด้วย)
+- [x] Shield badge icon ตรงกับ context menu — mobile แสดง emoji อย่างเดียว
 - [x] Virus mechanic — ไวรัสเกิดใน canvas, Debug Block ลบออก
 - [x] Turn-based battle (hero turn → enemy turn → resolution)
 - [x] Speed control 1x / 2x / 3x
@@ -451,6 +455,8 @@ src/
 - [x] Endless Wave Mode — wave scaling, score system
 - [x] Tutorial Guide — hint panel ลากย้ายได้ (draggable) + 20 ด่านพร้อม guided steps
 - [x] Process block menu — แสดงคำอธิบายแต่ละ action ในเมนู context
+- [x] **Daily Farm (Diminishing Returns รายวัน)** — บันทึกใน Firestore รีเซ็ตเที่ยงคืน UTC+7
+- [x] LevelSelect แสดง efficiency badge (🟢100% / 🟡50% / 🟠25% / 🔴10%) + countdown reset
 
 ### สิ่งที่ยังขาด
 
@@ -458,12 +464,25 @@ src/
 - [ ] Tooltip อธิบาย block แต่ละตัวเมื่อ hover
 - [ ] Sound Effects และ BGM
 - [ ] Sprite animation จริง (ปัจจุบันใช้ PNG + emoji)
+- [ ] Enemy Sprites ที่ขาด: Vampire Lord, Frost Titan, Dark Commander
 - [ ] Mobile / Touch screen support
 - [ ] Achievement System (type พร้อมแล้ว ยังขาด UI + logic)
 
 ---
 
 ## Changelog
+
+### v0.10.0 (มีนาคม 2026)
+
+- **Daily Farm Diminishing Returns** — จำนวนครั้งที่เล่นซ้ำรายวันเก็บใน Firestore (`dailyFarm.date` + `dailyFarm.plays`) รีเซ็ตทุกเที่ยงคืน UTC+7
+- LevelSelect แสดง efficiency badge ต่อด่าน (🟢100% / 🟡50% / 🟠25% / 🔴10%) + countdown ถึงเวลา reset
+- แก้ bug **Potions/Antidotes ไม่ถูก save** หลังใช้ในการสู้ — ตอนนี้ sync กลับ Firestore ทุกครั้งที่ battle จบ (ทั้งชนะและแพ้)
+- **Enemy Budget System** — enemy โจมตีหลายครั้งต่อ turn ตาม `budgetPerTurn` ใน FlowchartEngine (`executeEnemyTurn`)
+- เพิ่ม enemy behaviors: `poison_strike`, `freeze_strike`, `burn_strike`, `power_strike`
+- ด่าน 11–15 `budgetPerTurn: 2`, ด่าน 16–20 `budgetPerTurn: 3`
+- **Pre-set Hero Status** — ด่าน 7 hero เริ่มติด Poison + HP 70%, ด่าน 8 เริ่มติด Freeze เพื่อสอนการรับมือ ailment
+- แก้ Enemy Shield ให้รองรับ Condition-type required blocks (`hero_poisoned`, `hero_frozen`, `enemy_alive`, `hp_less`, `turn_gte`)
+- Shield badge icon ตรงกับเมนู context, mobile แสดง emoji อย่างเดียว
 
 ### v0.9.0 (มีนาคม 2026)
 - **Tutorial rework**: 20 ด่าน ลำดับการสอนที่ถูกต้อง Sequence → Decision (HP/Ailment/Counter) → Loop → Combine → Mastery
@@ -548,4 +567,4 @@ src/
 
 ---
 
-`v0.9.0` — มีนาคม 2026
+`v0.10.0` — มีนาคม 2026

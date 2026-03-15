@@ -41,6 +41,8 @@ export interface Player {
   purchasedEquipment?: string[];
   /** จำนวนครั้งที่ clear แต่ละด่าน (สำหรับ diminishing returns) */
   levelClearCounts?: Record<string, number>;
+  /** รายวัน — reset ทุกเที่ยงคืน UTC+7 */
+  dailyFarm?: { date: string; plays: Record<string, number> };
   createdAt: number;
   lastActive: number;
   stats: PlayerStats;
@@ -138,6 +140,13 @@ export interface Enemy {
   spriteId: string;
   stats: CharacterStats;
   behaviors: string[];
+  budgetPerTurn?: number; // how many action-points enemy spends per turn (default 1)
+}
+
+export interface InitialHeroStatus {
+  poisonRounds?: number;
+  freezeRounds?: number;
+  burnRounds?: number;
 }
 
 // ===========================
@@ -151,7 +160,8 @@ export interface LevelRewards {
 }
 
 // block types that a level can REQUIRE the player to use
-export type RequiredBlock = 'condition' | 'heal' | 'dodge' | 'cast_spell' | 'power_strike';
+export type RequiredBlock = 'condition' | 'heal' | 'dodge' | 'cast_spell' | 'power_strike'
+  | 'enemy_alive' | 'hp_less' | 'turn_gte' | 'hero_poisoned' | 'hero_frozen';
 
 export interface Level {
   id: string;
@@ -166,6 +176,8 @@ export interface Level {
   bonusObjective?: string;      // โบนัส (optional, ไม่บังคับ)
   requiredBlocks?: RequiredBlock[]; // block types ที่ต้องใช้จริง — ตรวจสอบก่อนบันทึก
   allowedBlocks?: string[]; // block types ที่อนุญาตให้ใช้ใน level นี้ (undefined = ทั้งหมด)
+  initialHeroHPPercent?: number; // 0–1, hero starts at this % of maxHP (default 1.0)
+  initialHeroStatus?: InitialHeroStatus; // pre-set ailments at battle start
   unlockRequirements: {
     levelRequired: number;
     previousLevelComplete: boolean;

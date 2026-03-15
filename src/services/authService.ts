@@ -300,6 +300,49 @@ export async function saveLevelLeaderboardEntry(
   });
 }
 
+// ===== Daily Farm System =====
+
+function getThaiDate(): string {
+  const now = new Date();
+  const utc7 = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  return utc7.toISOString().slice(0, 10);
+}
+
+export function getMsUntilMidnightThai(): number {
+  const now = new Date();
+  const utc7ms = now.getTime() + 7 * 60 * 60 * 1000;
+  const utc7 = new Date(utc7ms);
+  const midnight = new Date(Date.UTC(utc7.getUTCFullYear(), utc7.getUTCMonth(), utc7.getUTCDate() + 1));
+  return midnight.getTime() - now.getTime();
+}
+
+export async function getDailyFarmPlays(uid: string): Promise<Record<string, number>> {
+  try {
+    const ref = doc(db, 'users', uid);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return {};
+    const data = snap.data();
+    const dailyFarm = data.dailyFarm as { date: string; plays: Record<string, number> } | undefined;
+    if (!dailyFarm) return {};
+    const today = getThaiDate();
+    if (dailyFarm.date !== today) return {};
+    return dailyFarm.plays ?? {};
+  } catch { return {}; }
+}
+
+/** บันทึกการชนะด่าน level รายวัน → คืนค่า plays วันนี้หลังนับแล้ว */
+export async function recordDailyLevelWin(uid: string, levelId: string): Promise<number> {
+  const ref = doc(db, 'users', uid);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() : {};
+  const today = getThaiDate();
+  const stored = data.dailyFarm as { date: string; plays: Record<string, number> } | undefined;
+  const plays: Record<string, number> = (stored?.date === today) ? { ...stored.plays } : {};
+  plays[levelId] = (plays[levelId] ?? 0) + 1;
+  await setDoc(ref, { dailyFarm: { date: today, plays } }, { merge: true });
+  return plays[levelId];
+}
+
 // ===== Endless Mode Leaderboard =====
 export interface EndlessBattleStats {
   score: number;

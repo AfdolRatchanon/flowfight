@@ -7,11 +7,11 @@ import { useGameStore } from '../../stores/gameStore';
 import { useFlowchartStore } from '../../stores/flowchartStore';
 import { useShopStore } from '../../stores/shopStore';
 import ShopScreen from '../Shop/ShopScreen';
-import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry, saveShopData, saveEndlessLeaderboardEntry, saveEndlessProgress } from '../../services/authService';
+import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry, saveShopData, saveEndlessLeaderboardEntry, saveEndlessProgress, recordDailyLevelWin } from '../../services/authService';
 import type { LevelBattleStats } from '../../services/authService';
 import { gainXP, levelProgressPct, xpToNextLevel, LEVEL_XP_TABLE, MAX_LEVEL } from '../../utils/levelSystem';
 import FlowchartEditor from '../FlowchartEditor/FlowchartEditor';
-import { previewFlowchart, calcFlowchartManaCost, calcTurnManaMax, executeEnemyAction, resolveHeroStatuses } from '../../engines/FlowchartEngine';
+import { previewFlowchart, calcFlowchartManaCost, calcTurnManaMax, executeEnemyAction, executeEnemyTurn, resolveHeroStatuses, ENEMY_ACTION_COST } from '../../engines/FlowchartEngine';
 import type { BattleState, PreviewStep } from '../../engines/FlowchartEngine';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ThemeColors } from '../../contexts/ThemeContext';
@@ -397,11 +397,18 @@ export default function BattleScreen() {
   const { colors, theme } = useTheme();
   const { levelId } = useParams<{ levelId: string }>();
   const navigate = useNavigate();
-  const { character, player, setPlayer, setCharacter } = useGameStore();
+  const { character, player, setPlayer, setCharacter, dailyFarmPlays, setDailyFarmPlays } = useGameStore();
   const { status, heroHP, heroMaxHP, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, heroBurnRounds, heroFreezeRounds, heroPoisonRounds, enemyStunnedRounds, enemyBurnRounds, enemyFreezeRounds, enemyPoisonRounds, heroBerserkRounds, healCharges, comboCount, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
-  const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold, addGold, purchasedEquipment, lastRestockTime } = useShopStore();
+  const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold, addGold, setPotions, setAntidotes } = useShopStore();
   const { validationError, nodes: flowNodes, clearToStartEnd } = useFlowchartStore();
   const [speedIdx, setSpeedIdx] = useState(1);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const isMobile = windowWidth < 640;
   const progressSaved = useRef(false);
   const battleStartTime = useRef<number>(0);
   const battleReady = useRef(false); // true after startBattle fires; guards stale-status effects
@@ -444,14 +451,29 @@ export default function BattleScreen() {
   const turnManaMax = Math.max(1, calcTurnManaMax(currentTurn, level?.number ?? 1) - extraManaDebuff);
   const turnManaUsed = useMemo(() => calcFlowchartManaCost(flowNodes), [flowNodes]);
 
-  // Enemy intention (needs level to be defined first)
-  const enemyIntention = level?.enemy.behaviors?.[enemyBehaviorIdx % (level?.enemy.behaviors?.length ?? 1)] ?? 'attack';
-  const intentionLabel: Record<string, string> = {
-    attack: '🗡️ โจมตี',
-    heal: '💚 ฟื้นฟู',
-    cast_spell: '✨ ใช้สเปล',
+  // Enemy intention — show all actions it will take this turn based on budget
+  const enemyBudget = (level?.enemy as any)?.budgetPerTurn ?? 1;
+  const enemyBehaviors = level?.enemy.behaviors ?? ['attack'];
+  const intentionLabelMap: Record<string, string> = {
+    attack: '🗡️ โจมตี', heal: '💚 ฟื้นฟู', cast_spell: '✨ สเปล',
+    poison_strike: '🟣 พิษ', freeze_strike: '❄️ แช่แข็ง', burn_strike: '🔥 เผา', power_strike: '💥 โจมตีหนัก',
   };
-  const enemyIntentionLabel = intentionLabel[enemyIntention] ?? '👁️ เฝ้าดู';
+  const enemyIntentionActions = (() => {
+    const actions: string[] = [];
+    let budget = enemyBudget;
+    let i = 0;
+    while (budget > 0) {
+      const beh = enemyBehaviors[(enemyBehaviorIdx + i) % enemyBehaviors.length];
+      const cost = ENEMY_ACTION_COST[beh] ?? 1;
+      if (cost > budget) break;
+      actions.push(beh);
+      budget -= cost;
+      i++;
+    }
+    if (actions.length === 0) actions.push('attack');
+    return actions;
+  })();
+  const enemyIntentionLabel = enemyIntentionActions.map((a) => intentionLabelMap[a] ?? '👁️').join(' → ');
 
   // Animation state
   const [heroAnimKey, setHeroAnimKey] = useState(0);
@@ -470,13 +492,24 @@ export default function BattleScreen() {
   const [showSimPreview, setShowSimPreview] = useState(true);
 
   // Shield: compute all missing required block types
-  const SHIELD_ICONS: Record<string, string> = { condition: '◇', heal: '💚', dodge: '🌀', cast_spell: '✨', power_strike: '💥' };
-  const SHIELD_LABELS: Record<string, string> = { condition: 'Condition', heal: 'Heal', dodge: 'Dodge', cast_spell: 'Cast Spell', power_strike: 'Power Strike' };
+  // Icons match the ReactFlow context menu exactly (FlowchartEditor ACTION_GROUPS)
+  const SHIELD_ICONS: Record<string, string> = {
+    condition: '◇',
+    heal: '💚', dodge: '🌀', cast_spell: '✨', power_strike: '💥', attack: '⚔️',
+    enemy_alive: '☠️', hp_less: '❤️', turn_gte: '🔢', hero_poisoned: '🟣', hero_frozen: '❄️',
+  };
+  const SHIELD_LABELS: Record<string, string> = {
+    condition: 'Condition',
+    heal: 'Heal', dodge: 'Dodge', cast_spell: 'Cast Spell', power_strike: 'Power Strike', attack: 'Attack',
+    enemy_alive: 'Enemy Alive?', hp_less: 'HP < N?', turn_gte: 'Turn ≥ N?', hero_poisoned: 'Poisoned?', hero_frozen: 'Frozen?',
+  };
+  const COND_TYPES = ['enemy_alive', 'hp_less', 'turn_gte', 'hero_poisoned', 'hero_frozen'];
 
   const missingRequiredTypes = useMemo(() => {
     if (!level?.requiredBlocks?.length) return EMPTY_REQUIRED_BLOCKS;
     return level.requiredBlocks.filter((req) => {
       if (req === 'condition') return !flowNodes.some((n) => n.type === 'condition');
+      if (COND_TYPES.includes(req)) return !flowNodes.some((n) => n.type === 'condition' && (n.data as any).conditionType === req);
       return !flowNodes.some((n) => n.type === 'action' && n.data.actionType === req);
     });
   }, [level, flowNodes]);
@@ -583,6 +616,23 @@ export default function BattleScreen() {
     };
   };
 
+  // Apply initial hero HP and status from level definition
+  const applyInitialHeroState = (lv: typeof level) => {
+    if (!lv) return;
+    const maxHP = battleStore.heroMaxHP || 100;
+    if (lv.initialHeroHPPercent !== undefined) {
+      battleStore.updateHeroHP(Math.max(1, Math.floor(maxHP * lv.initialHeroHPPercent)));
+    }
+    if (lv.initialHeroStatus) {
+      battleStore.setAilments({
+        burn: (lv.initialHeroStatus as any).burnRounds ?? 0,
+        freeze: lv.initialHeroStatus.freezeRounds ?? 0,
+        poison: lv.initialHeroStatus.poisonRounds ?? 0,
+        enemyStun: 0,
+      });
+    }
+  };
+
   // Init battle on level change
   useEffect(() => {
     battleReady.current = false;
@@ -596,6 +646,7 @@ export default function BattleScreen() {
       setEnemyBehaviorIdx(0);
       liveBattleStateRef.current = null;
       startBattle(getBoostedChar() as any, level.enemy as any, level.id);
+      applyInitialHeroState(level);
       battleReady.current = true;
     }
   }, [levelId]);
@@ -723,7 +774,7 @@ export default function BattleScreen() {
         // Phase 4: if virus wasted the turn, enemy gets a free extra attack immediately
         if (virusTurnWasted) {
           battleStore.addLog({ round: currentTurn, action: '☠️ Virus wasted your turn! Enemy attacks for free!', actor: 'enemy', timestamp: Date.now() });
-          const { newState: extraState, log: extraLog } = executeEnemyAction(enemyIntention, stateSnap);
+          const { newState: extraState, log: extraLog } = executeEnemyAction('attack', stateSnap);
           battleStore.addLog({ round: currentTurn, action: extraLog, actor: 'enemy', timestamp: Date.now() });
           battleStore.updateHeroHP(extraState.heroHP);
           battleStore.updateEnemyHP(extraState.enemyHP);
@@ -758,6 +809,16 @@ export default function BattleScreen() {
       if (status === 'defeat' && heroHP > 0 && enemyHP > 0) return;
 
       progressSaved.current = true;
+
+      // ── Sync potions/antidotes ที่ใช้ในการสู้กลับ shop store + Firebase ──
+      const finalPotions = liveBattleStateRef.current?.potions ?? shopPotions;
+      const finalAntidotes = liveBattleStateRef.current?.antidotes ?? shopAntidotes;
+      if (finalPotions !== shopPotions || finalAntidotes !== shopAntidotes) {
+        setPotions(finalPotions);
+        setAntidotes(finalAntidotes);
+        const { gold: g, purchasedEquipment: pe, lastRestockTime: lrt, attackBonus: ab } = useShopStore.getState();
+        saveShopData(player.id, g, pe, lrt, finalPotions, finalAntidotes, ab).catch(() => {});
+      }
 
       // Save endless leaderboard on game-over (hero died)
       if (isEndless) {
@@ -804,9 +865,13 @@ export default function BattleScreen() {
 
       let savedChar = heroChar;
       if (won) {
-        // ── Diminishing returns ──────────────────────────────────────────────
-        const clearCountBefore = (player.levelClearCounts ?? {})[level.id] ?? 0;
+        // ── Diminishing returns (daily, resets midnight UTC+7) ───────────────
+        const clearCountBefore = dailyFarmPlays[level.id] ?? 0;
         const mult = getRewardMultiplier(clearCountBefore);
+        // บันทึกการชนะวันนี้ใน Firestore + อัพเดต store
+        recordDailyLevelWin(player.id, level.id).then((newCount) => {
+          setDailyFarmPlays({ ...dailyFarmPlays, [level.id]: newCount });
+        }).catch(() => {});
         setXpMultiplierPct(Math.round(mult.xp * 100));
 
         // Award gold (with multiplier)
@@ -816,8 +881,8 @@ export default function BattleScreen() {
           setGoldEarned(earnedGold);
           addGold(earnedGold);
           const newGold = shopGold + earnedGold;
-          const { potions: sp, antidotes: sa, attackBonus: sab } = useShopStore.getState();
-          saveShopData(player.id, newGold, purchasedEquipment, lastRestockTime, sp, sa, sab).catch(() => { });
+          const { purchasedEquipment: pe2, lastRestockTime: lrt2, potions: sp, antidotes: sa, attackBonus: sab } = useShopStore.getState();
+          saveShopData(player.id, newGold, pe2, lrt2, sp, sa, sab).catch(() => { });
         }
 
         // Award XP: base * multiplier + bonus XP (ถ้าผ่าน bonus objective)
@@ -907,8 +972,11 @@ export default function BattleScreen() {
     setBattlePhase('enemy_turn');
     const speedMs = SPEED_LEVELS[speedIdx].ms;
     setTimeout(() => {
-      const { newState, log } = executeEnemyAction(enemyIntention, stateAfterHero);
-      battleStore.addLog({ round: currentTurn, action: log, actor: 'enemy', timestamp: Date.now() });
+      const budget = (level?.enemy as any)?.budgetPerTurn ?? 1;
+      const behaviors = level?.enemy.behaviors ?? ['attack'];
+      const { newState, logs, actionsUsed } = executeEnemyTurn(behaviors, enemyBehaviorIdx, budget, stateAfterHero);
+      logs.forEach((log) => battleStore.addLog({ round: currentTurn, action: log, actor: 'enemy', timestamp: Date.now() }));
+      const log = logs[logs.length - 1] ?? '';
 
       // Phase 4: Boss virus injection (levels 11+) — 35% chance each turn
       if (level && level.number >= 11 && newState.enemyHP > 0) {
@@ -967,8 +1035,8 @@ export default function BattleScreen() {
         burn: newState.heroBurnRounds, freeze: newState.heroFreezeRounds, poison: newState.heroPoisonRounds, enemyStun: newState.enemyStunnedRounds,
         enemyBurn: newState.enemyBurnRounds, enemyFreeze: newState.enemyFreezeRounds, enemyPoison: newState.enemyPoisonRounds, heroBerserk: newState.heroBerserkRounds,
       });
-      // Advance enemy behavior
-      setEnemyBehaviorIdx(i => i + 1);
+      // Advance enemy behavior by number of actions used
+      setEnemyBehaviorIdx(i => i + actionsUsed);
       // Resolution after another delay
       setBattlePhase('resolution');
       setTimeout(() => {
@@ -1217,14 +1285,19 @@ export default function BattleScreen() {
                     borderRadius: 5, padding: '2px 6px', marginBottom: 3,
                     display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap',
                   }}>
-                    <span style={{ color: '#a5b4fc', fontSize: 9, fontWeight: 700 }}>วาง</span>
+                    {!isMobile && <span style={{ color: '#a5b4fc', fontSize: 9, fontWeight: 700 }}>วาง</span>}
                     {missingRequiredTypes.map((req) => (
-                      <span key={req} style={{
+                      <span key={req} title={SHIELD_LABELS[req]} style={{
                         background: 'rgba(99,102,241,0.5)', border: '1px solid rgba(165,180,252,0.6)',
-                        borderRadius: 3, padding: '1px 5px', color: '#e0e7ff', fontSize: 10, fontWeight: 800,
-                      }}>{SHIELD_ICONS[req]}{SHIELD_LABELS[req]}</span>
+                        borderRadius: 3, padding: isMobile ? '2px 4px' : '1px 5px',
+                        color: '#e0e7ff', fontSize: isMobile ? 14 : 10, fontWeight: 800,
+                        display: 'inline-flex', alignItems: 'center', gap: isMobile ? 0 : 2,
+                      }}>
+                        {SHIELD_ICONS[req] ?? '?'}
+                        {!isMobile && <span>{SHIELD_LABELS[req]}</span>}
+                      </span>
                     ))}
-                    <span style={{ color: '#a5b4fc', fontSize: 9, fontWeight: 700 }}>เพื่อทะลุโล!</span>
+                    {!isMobile && <span style={{ color: '#a5b4fc', fontSize: 9, fontWeight: 700 }}>เพื่อทะลุโล!</span>}
                   </div>
                 )}
                 {level?.enemy.behaviors && status !== 'victory' && status !== 'defeat' && (
@@ -1295,7 +1368,7 @@ export default function BattleScreen() {
                   setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
                   liveBattleStateRef.current = null;
                   clearToStartEnd();
-                  restartBattle(getBoostedChar() as any, level.enemy as any, level.id);
+                  restartBattle(getBoostedChar() as any, level.enemy as any, level.id); applyInitialHeroState(level);
                 }}
                 disabled={isExecuting}
                 style={{
@@ -1513,10 +1586,10 @@ export default function BattleScreen() {
                         borderRadius: 8, padding: '5px 10px', textAlign: 'center',
                       }}>
                         <p style={{ color: 'rgba(251,191,36,0.8)', fontSize: 10, margin: 0, fontWeight: 600 }}>
-                          เล่นซ้ำ → XP ×{xpMultiplierPct}% / Gold ×{Math.round((goldEarned / Math.max(1, (level.rewards as any).gold ?? 1)) * 100)}%
+                          เล่นซ้ำวันนี้ → XP ×{xpMultiplierPct}% / Gold ×{Math.round((goldEarned / Math.max(1, (level.rewards as any).gold ?? 1)) * 100)}%
                         </p>
                         <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, margin: '2px 0 0' }}>
-                          รางวัลลดลงเมื่อผ่านด่านนี้แล้ว — ลองด่านใหม่เพื่อ XP เต็ม
+                          รีเซ็ตรางวัลเที่ยงคืน (UTC+7) — เล่นด่านอื่นเพื่อ XP เต็ม
                         </p>
                       </div>
                     )}
@@ -1626,7 +1699,7 @@ export default function BattleScreen() {
                     progressSaved.current = false;
                     setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
                     liveBattleStateRef.current = null;
-                    restartBattle(getBoostedChar() as any, level.enemy as any, level.id);
+                    restartBattle(getBoostedChar() as any, level.enemy as any, level.id); applyInitialHeroState(level);
                   }}
                   style={{ padding: '12px 20px', borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.bgSurfaceHover, color: colors.text, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
                   ↺ Retry
@@ -1674,7 +1747,7 @@ export default function BattleScreen() {
             progressSaved.current = false;
             setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
             liveBattleStateRef.current = null;
-            restartBattle(getBoostedChar() as any, level.enemy as any, level.id);
+            restartBattle(getBoostedChar() as any, level.enemy as any, level.id); applyInitialHeroState(level);
           }}
           onClose={() => {
             if (shopFromBag) {

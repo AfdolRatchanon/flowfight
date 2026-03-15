@@ -23,11 +23,11 @@ export default function ConditionNode({
   const { nodes, setNodes, visitedNodeIds, visitedConditionResults, shieldGlowTypes } = useFlowchartStore();
   const active = data.isActive;
   const wasVisited = visitedNodeIds.includes(id);
-  const isShieldTarget = shieldGlowTypes.includes('condition');
   const traceResult = wasVisited ? visitedConditionResults[id] : undefined; // true=YES, false=NO, undefined=not visited
   const W = 180, H = 80;
 
   const condType = data.conditionType ?? 'enemy_alive';
+  const isShieldTarget = shieldGlowTypes.includes('condition') || shieldGlowTypes.includes(condType);
   const threshold = data.threshold ?? 50;
   const hasThreshold = THRESHOLD_TYPES.has(condType);
 

@@ -1,22 +1,24 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LEVELS, ENDLESS_LEVEL } from '../../utils/constants';
+import { LEVELS } from '../../utils/constants';
 import { useGameStore } from '../../stores/gameStore';
 import { useShopStore } from '../../stores/shopStore';
+import { getMsUntilMidnightThai } from '../../services/authService';
 import { levelProgressPct, MAX_LEVEL } from '../../utils/levelSystem';
 import { useTheme } from '../../contexts/ThemeContext';
 import BagButton from './BagButton';
 
 // ── Enemy image map (by level.id — 1 ภาพต่อ 1 ด่าน) ──────────────────────
 const LEVEL_IMAGE: Record<string, string> = {
-  level_1:  'slime.png',
-  level_2:  'Bigger Slime.png',
-  level_3:  'Goblin Scout.png',
-  level_4:  'Goblin Heal When Low.png',
-  level_5:  'Spider.png',
-  level_6:  'Kobold.png',
-  level_7:  'Forest Wraith.png',
-  level_8:  'Goblin Knight.png',
-  level_9:  'Orc Warrior.png',
+  level_1: 'slime.png',
+  level_2: 'Bigger Slime.png',
+  level_3: 'Goblin Scout.png',
+  level_4: 'Goblin Heal When Low.png',
+  level_5: 'Spider.png',
+  level_6: 'Kobold.png',
+  level_7: 'Forest Wraith.png',
+  level_8: 'Goblin Knight.png',
+  level_9: 'Orc Warrior.png',
   level_10: 'Stone Troll.png',
   level_11: 'Orc.png',
   level_12: 'Ice Giant.png',
@@ -42,12 +44,35 @@ function DifficultyStars({ n }: { n: number }) {
   );
 }
 
+function formatCountdown(ms: number): string {
+  const totalSec = Math.ceil(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function getDailyEfficiency(plays: number): { label: string; color: string; bg: string } {
+  if (plays === 0) return { label: '100%', color: '#4ade80', bg: 'rgba(74,222,128,0.15)' };
+  if (plays === 1) return { label: '50%', color: '#fbbf24', bg: 'rgba(251,191,36,0.15)' };
+  if (plays === 2) return { label: '25%', color: '#fb923c', bg: 'rgba(251,146,60,0.15)' };
+  return { label: '10%', color: '#f87171', bg: 'rgba(248,113,113,0.15)' };
+}
+
 export default function LevelSelect() {
   const navigate = useNavigate();
-  const { player, character } = useGameStore();
+  const { player, character, dailyFarmPlays } = useGameStore();
   const { colors } = useTheme();
   const shopStore = useShopStore();
   const completed = player?.levelsCompleted ?? [];
+
+  const [countdown, setCountdown] = useState('');
+  useEffect(() => {
+    function update() { setCountdown(formatCountdown(getMsUntilMidnightThai())); }
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   function isUnlocked(_levelId: string, idx: number) {
     if (idx === 0) return true;
@@ -110,10 +135,24 @@ export default function LevelSelect() {
           )}
         </div>
 
+        {/* ── Daily Farm Reset Strip ─────────────────────────────────────── */}
+        <div style={{
+          background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
+          borderRadius: 10, padding: '6px 14px', marginBottom: 12,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span style={{ color: 'rgba(165,180,252,0.85)', fontSize: 11 }}>
+            🔄 รางวัลรายวัน — รีเซ็ตทุกเที่ยงคืน (UTC+7)
+          </span>
+          <span style={{ color: '#a5b4fc', fontSize: 11, fontWeight: 700 }}>
+            {countdown}
+          </span>
+        </div>
+
         <div className="level-grid">
 
           {/* ── Endless Mode Card ──────────────────────────────────────────── */}
-          <div
+          {/* <div
             onClick={() => navigate('/battle/' + ENDLESS_LEVEL.id)}
             style={{
               background: 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(239,68,68,0.08))',
@@ -151,7 +190,7 @@ export default function LevelSelect() {
                 <p style={{ color: '#4ade80', fontSize: 11, margin: 0 }}>ไม่จำกัด</p>
               </div>
             </div>
-          </div>
+          </div> */}
 
           {/* ── Level Cards ────────────────────────────────────────────────── */}
           {LEVELS.map((level, i) => {
@@ -246,10 +285,24 @@ export default function LevelSelect() {
                       +{level.rewards.experience} XP
                     </p>
                     {(level.rewards as any).gold && (
-                      <p style={{ color: '#f59e0b', fontSize: 11, margin: 0 }}>
+                      <p style={{ color: '#f59e0b', fontSize: 11, margin: '0 0 2px' }}>
                         💰 {(level.rewards as any).gold}g
                       </p>
                     )}
+                    {(() => {
+                      const plays = dailyFarmPlays[level.id] ?? 0;
+                      const eff = getDailyEfficiency(plays);
+                      return (
+                        <span style={{
+                          display: 'inline-block',
+                          background: eff.bg, color: eff.color,
+                          fontSize: 9, fontWeight: 800, padding: '1px 6px',
+                          borderRadius: 4, border: `1px solid ${eff.color}55`,
+                        }}>
+                          {eff.label}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

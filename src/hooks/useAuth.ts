@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import type { User } from 'firebase/auth';
-import { onAuthChange, getPlayerProfile, ensurePlayerProfile } from '../services/authService';
+import { onAuthChange, getPlayerProfile, ensurePlayerProfile, getDailyFarmPlays } from '../services/authService';
 import { useGameStore } from '../stores/gameStore';
 import { useShopStore } from '../stores/shopStore';
 import { useCharacterStore } from '../stores/characterStore';
 import type { Character } from '../types/game.types';
 
 export function useAuth() {
-  const { player, setPlayer, setLoading, setCharacter } = useGameStore();
+  const { player, setPlayer, setLoading, setCharacter, setDailyFarmPlays } = useGameStore();
   const initShop = useShopStore((s) => s.initFromProfile);
 
   useEffect(() => {
@@ -24,6 +24,8 @@ export function useAuth() {
             // Ensure levelClearCounts is loaded from Firestore
             if (!(profile as any).levelClearCounts) (profile as any).levelClearCounts = {};
             setPlayer(profile);
+            // Load daily farm plays (fire-and-forget)
+            getDailyFarmPlays(user.uid).then(setDailyFarmPlays).catch(() => {});
             // Restore shop data (gold + purchased equipment — shared across all classes)
             initShop(
               profile.gold ?? 150,
