@@ -852,7 +852,7 @@ export default function InfinityDevBattle() {
           background: theme === 'dark'
             ? 'linear-gradient(to bottom, #0a0a20 0%, #0d0d1a 100%)'
             : 'linear-gradient(to bottom, #e8edf8 0%, #eef1f8 100%)',
-          backgroundImage: 'url(/backgrounds/infinity_dev.png)',
+          backgroundImage: 'url(/backgrounds/infinity_dev.jpg)',
           backgroundSize: 'cover',
           backgroundPosition: 'center bottom',
           backgroundRepeat: 'no-repeat',

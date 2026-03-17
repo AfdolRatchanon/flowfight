@@ -25,6 +25,11 @@ const LEVEL_IMAGE: Record<string, string> = {
   level_13: 'dragons-lair.png',
   level_14: 'lich-lord.png',
   level_15: 'dark-overlord.png',
+  level_16: 'vampire-lord.png',
+  level_17: 'frost-titan.png',
+  level_18: 'dark-commander.png',
+  level_19: 'the-lich-lord.png',
+  level_20: 'the-dark-overlord.png',
 };
 
 const ENEMY_EMOJI: Record<string, string> = {

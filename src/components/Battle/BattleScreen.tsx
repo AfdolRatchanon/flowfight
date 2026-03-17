@@ -166,40 +166,48 @@ const ENEMY_ICONS: Record<string, string> = {
 // Map level.id → image filename (1 ภาพต่อ 1 ด่าน ไม่ซ้ำกัน)
 const LEVEL_IMAGE: Record<string, string> = {
   level_1:  'slime.png',
-  level_2:  'Bigger Slime.png',
-  level_3:  'Goblin Scout.png',
-  level_4:  'Goblin Heal When Low.png',
-  level_5:  'Spider.png',
-  level_6:  'Forest Wraith.png',
-  level_7:  'Orc Warrior.png',
-  level_8:  'Goblin Knight.png',
-  level_9:  'Kobold.png',
-  level_10: 'Stone Troll.png',
-  level_11: 'Orc.png',
-  level_12: 'Ice Giant.png',
-  level_13: "Dragon's Lair.png",
-  level_14: "Dragon's Lair.png",
-  level_15: 'Orc.png',
-  // level_16-20: no image → emoji fallback (images to be added later)
+  level_2:  'bigger-slime.png',
+  level_3:  'goblin-scout.png',
+  level_4:  'goblin-heal.png',
+  level_5:  'spider.png',
+  level_6:  'kobold.png',
+  level_7:  'forest-wraith.png',
+  level_8:  'goblin-knight.png',
+  level_9:  'orc-warrior.png',
+  level_10: 'stone-troll.png',
+  level_11: 'orc.png',
+  level_12: 'ice-giant.png',
+  level_13: 'dragons-lair.png',
+  level_14: 'lich-lord.png',
+  level_15: 'dark-overlord.png',
+  level_16: 'vampire-lord.png',
+  level_17: 'frost-titan.png',
+  level_18: 'dark-commander.png',
+  level_19: 'the-lich-lord.png',
+  level_20: 'the-dark-overlord.png',
+};
+
+const LEVEL_BG: Record<string, string> = {
+  level_endless: 'infinity_dev.jpg',
 };
 
 // Endless mode: กลุ่มละ 5 wave → 15 ศัตรู (ตามลำดับความยาก)
 const WAVE_IMAGES = [
-  'slime.png',              // wave  1–5
-  'Bigger Slime.png',       // wave  6–10
-  'Goblin Scout.png',       // wave 11–15
-  'Goblin Heal When Low.png', // wave 16–20
-  'Spider.png',             // wave 21–25
-  'Kobold.png',             // wave 26–30
-  'Forest Wraith.png',      // wave 31–35
-  'Goblin Knight.png',      // wave 36–40
-  'Orc Warrior.png',        // wave 41–45
-  'Stone Troll.png',        // wave 46–50
-  'Orc.png',                // wave 51–55
-  'Ice Giant.png',          // wave 56–60
-  "Dragon's Lair.png",      // wave 61–65
-  'The Lich Lord.png',      // wave 66–70
-  'The Dark Overlord.png',  // wave 71+
+  'slime.png',        // wave  1–5
+  'bigger-slime.png', // wave  6–10
+  'goblin-scout.png', // wave 11–15
+  'goblin-heal.png',  // wave 16–20
+  'spider.png',       // wave 21–25
+  'kobold.png',       // wave 26–30
+  'forest-wraith.png',  // wave 31–35
+  'goblin-knight.png',  // wave 36–40
+  'orc-warrior.png',    // wave 41–45
+  'stone-troll.png',    // wave 46–50
+  'orc.png',            // wave 51–55
+  'ice-giant.png',      // wave 56–60
+  'dragons-lair.png',   // wave 61–65
+  'lich-lord.png',      // wave 66–70
+  'dark-overlord.png',  // wave 71+
 ];
 
 function getWaveImage(wave: number): string {
@@ -1100,7 +1108,7 @@ export default function BattleScreen() {
           background: theme === 'dark'
             ? 'linear-gradient(to bottom, #0a0a20 0%, #0d0d1a 100%)'
             : 'linear-gradient(to bottom, #e8edf8 0%, #eef1f8 100%)',
-          backgroundImage: `url(/backgrounds/${level.id}.png)`,
+          backgroundImage: `url(/backgrounds/${LEVEL_BG[level.id] ?? `${level.id}.jpg`})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center bottom',
           backgroundRepeat: 'no-repeat',
@@ -1110,30 +1118,38 @@ export default function BattleScreen() {
           {/* Dark overlay so text stays readable over background image */}
           <div style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(180deg, rgba(13,13,26,0.55) 0%, rgba(13,13,26,0.25) 50%, rgba(13,13,26,0.65) 100%)',
+            background: 'linear-gradient(180deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.42) 45%, rgba(0,0,0,0.72) 100%)',
           }} />
 
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'relative', zIndex: 1 }}>
             <button onClick={() => navigate('/levels')} style={{
-              background: colors.bgSurface, border: 'none',
-              color: colors.textSub, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+              background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)',
+              backdropFilter: 'blur(6px)',
+              color: 'rgba(255,255,255,0.9)', padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
             }}>← Levels</button>
 
             {/* Center: wave badge (Endless) หรือ level name (Tutorial) */}
             {isEndless ? (
               <div style={{
-                background: 'linear-gradient(135deg,rgba(124,58,237,0.8),rgba(239,68,68,0.8))',
-                border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10,
+                background: 'linear-gradient(135deg,rgba(124,58,237,0.85),rgba(239,68,68,0.85))',
+                border: '1px solid rgba(255,255,255,0.25)', borderRadius: 10,
                 padding: '4px 16px', textAlign: 'center',
+                backdropFilter: 'blur(6px)',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
               }}>
-                <p style={{ color: 'white', fontSize: 12, fontWeight: 800, margin: 0 }}>WAVE {waveNumber}</p>
-                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, margin: 0 }}>Score: {endlessScore}</p>
+                <p style={{ color: 'white', fontSize: 12, fontWeight: 800, margin: 0, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>WAVE {waveNumber}</p>
+                <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 10, margin: 0 }}>Score: {endlessScore}</p>
               </div>
             ) : (
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ color: colors.text, fontWeight: 700, fontSize: 14, margin: 0 }}>{level.name}</p>
-                <p style={{ color: stat.color, fontSize: 12, margin: 0 }}>{stat.label}</p>
+              <div style={{
+                textAlign: 'center',
+                background: 'rgba(0,0,0,0.45)', borderRadius: 8,
+                padding: '3px 12px', backdropFilter: 'blur(6px)',
+                border: '1px solid rgba(255,255,255,0.1)',
+              }}>
+                <p style={{ color: '#fff', fontWeight: 700, fontSize: 14, margin: 0, textShadow: '0 1px 6px rgba(0,0,0,0.8)' }}>{level.name}</p>
+                <p style={{ color: stat.color, fontSize: 12, margin: 0, textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>{stat.label}</p>
               </div>
             )}
 
@@ -1144,8 +1160,9 @@ export default function BattleScreen() {
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
             position: 'relative', zIndex: 1,
-            background: 'rgba(0,0,0,0.35)', borderRadius: 8,
-            padding: '4px 10px',
+            background: 'rgba(0,0,0,0.55)', borderRadius: 8,
+            padding: '4px 10px', backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.08)',
           }}>
             <span style={{
               background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.4)',
@@ -1189,13 +1206,13 @@ export default function BattleScreen() {
               </div>
 
               {/* Center controls */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, flexShrink: 0, width: 110, zIndex: 2, borderRadius: 12, transition: 'box-shadow 0.3s', boxShadow: tutorialTarget === 'run-btn' ? '0 0 0 3px rgba(74,222,128,0.7), 0 0 20px rgba(74,222,128,0.4)' : undefined }}>
-                <span style={{ color: colors.textSub, fontWeight: 800, fontSize: 11 }}>VS</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 'clamp(3px,0.5vh,6px)', flexShrink: 0, width: 'clamp(110px,14vw,180px)', alignSelf: 'stretch', zIndex: 2, borderRadius: 12, transition: 'box-shadow 0.3s', boxShadow: tutorialTarget === 'run-btn' ? '0 0 0 3px rgba(74,222,128,0.7), 0 0 20px rgba(74,222,128,0.4)' : undefined, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.08)', padding: 'clamp(6px,1.2vh,16px) clamp(4px,0.6vw,10px)', overflow: 'hidden' }}>
+                <span style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 800, fontSize: 'clamp(11px,1.3vw,17px)', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>VS</span>
                 <div style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.4)', borderRadius: 7, padding: '2px 8px' }}>
-                  <span style={{ color: '#c4b5fd', fontSize: 10, fontWeight: 800 }}>Turn {currentTurn}</span>
+                  <span style={{ color: '#c4b5fd', fontSize: 'clamp(10px,1.1vw,15px)', fontWeight: 800 }}>Turn {currentTurn}</span>
                 </div>
                 {flowNodes.some(n => n.data.isVirus) && (
-                  <div style={{ background: 'rgba(150,0,30,0.85)', border: '1px solid rgba(220,0,80,0.6)', borderRadius: 5, padding: '2px 6px', fontSize: 8, fontWeight: 700, color: '#ff4070', textAlign: 'center' }}>☠️ VIRUS!</div>
+                  <div style={{ background: 'rgba(150,0,30,0.85)', border: '1px solid rgba(220,0,80,0.6)', borderRadius: 5, padding: '2px 6px', fontSize: 'clamp(8px,0.9vw,12px)', fontWeight: 700, color: '#ff4070', textAlign: 'center' }}>☠️ VIRUS!</div>
                 )}
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button
@@ -1203,10 +1220,10 @@ export default function BattleScreen() {
                     disabled={isExecuting || status === 'victory' || status === 'defeat' || battlePhase !== 'planning'}
                     style={{
                       background: isExecuting ? 'rgba(74,222,128,0.15)' : 'linear-gradient(135deg,#16a34a,#15803d)',
-                      border: 'none', color: 'white', padding: '7px 10px', borderRadius: 9,
+                      border: 'none', color: 'white', padding: 'clamp(7px,0.8vh,11px) clamp(10px,1vw,16px)', borderRadius: 9,
                       cursor: (isExecuting || battlePhase !== 'planning') ? 'not-allowed' : 'pointer',
-                      fontWeight: 700, fontSize: 12, opacity: status === 'victory' || status === 'defeat' ? 0.4 : 1,
-                      boxShadow: isExecuting ? 'none' : '0 4px 12px rgba(22,163,74,0.4)', minWidth: 56,
+                      fontWeight: 700, fontSize: 'clamp(12px,1.3vw,17px)', opacity: status === 'victory' || status === 'defeat' ? 0.4 : 1,
+                      boxShadow: isExecuting ? 'none' : '0 4px 12px rgba(22,163,74,0.4)', minWidth: 'clamp(56px,6vw,80px)',
                     }}>
                     {isExecuting ? '⏳' : battlePhase === 'enemy_turn' ? '👹...' : battlePhase === 'resolution' ? '⚙️...' : '▶ Run'}
                   </button>
@@ -1214,23 +1231,23 @@ export default function BattleScreen() {
                     background: isExecuting ? 'linear-gradient(135deg,#dc2626,#991b1b)' : colors.bgSurface,
                     border: isExecuting ? 'none' : `1px solid ${colors.border}`,
                     color: isExecuting ? colors.text : colors.textMuted,
-                    padding: '7px 9px', borderRadius: 9, cursor: isExecuting ? 'pointer' : 'not-allowed',
-                    fontWeight: 700, fontSize: 12, boxShadow: isExecuting ? '0 4px 12px rgba(220,38,38,0.4)' : 'none',
+                    padding: 'clamp(7px,0.8vh,11px) clamp(9px,0.9vw,14px)', borderRadius: 9, cursor: isExecuting ? 'pointer' : 'not-allowed',
+                    fontWeight: 700, fontSize: 'clamp(12px,1.3vw,17px)', boxShadow: isExecuting ? '0 4px 12px rgba(220,38,38,0.4)' : 'none',
                   }}>⏹</button>
                 </div>
-                <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  <span style={{ color: colors.textMuted, fontSize: 7 }}>ช้า</span>
+                <div style={{ display: 'flex', gap: 2, alignItems: 'center', width: '100%', justifyContent: 'center' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'clamp(7px,0.8vw,11px)' }}>ช้า</span>
                   {SPEED_LEVELS.map((s, i) => (
                     <button key={i} onClick={() => setSpeedIdx(i)} disabled={isExecuting} style={{
-                      width: 20, height: 16, borderRadius: 3, border: 'none',
-                      background: speedIdx === i ? 'linear-gradient(135deg,#e94560,#7c3aed)' : colors.bgSurfaceHover,
-                      color: speedIdx === i ? colors.text : colors.textSub,
-                      fontSize: 7, fontWeight: 700, cursor: isExecuting ? 'not-allowed' : 'pointer',
+                      width: 'clamp(20px,2.2vw,30px)', height: 'clamp(16px,1.8vh,24px)', borderRadius: 3, border: 'none',
+                      background: speedIdx === i ? 'linear-gradient(135deg,#e94560,#7c3aed)' : 'rgba(255,255,255,0.15)',
+                      color: speedIdx === i ? '#fff' : 'rgba(255,255,255,0.75)',
+                      fontSize: 'clamp(7px,0.8vw,11px)', fontWeight: 700, cursor: isExecuting ? 'not-allowed' : 'pointer',
                     }}>{s.label}</button>
                   ))}
-                  <span style={{ color: colors.textMuted, fontSize: 7 }}>เร็ว</span>
+                  <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'clamp(7px,0.8vw,11px)' }}>เร็ว</span>
                 </div>
-                {validationError && <p style={{ color: '#f87171', fontSize: 8, maxWidth: 100, textAlign: 'center', margin: 0 }}>{validationError}</p>}
+                {validationError && <p style={{ color: '#f87171', fontSize: 'clamp(8px,0.9vw,12px)', maxWidth: '100%', textAlign: 'center', margin: 0 }}>{validationError}</p>}
               </div>
 
               {/* Enemy sprite — clean, no HP overlay */}
@@ -1264,7 +1281,7 @@ export default function BattleScreen() {
             </div>
 
             {/* ── Row 2: Status bar — HP bars, shield info, XP ── */}
-            <div style={{ flexShrink: 0, display: 'flex', gap: 4, padding: '4px 2px 2px', borderTop: `1px solid ${colors.borderSubtle}` }}>
+            <div style={{ flexShrink: 0, display: 'flex', gap: 4, padding: '5px 6px 4px', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', borderTop: '1px solid rgba(255,255,255,0.1)', borderRadius: '0 0 8px 8px' }}>
 
               {/* Hero status */}
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -1283,13 +1300,13 @@ export default function BattleScreen() {
                 <HPBar current={heroHP} max={heroMaxHP} color="#4ade80" />
                 <span style={{ color: heroHP < heroMaxHP * 0.3 ? '#ef4444' : '#4ade80', fontSize: 9, fontWeight: 700 }}>{heroHP}/{heroMaxHP}</span>
                 <XPBar pct={xpPct} />
-                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 7, margin: '1px 0 0' }}>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 7, margin: '1px 0 0' }}>
                   {heroChar.level >= MAX_LEVEL ? 'MAX' : `${xpLeft}xp→Lv.${heroChar.level + 1}`}
                 </p>
               </div>
 
               {/* Spacer aligns with center controls */}
-              <div style={{ width: 110, flexShrink: 0 }} />
+              <div style={{ width: 'clamp(110px,14vw,180px)', flexShrink: 0 }} />
 
               {/* Enemy status */}
               <div style={{ flex: 1, minWidth: 0 }}>

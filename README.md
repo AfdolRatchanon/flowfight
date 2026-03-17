@@ -457,6 +457,8 @@ src/
 - [x] Process block menu — แสดงคำอธิบายแต่ละ action ในเมนู context
 - [x] **Daily Farm (Diminishing Returns รายวัน)** — บันทึกใน Firestore รีเซ็ตเที่ยงคืน UTC+7
 - [x] LevelSelect แสดง efficiency badge (🟢100% / 🟡50% / 🟠25% / 🔴10%) + countdown reset
+- [x] Background images ครบทุกด่าน (level_1–20 + infinity_dev) เป็นไฟล์ `.jpg` ชื่อ clean
+- [x] Enemy Sprites ครบทุกด่าน รวม level 16–20 (Vampire Lord, Frost Titan, Dark Commander, Lich Lord, Dark Overlord)
 
 ### สิ่งที่ยังขาด
 
@@ -464,7 +466,6 @@ src/
 - [ ] Tooltip อธิบาย block แต่ละตัวเมื่อ hover
 - [ ] Sound Effects และ BGM
 - [ ] Sprite animation จริง (ปัจจุบันใช้ PNG + emoji)
-- [ ] Enemy Sprites ที่ขาด: Vampire Lord, Frost Titan, Dark Commander
 - [ ] Mobile / Touch screen support
 - [ ] Achievement System (type พร้อมแล้ว ยังขาด UI + logic)
 
@@ -482,6 +483,12 @@ src/
 - **Volume & Mute** — บันทึกค่าใน localStorage (SFX / BGM / Voice แยกกัน)
 - จัดโฟลเดอร์ sound ใหม่: `bgm/` `sfx/` `voice/` เลือกเฉพาะไฟล์ที่ใช้
 - Convert ไฟล์เสียงจาก WAV → MP3 128kbps ลดขนาดจาก **5.2 GB → 25 MB**
+
+### v0.12.2 (มีนาคม 2026)
+
+- **Background images ครบทุกด่าน** — rename ไฟล์เป็น `level_1.jpg`–`level_20.jpg` + `infinity_dev.jpg`, ลบไฟล์ชื่อเดิมและ `bg-preview.html` ทิ้ง
+- `level_endless` ใช้ภาพ `infinity_dev.jpg` แทน emoji fallback
+- **Enemy Sprites ครบ level 16–20** — Vampire Lord, Frost Titan, Dark Commander, Lich Lord, Dark Overlord (rename เป็น kebab-case ไม่มี space)
 
 ### v0.12.1 (มีนาคม 2026)
 
@@ -598,4 +605,4 @@ src/
 
 ---
 
-`v0.10.0` — มีนาคม 2026
+`v0.12.2` — มีนาคม 2026
