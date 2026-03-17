@@ -161,20 +161,20 @@ function XPBar({ pct }: { pct: number }) {
 // Infinity Dev wave images
 const WAVE_IMAGES = [
   'slime.png',              // wave  1–5
-  'Bigger Slime.png',       // wave  6–10
-  'Goblin Scout.png',       // wave 11–15
-  'Goblin Heal When Low.png', // wave 16–20
-  'Spider.png',             // wave 21–25
-  'Kobold.png',             // wave 26–30
-  'Forest Wraith.png',      // wave 31–35
-  'Goblin Knight.png',      // wave 36–40
-  'Orc Warrior.png',        // wave 41–45
-  'Stone Troll.png',        // wave 46–50
-  'Orc.png',                // wave 51–55
-  'Ice Giant.png',          // wave 56–60
-  "Dragon's Lair.png",      // wave 61–65
-  'The Lich Lord.png',      // wave 66–70
-  'The Dark Overlord.png',  // wave 71+
+  'bigger-slime.png',       // wave  6–10
+  'goblin-scout.png',       // wave 11–15
+  'goblin-heal.png',        // wave 16–20
+  'spider.png',             // wave 21–25
+  'kobold.png',             // wave 26–30
+  'forest-wraith.png',      // wave 31–35
+  'goblin-knight.png',      // wave 36–40
+  'orc-warrior.png',        // wave 41–45
+  'stone-troll.png',        // wave 46–50
+  'orc.png',                // wave 51–55
+  'ice-giant.png',          // wave 56–60
+  'dragons-lair.png',       // wave 61–65
+  'lich-lord.png',          // wave 66–70
+  'dark-overlord.png',      // wave 71+
 ];
 
 function getWaveImage(wave: number): string {
@@ -191,7 +191,7 @@ function InfinityEnemySprite({
   isBoss: boolean;
   corruptedSectorActive: boolean;
 }) {
-  const imgFile = isBoss ? 'The Dark Overlord.png' : getWaveImage(wave);
+  const imgFile = isBoss ? 'dark-overlord.png' : getWaveImage(wave);
   const [useImg, setUseImg] = useState(true);
   React.useEffect(() => { setUseImg(true); }, [wave]);
 

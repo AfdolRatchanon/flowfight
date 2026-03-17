@@ -8,7 +8,7 @@ import { WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../../utils/constants';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL, CLASS_STAT_GAIN } from '../../utils/levelSystem';
 import { saveCharacterProgress, saveShopData, saveEquippedItems } from '../../services/authService';
 import { useTheme } from '../../contexts/ThemeContext';
-import { soundManager } from '../../utils/soundManager';
+import { soundManager } from '../../services/soundManager';
 
 // ===== Class definitions =====
 const CLASS_INFO: Record<CharacterClass, {

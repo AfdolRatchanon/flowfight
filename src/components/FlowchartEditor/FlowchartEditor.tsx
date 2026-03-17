@@ -23,7 +23,7 @@ import LoopNode from './CustomNodes/LoopNode';
 import SelfLoopEdge from './SelfLoopEdge';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ThemeColors } from '../../contexts/ThemeContext';
-import { soundManager } from '../../utils/soundManager';
+import { soundManager } from '../../services/soundManager';
 
 const nodeTypes = {
   start: StartNode,

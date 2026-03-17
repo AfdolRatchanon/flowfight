@@ -18,7 +18,7 @@ import type { ThemeColors } from '../../contexts/ThemeContext';
 import TutorialGuide from '../Tutorial/TutorialGuide';
 import type { TutorialTarget } from '../Tutorial/TutorialGuide';
 import BagButton from '../UI/BagButton';
-import { soundManager } from '../../utils/soundManager';
+import { soundManager } from '../../services/soundManager';
 
 // ===== Error Boundary for FlowchartEditor =====
 class FlowchartErrorBoundary extends Component<

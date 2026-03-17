@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { soundManager, type BGMKey } from './utils/soundManager';
+import { soundManager, type BGMKey } from './services/soundManager';
 import { useAuth } from './hooks/useAuth';
 import { useGameStore } from './stores/gameStore';
 import { useTheme } from './contexts/ThemeContext';

@@ -4,7 +4,7 @@ import { useShopStore, RESTOCK_INTERVAL_MS, RESTOCK_POTIONS, RESTOCK_ANTIDOTES }
 import { useGameStore } from '../../stores/gameStore';
 import { saveShopData } from '../../services/authService';
 import { useTheme } from '../../contexts/ThemeContext';
-import { soundManager } from '../../utils/soundManager';
+import { soundManager } from '../../services/soundManager';
 
 // ─── Catalog ─────────────────────────────────────────────────────────────────
 

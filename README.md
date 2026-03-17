@@ -483,6 +483,14 @@ src/
 - จัดโฟลเดอร์ sound ใหม่: `bgm/` `sfx/` `voice/` เลือกเฉพาะไฟล์ที่ใช้
 - Convert ไฟล์เสียงจาก WAV → MP3 128kbps ลดขนาดจาก **5.2 GB → 25 MB**
 
+### v0.12.1 (มีนาคม 2026)
+
+- **จัดโครงสร้างโปรเจกต์** — ย้าย `soundManager.ts` จาก `utils/` → `services/`
+- Rename enemy sprites เป็น kebab-case (`Bigger Slime.png` → `bigger-slime.png` ฯลฯ) ไม่มี space/apostrophe
+- ลบไฟล์ Vite template ที่ไม่ใช้: `react.svg`, `vite.svg`
+- ลบโฟลเดอร์ว่าง: `src/components/Common/`, `src/styles/`
+- ลบ `pglite-debug.log`
+
 ### v0.12.0 (มีนาคม 2026)
 
 - **Campaign Speedrun Leaderboard** — tab "⏱️ Speedrun" ใน Leaderboard จับเวลา wall clock จริงตั้งแต่ชนะด่านแรกครั้งแรก จนถึงด่านสุดท้าย
