@@ -611,4 +611,16 @@ src/
 
 ## License
 
-Copyright (c) 2026 Ratchanon Semsayan — All rights reserved.
+MIT License — Copyright (c) 2026 Ratchanon Semsayan
+
+## Credits
+
+| Role                        | Name                                      |
+|-----------------------------|-------------------------------------------|
+| Lead Developer              | Ratchanon Semsayan (รัชนนท์ เสมสายัณห์)   |
+| Project & Creative Director | Suppakit Kongthong (ศุภกิจ คงทอง)         |
+| Lead QA & System Advisor    | Phattrawut Nachirit (ภัทราวุฒ นาชัยฤทธิ์) |
+| Lead QA & System Advisor    | Watanyu Arjsurin (วทัญญู อาจสุรินทร์)     |
+| QA Tester                   | Prapatpong Srikampol (ประภัสพงษ์ ศรีกำพล) |
+| QA Tester                   | Anon Mongkolwong (อานนท์ มงคลวงษ์)        |
+| QA Tester                   | Jetsada Longkrathok (เจษฎา โล่งกระโทก)   |

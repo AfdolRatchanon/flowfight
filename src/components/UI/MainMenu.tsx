@@ -153,6 +153,11 @@ export default function MainMenu() {
         <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 10, marginTop: 4, opacity: 0.35 }}>
           © 2026 Ratchanon Semsayan
         </p>
+        <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 9, marginTop: 6, opacity: 0.25, lineHeight: 1.7 }}>
+          Project &amp; Creative Director: Suppakit Kongthong<br />
+          Lead QA: Phattrawut Nachirit · Watanyu Arjsurin<br />
+          QA: Prapatpong Srikampol · Anon Mongkolwong · Jetsada Longkrathok
+        </p>
       </div>
     </div>
   );

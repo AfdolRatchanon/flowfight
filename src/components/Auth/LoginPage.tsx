@@ -187,6 +187,11 @@ export default function LoginPage() {
         <p style={{ color: 'rgba(255,255,255,0.18)', fontSize: 10, margin: '2px 0 0' }}>
           © 2026 Ratchanon Semsayan
         </p>
+        <p style={{ color: 'rgba(255,255,255,0.12)', fontSize: 9, margin: '4px 0 0', lineHeight: 1.7 }}>
+          Project &amp; Creative Director: Suppakit Kongthong<br />
+          Lead QA: Phattrawut Nachirit · Watanyu Arjsurin<br />
+          QA: Prapatpong Srikampol · Anon Mongkolwong · Jetsada Longkrathok
+        </p>
       </div>
     </div>
   );
