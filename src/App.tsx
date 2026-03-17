@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { soundManager, type BGMKey } from './utils/soundManager';
 import { useAuth } from './hooks/useAuth';
 import { useGameStore } from './stores/gameStore';
 import { useTheme } from './contexts/ThemeContext';
@@ -44,12 +45,28 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function BGMController() {
+  const location = useLocation();
+  useEffect(() => {
+    const path = location.pathname;
+    let key: BGMKey | null = null;
+    if (path.startsWith('/battle') || path.startsWith('/infinity-dev')) key = path.startsWith('/infinity-dev') ? 'endless' : 'battle';
+    else if (path === '/levels/tutorial' || path === '/levels') key = 'level-select';
+    else if (path === '/login') key = null;
+    else key = 'menu';
+    if (key) soundManager.playBGM(key);
+    else soundManager.stopBGM();
+  }, [location.pathname]);
+  return null;
+}
+
 export default function App() {
   // เรียก useAuth() ครั้งเดียวที่ root เพื่อ subscribe Firebase Auth
   useAuth();
 
   return (
     <Router>
+      <BGMController />
       <ThemeToggle />
       <Routes>
         <Route path="/login" element={<LoginPage />} />

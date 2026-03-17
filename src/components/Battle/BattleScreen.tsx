@@ -18,6 +18,7 @@ import type { ThemeColors } from '../../contexts/ThemeContext';
 import TutorialGuide from '../Tutorial/TutorialGuide';
 import type { TutorialTarget } from '../Tutorial/TutorialGuide';
 import BagButton from '../UI/BagButton';
+import { soundManager } from '../../utils/soundManager';
 
 // ===== Error Boundary for FlowchartEditor =====
 class FlowchartErrorBoundary extends Component<
@@ -655,6 +656,8 @@ export default function BattleScreen() {
   useEffect(() => {
     if (battleLog.length === 0) return;
     const last = battleLog[battleLog.length - 1];
+    soundManager.playFromLog(last.action, last.actor);
+    soundManager.playVoiceForAction(last.action, last.actor, heroChar.class);
     const { heroAnim: ha, enemyAnim: ea, enemyDmg, heroDmg, healAmt } = parseLogAction(last.action);
 
     if (ha) { setHeroAnim(ha); setHeroAnimKey(k => k + 1); }
@@ -801,6 +804,15 @@ export default function BattleScreen() {
     }
   }, [isEndless, status]);
 
+  // Play victory/defeat SFX
+  useEffect(() => {
+    if (status === 'victory' && heroHP > 0) soundManager.playSFX('victory');
+    else if (status === 'defeat' && heroHP <= 0) {
+      soundManager.playSFX('defeat');
+      soundManager.playVoice(heroChar.class === 'mage' ? 'mage-death' : 'warrior-death');
+    }
+  }, [status]);
+
   // Save progress + award XP on battle end
   useEffect(() => {
     if ((status === 'victory' || status === 'defeat') && !progressSaved.current && player && level) {
@@ -913,6 +925,7 @@ export default function BattleScreen() {
         }
         if (leveledUp) {
           setLevelUpData({ oldLevel, newLevel, hpGain: (newLevel - oldLevel) * 10, atkGain: (newLevel - oldLevel) * 2 });
+          soundManager.playSFX('level-up');
         }
         saveCharacterProgress(player.id, newCharacter).catch(() => { });
       }

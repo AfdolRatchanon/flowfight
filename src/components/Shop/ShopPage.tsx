@@ -4,6 +4,7 @@ import { useShopStore, RESTOCK_INTERVAL_MS, RESTOCK_POTIONS, RESTOCK_ANTIDOTES }
 import { useGameStore } from '../../stores/gameStore';
 import { saveShopData } from '../../services/authService';
 import { useTheme } from '../../contexts/ThemeContext';
+import { soundManager } from '../../utils/soundManager';
 
 // ─── Catalog ─────────────────────────────────────────────────────────────────
 
@@ -122,6 +123,7 @@ export default function ShopPage() {
     else if (item.id === 'antidote') shop.setAntidotes(shop.antidotes + 1);
     else if (item.id === 'scroll') shop.setAttackBonus(shop.attackBonus + 5);
     setBought((b) => ({ ...b, [item.id]: (b[item.id] ?? 0) + 1 }));
+    soundManager.playSFX('buy');
     showFlash(`ซื้อ ${item.label} สำเร็จ!`, true);
     // Save gold + potions/antidotes ทันที
     if (player) {

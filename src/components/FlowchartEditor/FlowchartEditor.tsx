@@ -23,6 +23,7 @@ import LoopNode from './CustomNodes/LoopNode';
 import SelfLoopEdge from './SelfLoopEdge';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ThemeColors } from '../../contexts/ThemeContext';
+import { soundManager } from '../../utils/soundManager';
 
 const nodeTypes = {
   start: StartNode,
@@ -178,6 +179,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
   const onConnect = useCallback(
     (params: Connection) => {
       setActiveHandleKey(null);
+      soundManager.playSFX('connect');
       const sh = params.sourceHandle;
       const isYes  = sh === 'yes';
       const isNo   = sh === 'no';
@@ -261,6 +263,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
       position = rfInstance.current.project({ x: screenPos.x - rect.left, y: screenPos.y - rect.top });
     }
     store.setNodes([...storeNodes, { id, type, position, data } as FlowNode]);
+    soundManager.playSFX('click');
     closeAll();
   }
 

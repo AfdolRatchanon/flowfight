@@ -8,6 +8,7 @@ import { WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../../utils/constants';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL, CLASS_STAT_GAIN } from '../../utils/levelSystem';
 import { saveCharacterProgress, saveShopData, saveEquippedItems } from '../../services/authService';
 import { useTheme } from '../../contexts/ThemeContext';
+import { soundManager } from '../../utils/soundManager';
 
 // ===== Class definitions =====
 const CLASS_INFO: Record<CharacterClass, {
@@ -536,6 +537,7 @@ function EquipmentTab({ selectedClass, displayLevel }: { selectedClass: Characte
                                 }).catch(() => {});
                               }
                             } else {
+                              soundManager.playSFX('equip');
                               store.equipItem(item as EquipmentItem);
                               if (player) {
                                 const eq = useCharacterStore.getState().equipment;
