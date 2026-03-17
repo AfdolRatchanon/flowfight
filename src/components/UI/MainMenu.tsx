@@ -148,7 +148,10 @@ export default function MainMenu() {
         </button>
 
         <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 11, marginTop: 20, opacity: 0.5 }}>
-          v{import.meta.env.VITE_APP_VERSION ?? '0.12.1'}
+          v{import.meta.env.VITE_APP_VERSION ?? '0.12.2'}
+        </p>
+        <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 10, marginTop: 4, opacity: 0.35 }}>
+          © 2026 Ratchanon Semsayan
         </p>
       </div>
     </div>

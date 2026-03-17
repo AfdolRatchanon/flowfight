@@ -606,3 +606,9 @@ src/
 ---
 
 `v0.12.2` — มีนาคม 2026
+
+---
+
+## License
+
+Copyright (c) 2026 Ratchanon Semsayan — All rights reserved.

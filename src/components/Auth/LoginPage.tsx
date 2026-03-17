@@ -180,6 +180,14 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+      <div style={{ position: 'absolute', bottom: 16, width: '100%', textAlign: 'center', pointerEvents: 'none' }}>
+        <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, margin: 0 }}>
+          v{import.meta.env.VITE_APP_VERSION ?? '0.12.2'}
+        </p>
+        <p style={{ color: 'rgba(255,255,255,0.18)', fontSize: 10, margin: '2px 0 0' }}>
+          © 2026 Ratchanon Semsayan
+        </p>
+      </div>
     </div>
   );
 }
