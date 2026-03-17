@@ -483,6 +483,12 @@ src/
 - จัดโฟลเดอร์ sound ใหม่: `bgm/` `sfx/` `voice/` เลือกเฉพาะไฟล์ที่ใช้
 - Convert ไฟล์เสียงจาก WAV → MP3 128kbps ลดขนาดจาก **5.2 GB → 25 MB**
 
+### v0.12.0 (มีนาคม 2026)
+
+- **Campaign Speedrun Leaderboard** — tab "⏱️ Speedrun" ใน Leaderboard จับเวลา wall clock จริงตั้งแต่ชนะด่านแรกครั้งแรก จนถึงด่านสุดท้าย
+- แสดง Finished (เรียงเวลาน้อย→มาก, มงกุฎ 👑 อันดับ 1) และ In Progress (progress bar X/15, วันที่เริ่ม)
+- บันทึก `campaignStartedAt` / `campaignClearedAt` / `campaignTotalTimeMs` ใน Firestore Leaderboard
+
 ### v0.10.1 (มีนาคม 2026)
 
 - แก้ **Handle highlight หายหลังปล่อยมือ** — ย้าย active handle state เข้า Zustand store แทนการใช้ `classList` โดยตรง (ReactFlow อัพเดต className ระหว่าง drag ทำให้ class หาย)

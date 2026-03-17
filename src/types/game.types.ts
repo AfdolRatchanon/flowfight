@@ -328,6 +328,10 @@ export interface LeaderboardEntry {
   totalDamageTaken: number;
   gameMode: GameMode;
   lastUpdated: number;
+  // Campaign Speedrun tracking (wall clock time)
+  campaignStartedAt?: number;    // timestamp เมื่อ first clear ด่านแรก
+  campaignClearedAt?: number;    // timestamp เมื่อ first clear ด่านสุดท้าย
+  campaignTotalTimeMs?: number;  // campaignClearedAt - campaignStartedAt (เวลาจริง)
 }
 
 // สถิติต่อด่าน (collection: levelboards)

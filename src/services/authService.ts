@@ -13,6 +13,7 @@ import type { User } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebaseService';
 import type { Player, Character } from '../types/game.types';
+import { LEVELS } from '../utils/constants';
 
 export interface LevelBattleStats {
   levelId: string;
@@ -213,21 +214,50 @@ export async function saveLeaderboardEntry(
   player: Player,
   character: Character,
   battleStats?: LevelBattleStats,
+  isFirstClear = false,
 ): Promise<void> {
   const ref = doc(db, 'leaderboards', player.id);
+  const totalCampaignLevels = LEVELS.length;
 
-  // อ่านค่าเดิมก่อน เพื่อสะสม totalDamage/totalTime
+  const firstLevelId = LEVELS[0].id;
+  const lastLevelId  = LEVELS[LEVELS.length - 1].id;
+  const now = Date.now();
+
+  // อ่านค่าเดิมก่อน เพื่อสะสม totalDamage/totalTime และ speedrun timestamps
   let prevDealt = 0, prevTaken = 0, prevTime = 0;
+  let prevCampaignStartedAt: number | undefined;
+  let prevCampaignClearedAt: number | undefined;
   try {
     const snap = await getDoc(ref);
     if (snap.exists()) {
       prevDealt = snap.data().totalDamageDealt ?? 0;
       prevTaken = snap.data().totalDamageTaken ?? 0;
-      prevTime = snap.data().totalPlayTime ?? 0;
+      prevTime  = snap.data().totalPlayTime ?? 0;
+      prevCampaignStartedAt = snap.data().campaignStartedAt;
+      prevCampaignClearedAt = snap.data().campaignClearedAt;
     }
   } catch { /* ถ้าอ่านไม่ได้ให้ใช้ 0 */ }
 
-  await setDoc(ref, {
+  // จับเวลาจริง: เริ่มนับตอน first clear level_1, หยุดนับตอน first clear level สุดท้าย
+  const isFirstLevel = battleStats?.levelId === firstLevelId;
+  const isLastLevel  = battleStats?.levelId === lastLevelId;
+
+  const campaignStartedAt = (!prevCampaignStartedAt && isFirstClear && isFirstLevel)
+    ? now
+    : prevCampaignStartedAt;
+
+  const newLevelsCompleted = (player.levelsCompleted ?? []).length;
+  const justFinishedCampaign = isFirstClear && isLastLevel
+    && newLevelsCompleted >= totalCampaignLevels
+    && !prevCampaignClearedAt;
+
+  const campaignClearedAt  = justFinishedCampaign ? now : prevCampaignClearedAt;
+  // เวลาจริง = campaignClearedAt - campaignStartedAt (ms)
+  const campaignTotalTimeMs = (campaignClearedAt && campaignStartedAt)
+    ? campaignClearedAt - campaignStartedAt
+    : undefined;
+
+  const payload: Record<string, unknown> = {
     playerId: player.id,
     playerName: player.username ?? player.email ?? 'Unknown',
     characterName: character.name ?? 'Unknown',
@@ -235,14 +265,19 @@ export async function saveLeaderboardEntry(
     characterLevel: character.level ?? 1,
     experience: character.experience ?? 0,
     levelReached: player.stats?.levelReached ?? 1,
-    levelsCompleted: (player.levelsCompleted ?? []).length,
+    levelsCompleted: newLevelsCompleted,
     totalKills: player.stats?.totalKills ?? 0,
     totalPlayTime: prevTime + (battleStats?.timeMs ?? 0),
     totalDamageDealt: prevDealt + (battleStats?.damageDealt ?? 0),
     totalDamageTaken: prevTaken + (battleStats?.damageTaken ?? 0),
     gameMode: 'normal',
-    lastUpdated: Date.now(),
-  });
+    lastUpdated: now,
+  };
+  if (campaignStartedAt)   payload.campaignStartedAt   = campaignStartedAt;
+  if (campaignClearedAt)   payload.campaignClearedAt   = campaignClearedAt;
+  if (campaignTotalTimeMs) payload.campaignTotalTimeMs = campaignTotalTimeMs;
+
+  await setDoc(ref, payload);
 }
 
 export async function saveLevelLeaderboardEntry(

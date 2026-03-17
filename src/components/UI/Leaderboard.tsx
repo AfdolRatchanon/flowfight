@@ -41,6 +41,24 @@ function fmtTime(ms: number) {
   return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
 
+function fmtDateTime(ts: number) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' })
+    + ' ' + d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtFullTime(ms: number) {
+  if (!ms) return '—';
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}ชม. ${m}น. ${sec}ว.`;
+  if (m > 0) return `${m}น. ${sec}ว.`;
+  return `${sec}ว.`;
+}
+
 function RankBadge({ rank }: { rank: number }) {
   const { colors } = useTheme();
   if (rank === 1) return <span style={{ fontSize: 22 }}>🥇</span>;
@@ -92,8 +110,8 @@ export default function Leaderboard() {
   const { player } = useGameStore();
   const { colors } = useTheme();
 
-  // Tab: 'overall' | 'level' | 'endless'
-  const [tab, setTab] = useState<'overall' | 'level' | 'endless'>('overall');
+  // Tab: 'overall' | 'level' | 'endless' | 'speedrun'
+  const [tab, setTab] = useState<'overall' | 'level' | 'endless' | 'speedrun'>('overall');
 
   // Overall state
   const [overallEntries, setOverallEntries] = useState<LeaderboardEntry[]>([]);
@@ -221,6 +239,20 @@ export default function Leaderboard() {
 
   const myEndless = sortedEndless.find((e) => e.playerId === player?.id);
 
+  // ===== Speedrun: sort from overallEntries =====
+  const sortedSpeedrun = useMemo(() => {
+    // ผู้ที่ครบทุกด่าน — เรียงตามเวลา (เร็วสุดก่อน)
+    const finished = overallEntries
+      .filter((e) => (e as any).campaignTotalTimeMs > 0 && e.levelsCompleted >= LEVELS.length)
+      .sort((a, b) => ((a as any).campaignTotalTimeMs ?? 0) - ((b as any).campaignTotalTimeMs ?? 0))
+      .map((e, i) => ({ ...e, rank: i + 1 }));
+    // ผู้ที่ยังไม่ครบ — เรียงตามด่านที่ผ่าน มากสุดก่อน
+    const inProgress = overallEntries
+      .filter((e) => e.levelsCompleted < LEVELS.length)
+      .sort((a, b) => b.levelsCompleted - a.levelsCompleted);
+    return { finished, inProgress };
+  }, [overallEntries]);
+
   return (
     <div className="page-outer">
       <div className="leaderboard-container">
@@ -241,17 +273,19 @@ export default function Leaderboard() {
         </div>
 
         {/* ===== Tabs ===== */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {(['overall', 'level', 'endless'] as const).map((t) => (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          {(['overall', 'level', 'endless', 'speedrun'] as const).map((t) => (
             <button key={t} onClick={() => setTab(t)} style={{
-              flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
-              fontWeight: 700, fontSize: 13,
+              flex: 1, minWidth: 70, padding: '9px 4px', borderRadius: 10, border: 'none', cursor: 'pointer',
+              fontWeight: 700, fontSize: 12,
               background: tab === t
-                ? 'linear-gradient(135deg,#e94560,#7c3aed)'
+                ? t === 'speedrun'
+                  ? 'linear-gradient(135deg,#f59e0b,#ef4444)'
+                  : 'linear-gradient(135deg,#e94560,#7c3aed)'
                 : colors.bgSurface,
               color: tab === t ? '#ffffff' : colors.textSub,
             }}>
-              {t === 'overall' ? '🌐 ภาพรวม' : t === 'level' ? '🗺️ แต่ละด่าน' : '∞ Endless'}
+              {t === 'overall' ? '🌐 ภาพรวม' : t === 'level' ? '🗺️ แต่ละด่าน' : t === 'endless' ? '∞ Endless' : '⏱️ Speedrun'}
             </button>
           ))}
         </div>
@@ -493,6 +527,139 @@ export default function Leaderboard() {
                 </div>
               )
             }
+          </>
+        )}
+
+        {/* ============================= SPEEDRUN TAB ============================= */}
+        {tab === 'speedrun' && (
+          <>
+            {/* Header */}
+            <div style={{
+              background: 'linear-gradient(135deg,rgba(245,158,11,0.15),rgba(239,68,68,0.1))',
+              border: '1px solid rgba(245,158,11,0.35)',
+              borderRadius: 14, padding: '14px 16px', marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <span style={{ fontSize: 28 }}>⏱️</span>
+              <div>
+                <div style={{ color: '#f59e0b', fontWeight: 800, fontSize: 15 }}>Campaign Speedrun</div>
+                <div style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
+                  ใครผ่านครบ {LEVELS.length} ด่านเร็วสุด · นับตั้งแต่ชนะด่าน 1 ครั้งแรก จนถึงด่านสุดท้าย
+                </div>
+              </div>
+            </div>
+
+            {overallLoading ? <LoadingState /> : (
+              <>
+                {/* ===== Finished ===== */}
+                {sortedSpeedrun.finished.length > 0 ? (
+                  <>
+                    <div style={{ color: colors.textSub, fontSize: 11, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>
+                      FINISHED — {sortedSpeedrun.finished.length} คน
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 20 }}>
+                      {sortedSpeedrun.finished.map((entry) => {
+                        const isMe = entry.playerId === player?.id;
+                        const isFirst = entry.rank === 1;
+                        return (
+                          <div key={entry.playerId} style={{
+                            display: 'flex', alignItems: 'center', gap: 12,
+                            background: isFirst
+                              ? 'rgba(245,158,11,0.12)'
+                              : isMe ? 'rgba(124,58,237,0.08)' : colors.bgSurface,
+                            border: isFirst
+                              ? '1px solid rgba(245,158,11,0.45)'
+                              : isMe ? '1px solid rgba(124,58,237,0.3)' : `1px solid ${colors.borderSubtle}`,
+                            borderRadius: 14, padding: '10px 14px',
+                          }}>
+                            <div style={{ width: 32, textAlign: 'center', flexShrink: 0 }}>
+                              {isFirst ? <span style={{ fontSize: 22 }}>👑</span> : <RankBadge rank={entry.rank} />}
+                            </div>
+                            <CharAvatar cls={entry.characterClass} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                <span style={{ color: colors.text, fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {entry.playerName}
+                                </span>
+                                {isMe && <span style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4 }}>YOU</span>}
+                                {isFirst && <span style={{ background: 'rgba(245,158,11,0.3)', color: '#f59e0b', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4 }}>FIRST!</span>}
+                              </div>
+                              <div style={{ color: colors.textMuted, fontSize: 10 }}>
+                                {entry.characterName} · {entry.characterClass} · Lv.{entry.characterLevel}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ color: isFirst ? '#f59e0b' : '#4ade80', fontWeight: 900, fontSize: 14 }}>
+                                {fmtFullTime((entry as any).campaignTotalTimeMs)}
+                              </div>
+                              <div style={{ color: colors.textMuted, fontSize: 9, marginTop: 2 }}>
+                                {(entry as any).campaignClearedAt ? fmtDateTime((entry as any).campaignClearedAt) : ''}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{
+                    textAlign: 'center', padding: '24px 0', color: colors.textMuted, fontSize: 13,
+                  }}>
+                    ยังไม่มีใครผ่านครบ {LEVELS.length} ด่าน — คุณจะเป็นคนแรกไหม?
+                  </div>
+                )}
+
+                {/* ===== In Progress ===== */}
+                {sortedSpeedrun.inProgress.length > 0 && (
+                  <>
+                    <div style={{ color: colors.textSub, fontSize: 11, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>
+                      IN PROGRESS — {sortedSpeedrun.inProgress.length} คน
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {sortedSpeedrun.inProgress.map((entry) => {
+                        const isMe = entry.playerId === player?.id;
+                        const pct = Math.round((entry.levelsCompleted / LEVELS.length) * 100);
+                        return (
+                          <div key={entry.playerId} style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            background: isMe ? 'rgba(124,58,237,0.08)' : colors.bgSurface,
+                            border: isMe ? '1px solid rgba(124,58,237,0.3)' : `1px solid ${colors.borderSubtle}`,
+                            borderRadius: 12, padding: '9px 12px',
+                          }}>
+                            <CharAvatar cls={entry.characterClass} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                <span style={{ color: colors.text, fontWeight: 700, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {entry.playerName}
+                                </span>
+                                {isMe && <span style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 4 }}>YOU</span>}
+                              </div>
+                              {/* Progress bar */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <div style={{ flex: 1, height: 5, borderRadius: 3, background: colors.borderSubtle, overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#e94560,#7c3aed)', borderRadius: 3, transition: 'width 0.4s' }} />
+                                </div>
+                                <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                                  {entry.levelsCompleted}/{LEVELS.length}
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 700 }}>{pct}%</div>
+                              <div style={{ color: colors.textMuted, fontSize: 9, marginTop: 1 }}>
+                                {(entry as any).campaignStartedAt
+                                  ? `เริ่ม ${fmtDateTime((entry as any).campaignStartedAt)}`
+                                  : 'ยังไม่เริ่ม'}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </>
         )}
 

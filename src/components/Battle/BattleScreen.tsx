@@ -946,7 +946,8 @@ export default function BattleScreen() {
           const mergedPlayer = { ...updated, username: updated.username ?? player.username };
           setPlayer(mergedPlayer);
           if (won) {
-            saveLeaderboardEntry(mergedPlayer, savedChar, battleStats).catch((e) => console.error('[Leaderboard] overall save error:', e));
+            const wasFirstClear = !player.levelsCompleted?.includes(level.id);
+            saveLeaderboardEntry(mergedPlayer, savedChar, battleStats, wasFirstClear).catch((e) => console.error('[Leaderboard] overall save error:', e));
             saveLevelLeaderboardEntry(mergedPlayer, savedChar, battleStats).catch((e) => console.error('[Leaderboard] level save error:', e));
           }
         }
