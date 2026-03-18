@@ -473,17 +473,6 @@ src/
 
 ## Changelog
 
-### v0.11.0 (มีนาคม 2026)
-
-- **Sound System** — ระบบเสียงครบวงจร BGM + SFX + Voice
-- **BGM อัตโนมัติตาม route** — Main Menu / Level Select / Battle / Infinity Dev เล่นเพลงคนละชุด
-- **Battle SFX** — เสียงทุก action: attack, power strike, spell, heal, dodge, berserk, potion, antidote, parry, burn, freeze, poison, victory, defeat, level-up
-- **UI SFX** — เสียงวาง node, เชื่อม edge, ซื้อไอเทม, ใส่อุปกรณ์
-- **Voice Pack** — เสียงพากย์ Mage และ Warrior (attack / hit / death) เล่น random 40% กัน spam
-- **Volume & Mute** — บันทึกค่าใน localStorage (SFX / BGM / Voice แยกกัน)
-- จัดโฟลเดอร์ sound ใหม่: `bgm/` `sfx/` `voice/` เลือกเฉพาะไฟล์ที่ใช้
-- Convert ไฟล์เสียงจาก WAV → MP3 128kbps ลดขนาดจาก **5.2 GB → 25 MB**
-
 ### v0.12.2 (มีนาคม 2026)
 
 - **Background images ครบทุกด่าน** — rename ไฟล์เป็น `level_1.jpg`–`level_20.jpg` + `infinity_dev.jpg`, ลบไฟล์ชื่อเดิมและ `bg-preview.html` ทิ้ง
@@ -503,6 +492,17 @@ src/
 - **Campaign Speedrun Leaderboard** — tab "⏱️ Speedrun" ใน Leaderboard จับเวลา wall clock จริงตั้งแต่ชนะด่านแรกครั้งแรก จนถึงด่านสุดท้าย
 - แสดง Finished (เรียงเวลาน้อย→มาก, มงกุฎ 👑 อันดับ 1) และ In Progress (progress bar X/15, วันที่เริ่ม)
 - บันทึก `campaignStartedAt` / `campaignClearedAt` / `campaignTotalTimeMs` ใน Firestore Leaderboard
+
+### v0.11.0 (มีนาคม 2026)
+
+- **Sound System** — ระบบเสียงครบวงจร BGM + SFX + Voice
+- **BGM อัตโนมัติตาม route** — Main Menu / Level Select / Battle / Infinity Dev เล่นเพลงคนละชุด
+- **Battle SFX** — เสียงทุก action: attack, power strike, spell, heal, dodge, berserk, potion, antidote, parry, burn, freeze, poison, victory, defeat, level-up
+- **UI SFX** — เสียงวาง node, เชื่อม edge, ซื้อไอเทม, ใส่อุปกรณ์
+- **Voice Pack** — เสียงพากย์ Mage และ Warrior (attack / hit / death) เล่น random 40% กัน spam
+- **Volume & Mute** — บันทึกค่าใน localStorage (SFX / BGM / Voice แยกกัน)
+- จัดโฟลเดอร์ sound ใหม่: `bgm/` `sfx/` `voice/` เลือกเฉพาะไฟล์ที่ใช้
+- Convert ไฟล์เสียงจาก WAV → MP3 128kbps ลดขนาดจาก **5.2 GB → 25 MB**
 
 ### v0.10.1 (มีนาคม 2026)
 
