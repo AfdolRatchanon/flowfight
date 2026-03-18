@@ -20,6 +20,7 @@
 - [ด่านทั้งหมด (20 ด่าน)](#ด่านทั้งหมด-20-ด่าน--endless)
 - [สถานะระบบ](#สถานะระบบ)
 - [Changelog](#changelog)
+- [Team](#team)
 
 ---
 
@@ -314,46 +315,57 @@ npm run build && firebase deploy --only hosting
 src/
 ├── components/
 │   ├── Auth/
-│   │   └── LoginPage.tsx          — Firebase Auth (Google + Email)
+│   │   └── LoginPage.tsx           — Firebase Auth (Google + Email)
 │   ├── Battle/
-│   │   └── BattleScreen.tsx       — หน้าหลัก: arena + flowchart editor
+│   │   └── BattleScreen.tsx        — หน้าหลัก: arena + flowchart editor
 │   ├── Character/
 │   │   └── CharacterCustomizer.tsx — เลือก class / equipment / สี
 │   ├── FlowchartEditor/
-│   │   ├── FlowchartEditor.tsx    — canvas + context menu 3 ระดับ
-│   │   └── CustomNodes/           — ActionNode, ConditionNode, LoopNode, ...
+│   │   ├── FlowchartEditor.tsx     — canvas + context menu 3 ระดับ
+│   │   └── CustomNodes/            — ActionNode, ConditionNode, LoopNode, ...
 │   ├── Shop/
-│   │   ├── ShopScreen.tsx         — shop popup หลังชนะด่าน
-│   │   └── ShopPage.tsx           — หน้า shop แบบ standalone
+│   │   ├── ShopScreen.tsx          — shop popup หลังชนะด่าน
+│   │   └── ShopPage.tsx            — หน้า shop แบบ standalone
 │   └── UI/
-│       ├── LevelSelect.tsx        — เลือกด่าน + แสดงสถานะ unlock
-│       ├── MainMenu.tsx           — หน้าแรกหลัง login
-│       ├── Leaderboard.tsx        — global + per-level leaderboard
-│       └── ThemeToggle.tsx        — สลับ Light / Dark theme
+│       ├── LevelSelect.tsx         — เลือกด่าน + แสดงสถานะ unlock
+│       ├── MainMenu.tsx            — หน้าแรกหลัง login
+│       ├── Leaderboard.tsx         — global + per-level + speedrun leaderboard
+│       ├── ModeSelect.tsx          — เลือก Campaign / Endless
+│       └── ThemeToggle.tsx         — สลับ Light / Dark theme
+├── modes/
+│   └── InfinityDev/
+│       ├── InfinityDevScreen.tsx   — Endless Mode UI
+│       └── InfinityDevBattle.tsx   — Endless Mode battle logic
 ├── engines/
-│   ├── FlowchartEngine.ts         — parse + validate + execute flowchart
-│   └── ShopEngine.ts              — คำนวณ stat bonus จาก equipment
+│   ├── FlowchartEngine.ts          — parse + validate + execute flowchart
+│   └── ShopEngine.ts               — คำนวณ stat bonus จาก equipment
 ├── hooks/
-│   ├── useBattle.ts               — orchestrate battle (execute / stop / restart)
-│   └── useAuth.ts                 — Firebase auth state
+│   ├── useBattle.ts                — orchestrate battle (execute / stop / restart)
+│   └── useAuth.ts                  — Firebase auth state
 ├── stores/
-│   ├── gameStore.ts               — Player + Character global state (Zustand)
-│   ├── battleStore.ts             — HP, log, ailment, executing state
-│   ├── flowchartStore.ts          — nodes, edges, executionLog, visitedTrace
-│   ├── shopStore.ts               — gold, potions, antidotes, equipment bonus
-│   └── characterStore.ts          — character builder state
+│   ├── gameStore.ts                — Player + Character global state (Zustand)
+│   ├── battleStore.ts              — HP, log, ailment, executing state
+│   ├── flowchartStore.ts           — nodes, edges, executionLog, visitedTrace
+│   ├── shopStore.ts                — gold, potions, antidotes, equipment bonus
+│   └── characterStore.ts           — character builder state
 ├── services/
-│   ├── authService.ts             — Firestore read/write (progress, leaderboard)
-│   ├── characterService.ts        — character save/load (Firestore)
-│   └── firebaseService.ts         — Firebase init + config
+│   ├── authService.ts              — Firestore read/write (progress, leaderboard)
+│   ├── characterService.ts         — character save/load (Firestore)
+│   ├── soundManager.ts             — BGM / SFX / Voice singleton
+│   └── firebaseService.ts          — Firebase init + config
 ├── contexts/
-│   └── ThemeContext.tsx           — Light/Dark theme + color tokens
+│   └── ThemeContext.tsx            — Light/Dark theme + color tokens
 ├── types/
-│   ├── game.types.ts              — TypeScript interfaces ทั้งหมด
-│   └── firebase.types.ts          — Firestore document types
+│   ├── game.types.ts               — TypeScript interfaces ทั้งหมด
+│   └── firebase.types.ts           — Firestore document types
 └── utils/
-    ├── constants.ts               — LEVELS, CLASS_SKILLS, WEAPONS, ARMORS, ...
-    └── levelSystem.ts             — gainXP(), levelProgressPct(), LEVEL_XP_TABLE
+    ├── constants.ts                — LEVELS, CLASS_SKILLS, WEAPONS, ARMORS, ...
+    └── levelSystem.ts              — gainXP(), levelProgressPct(), LEVEL_XP_TABLE
+
+public/
+├── characters/                     — knight.png, mage.png, rogue.png, barbarian.png
+├── enemies/                        — sprite ศัตรูทุกด่าน (kebab-case .png)
+└── backgrounds/                    — level_1.jpg – level_20.jpg + infinity_dev.jpg
 ```
 
 ---
@@ -365,59 +377,59 @@ src/
 
 ### หมวด 1: Sequence (ด่าน 1–3)
 
-| # | ชื่อด่าน | ศัตรู | HP | Concept |
-|---|---------|------|----|---------|
-| 1 | The Slime Cave | Slime | 20 | Sequence พื้นฐาน — ต่อ block เป็นเส้นตรง |
-| 2 | Return of the Slime | Bigger Slime | 38 | เพิ่ม Heal — Process มีหลายประเภท |
-| 3 | Goblin Scout | Goblin Scout | 65 | Dodge — เลือก action ที่เหมาะสม |
+| # | ชื่อด่าน | ศัตรู | Concept |
+|---|---------|------|---------|
+| 1 | The Slime Cave | Slime | Sequence พื้นฐาน — ต่อ block เป็นเส้นตรง |
+| 2 | Heal Up! | Bigger Slime | Process มีหลายประเภท — เพิ่ม Heal ใน Sequence |
+| 3 | Dodge Roll | Goblin Scout | Dodge — เลือก action ที่เหมาะสม |
 
 ### หมวด 2: Decision — HP Condition (ด่าน 4–6)
 
-| # | ชื่อด่าน | ศัตรู | HP | Concept |
-|---|---------|------|----|---------|
-| 4 | Goblin's Gambit | Goblin | 78 | If/Else — HP < 50? Heal : Attack |
-| 5 | The Spider's Web | Spider | 100 | Nested Condition — เงื่อนไขซ้อนกัน |
-| 6 | Forest Wraith | Forest Wraith | 120 | HP > 50? Cast Spell เมื่อเลือด HPs สูง |
+| # | ชื่อด่าน | ศัตรู | Concept |
+|---|---------|------|---------|
+| 4 | Heal When Low | Goblin | If/Else — HP < 50? Heal : Attack |
+| 5 | Spider Den | Spider | Nested Condition — เงื่อนไขซ้อนกัน |
+| 6 | Forest Wraith | Forest Wraith | HP > 50? Cast Spell เมื่อ HP สูง |
 
 ### หมวด 3: Decision — Ailment Condition (ด่าน 7–8)
 
-| # | ชื่อด่าน | ศัตรู | HP | Concept |
-|---|---------|------|----|---------|
-| 7 | Orc Warrior | Orc Warrior | 145 | Hero Poisoned? — ตรวจสถานะตัวเอง |
-| 8 | Kobold Pack | Kobold Pack | 155 | Hero Frozen? + Dodge — รับมือ Ailment |
+| # | ชื่อด่าน | ศัตรู | Concept |
+|---|---------|------|---------|
+| 7 | Orc's Poison | Orc Warrior | Hero Poisoned? — ตรวจสถานะตัวเองด้วย Condition |
+| 8 | Frozen in Place | Kobold | Hero Frozen? + Dodge — รับมือ Ailment |
 
 ### หมวด 4: Decision — Counter (ด่าน 9–10)
 
-| # | ชื่อด่าน | ศัตรู | HP | Concept |
-|---|---------|------|----|---------|
-| 9 | Goblin Knight | Goblin Knight | 168 | Turn ≥ N? — Power Strike ในเวลาที่ถูกต้อง |
-| 10 | Stone Troll | Stone Troll | 195 | Counter + HP Threshold ซ้อนกัน |
+| # | ชื่อด่าน | ศัตรู | Concept |
+|---|---------|------|---------|
+| 9 | Turn Counter | Goblin Knight | Turn ≥ N? — Power Strike ในเวลาที่ถูกต้อง |
+| 10 | Troll Rampage | Stone Troll | Counter + HP Threshold ซ้อนกัน |
 
 ### หมวด 5: Loop (ด่าน 11–13)
 
-| # | ชื่อด่าน | ศัตรู | HP | Concept |
-|---|---------|------|----|---------|
-| 11 | Orc Warlord | Orc Warlord | 230 | While Loop — Enemy Alive? วนโจมตี |
-| 12 | Ice Giant | Ice Giant | 270 | Loop + HP Decision ข้างใน |
-| 13 | Young Dragon | Young Dragon | 310 | Loop + Counter ข้างใน |
+| # | ชื่อด่าน | ศัตรู | Concept |
+|---|---------|------|---------|
+| 11 | While Loop | Orc | Enemy Alive? — วนโจมตีจนศัตรูตาย |
+| 12 | Loop + Heal | Ice Giant | Loop + HP Decision ข้างใน |
+| 13 | Dragon's Counter | Dragon's Lair | Loop + Counter — burst ทุก N รอบ |
 
 ### หมวด 6: Combine (ด่าน 14–15)
 
-| # | ชื่อด่าน | ศัตรู | HP | Concept |
-|---|---------|------|----|---------|
-| 14 | Dragon Elder | Dragon Elder | 345 | Loop + Ailment + HP + Counter รวมกัน |
-| 15 | Orc Warlord Elite | Orc Warlord Elite | 280 | Full Algorithm — Sequence + Decision + Loop |
+| # | ชื่อด่าน | ศัตรู | Concept |
+|---|---------|------|---------|
+| 14 | Dragon's Fury | Dragon's Lair | Loop + Ailment + HP + Counter รวมกัน |
+| 15 | The Warlord Returns | Orc Warrior | Full Algorithm — ทุก concept รวมกัน |
 
 ### หมวด 7: Mastery (ด่าน 16–20)
 
-| # | ชื่อด่าน | ศัตรู | HP | ★ | หมายเหตุ |
-|---|---------|------|----|---|---------|
-| 16 | Vampire Lord | Vampire Lord 🧛 | 350 | ★★★★ | Class Skills + Ailment |
-| 17 | Frost Titan | Frost Titan ❄️ | 400 | ★★★★ | Counter Precision |
-| 18 | Dark Commander | Dark Commander ⚔️ | 450 | ★★★★★ | ออกแบบ Algorithm เอง |
-| 19 | The Lich Lord | Lich Lord 💀 | 500 | ★★★★★ | **Sub-BOSS** — Mastery |
-| 20 | The Dark Overlord | Dark Overlord 👑 | 650 | ★★★★★ | **FINAL BOSS** — ทุก concept |
-| ∞ | **Endless Mode** | Wave ∞ | scales | — | Survival — score = Wave × HP% |
+| # | ชื่อด่าน | ศัตรู | Concept |
+|---|---------|------|---------|
+| 16 | Vampire's Curse | Vampire Lord | Class Skills + Ailment |
+| 17 | Frost Titan | Frost Titan | Counter Precision |
+| 18 | Dark Commander | Dark Commander | ออกแบบ Algorithm เองทั้งหมด |
+| 19 | The Lich Lord | The Lich Lord | **Sub-BOSS** — Mastery ทุก Ailment |
+| 20 | The Dark Overlord | The Dark Overlord | **FINAL BOSS** — ทุก concept |
+| ∞ | **Endless Mode** | Wave ∞ | Survival — score = Wave × HP% |
 
 > แต่ละด่านมี **requiredBlocks** — ถ้าไม่มี block ที่กำหนด ศัตรูจะ Shield ป้องกันการโจมตีทุกครั้ง
 
@@ -610,12 +622,22 @@ src/
 | Zustand | 5 | State Management |
 | Framer Motion | 12 | UI Animation |
 | Firebase | 12 | Auth + Firestore + Hosting |
-| Phaser 3 | 3.90 | ติดตั้งแล้ว — planned สำหรับ battle animation |
 | Tailwind CSS | 4 | Utility CSS |
 
 ---
 
-`v0.12.2` — มีนาคม 2026
+## Team
+
+| บทบาท | ชื่อ |
+|-------|------|
+| Lead Developer | Ratchanon Semsayan |
+| Project & Creative Director | Suppakit Kongthong |
+| Lead QA & System Advisor | Phattrawut Nachirit, Watanyu Arjsurin |
+| QA Tester | Prapatpong Srikampol, Anon Mongkolwong, Jetsada Longkrathok |
+
+---
+
+`v0.13.0` — มีนาคม 2026
 
 ---
 
