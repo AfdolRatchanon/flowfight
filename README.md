@@ -649,7 +649,7 @@ MIT License — Copyright (c) 2026 Ratchanon Semsayan
 
 | Role                        | Name                                      |
 |-----------------------------|-------------------------------------------|
-| Lead Developer              | Ratchanon Semsayan (รัชนนท์ เสมสายัณห์)   |
+| Lead Developer              | Ratchanon Semsayan (รัชชานนท์ เสมสายัณห์)   |
 | Project & Creative Director | Suppakit Kongthong (ศุภกิจ คงทอง)         |
 | Lead QA & System Advisor    | Phattrawut Nachirit (ภัทราวุฒ นาชัยฤทธิ์) |
 | Lead QA & System Advisor    | Watanyu Arjsurin (วทัญญู อาจสุรินทร์)     |
