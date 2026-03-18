@@ -425,7 +425,7 @@ src/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026
+> อัปเดต: มีนาคม 2026 | v0.13.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -444,7 +444,7 @@ src/
 - [x] Firebase Auth — Google Sign-In
 - [x] Firestore — save player progress, character progress, leaderboard
 - [x] Firestore — Potions/Antidotes sync ทุกครั้งหลังสู้ (ชนะ + แพ้)
-- [x] Global Leaderboard + Per-level Leaderboard
+- [x] Global Leaderboard + Per-level Leaderboard + Campaign Speedrun Leaderboard
 - [x] Light / Dark Theme
 - [x] Enemy Shield mechanic — ป้องกันเมื่อขาด required blocks (รองรับ Condition-type blocks ด้วย)
 - [x] Shield badge icon ตรงกับ context menu — mobile แสดง emoji อย่างเดียว
@@ -459,13 +459,16 @@ src/
 - [x] LevelSelect แสดง efficiency badge (🟢100% / 🟡50% / 🟠25% / 🔴10%) + countdown reset
 - [x] Background images ครบทุกด่าน (level_1–20 + infinity_dev) เป็นไฟล์ `.jpg` ชื่อ clean
 - [x] Enemy Sprites ครบทุกด่าน รวม level 16–20 (Vampire Lord, Frost Titan, Dark Commander, Lich Lord, Dark Overlord)
+- [x] Sound System — BGM + SFX + Voice Pack, Convert WAV → MP3 (5.2 GB → 25 MB)
+- [x] Lazy loading routes — initial bundle ลดจาก 558 KB → 271 KB
+- [x] Version single source of truth — ดึงจาก `package.json` อัตโนมัติ
+- [x] MIT License + Team Credits
 
 ### สิ่งที่ยังขาด
 
 - [ ] **Flowchart Save/Load per level** — วาดแล้วปิด → หาย (สำคัญสูงสุด)
 - [ ] Tooltip อธิบาย block แต่ละตัวเมื่อ hover
-- [ ] Sound Effects และ BGM
-- [ ] Sprite animation จริง (ปัจจุบันใช้ PNG + emoji)
+- [ ] Sprite animation จริง (ปัจจุบันใช้ PNG static)
 - [ ] Mobile / Touch screen support
 - [ ] Achievement System (type พร้อมแล้ว ยังขาด UI + logic)
 
