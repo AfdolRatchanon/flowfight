@@ -473,6 +473,13 @@ src/
 
 ## Changelog
 
+### v0.13.0 (มีนาคม 2026)
+
+- **Team Credits** — เพิ่มชื่อทีมงานใน LICENSE, README, หน้า Login และ Main Menu (Lead Dev / Project & Creative Director / Lead QA / QA Tester)
+- **Version single source of truth** — `vite.config.ts` ดึง version จาก `package.json` อัตโนมัติ ลบ `GAME_VERSION` จาก `constants.ts` และ `VITE_APP_VERSION` จาก `.env`/`.env.example`
+- **Lazy loading routes** — แยก chunk BattleScreen, InfinityDev, Leaderboard, Shop, CharacterCustomizer ลด initial bundle จาก **558 KB → 271 KB** (-51%)
+- **MIT License** — เพิ่มไฟล์ `LICENSE` (MIT 2026 Ratchanon Semsayan)
+
 ### v0.12.2 (มีนาคม 2026)
 
 - **Background images ครบทุกด่าน** — rename ไฟล์เป็น `level_1.jpg`–`level_20.jpg` + `infinity_dev.jpg`, ลบไฟล์ชื่อเดิมและ `bg-preview.html` ทิ้ง
