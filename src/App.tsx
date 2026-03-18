@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { soundManager, type BGMKey } from './services/soundManager';
 import { useAuth } from './hooks/useAuth';
@@ -6,14 +6,15 @@ import { useGameStore } from './stores/gameStore';
 import { useTheme } from './contexts/ThemeContext';
 import LoginPage from './components/Auth/LoginPage';
 import MainMenu from './components/UI/MainMenu';
-import ModeSelect from './components/UI/ModeSelect';
-import LevelSelect from './components/UI/LevelSelect';
-import BattleScreen from './components/Battle/BattleScreen';
-import CharacterCustomizer from './components/Character/CharacterCustomizer';
-import Leaderboard from './components/UI/Leaderboard';
-import ShopPage from './components/Shop/ShopPage';
 import ThemeToggle from './components/UI/ThemeToggle';
-import InfinityDevScreen from './modes/InfinityDev/InfinityDevScreen';
+
+const ModeSelect        = lazy(() => import('./components/UI/ModeSelect'));
+const LevelSelect       = lazy(() => import('./components/UI/LevelSelect'));
+const BattleScreen      = lazy(() => import('./components/Battle/BattleScreen'));
+const CharacterCustomizer = lazy(() => import('./components/Character/CharacterCustomizer'));
+const Leaderboard       = lazy(() => import('./components/UI/Leaderboard'));
+const ShopPage          = lazy(() => import('./components/Shop/ShopPage'));
+const InfinityDevScreen = lazy(() => import('./modes/InfinityDev/InfinityDevScreen'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, player, character } = useGameStore();
@@ -68,19 +69,21 @@ export default function App() {
     <Router>
       <BGMController />
       <ThemeToggle />
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<ProtectedRoute><MainMenu /></ProtectedRoute>} />
-        <Route path="/levels" element={<ProtectedRoute><ModeSelect /></ProtectedRoute>} />
-        <Route path="/levels/tutorial" element={<ProtectedRoute><LevelSelect /></ProtectedRoute>} />
-        <Route path="/battle/:levelId" element={<ProtectedRoute><BattleScreen /></ProtectedRoute>} />
-        <Route path="/character" element={<ProtectedRoute><CharacterCustomizer /></ProtectedRoute>} />
-        <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
-        <Route path="/shop" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
-        <Route path="/infinity-dev" element={<ProtectedRoute><InfinityDevScreen /></ProtectedRoute>} />
-        <Route path="/infinity-dev/battle" element={<ProtectedRoute><InfinityDevScreen /></ProtectedRoute>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={null}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<ProtectedRoute><MainMenu /></ProtectedRoute>} />
+          <Route path="/levels" element={<ProtectedRoute><ModeSelect /></ProtectedRoute>} />
+          <Route path="/levels/tutorial" element={<ProtectedRoute><LevelSelect /></ProtectedRoute>} />
+          <Route path="/battle/:levelId" element={<ProtectedRoute><BattleScreen /></ProtectedRoute>} />
+          <Route path="/character" element={<ProtectedRoute><CharacterCustomizer /></ProtectedRoute>} />
+          <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+          <Route path="/shop" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
+          <Route path="/infinity-dev" element={<ProtectedRoute><InfinityDevScreen /></ProtectedRoute>} />
+          <Route path="/infinity-dev/battle" element={<ProtectedRoute><InfinityDevScreen /></ProtectedRoute>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </Router>
   );
 }
