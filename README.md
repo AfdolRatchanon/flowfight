@@ -73,7 +73,17 @@ npm run dev
 
 ### 4. ใส่ config ในโปรเจกต์
 
-สร้างไฟล์ `.env` ที่ root โปรเจกต์ (copy จาก `.env.example`) แล้วใส่ค่าจาก Firebase:
+**4a. Firebase project pointer** — copy `.firebaserc.example` แล้วแก้ project ID:
+
+```bash
+cp .firebaserc.example .firebaserc
+```
+
+แก้ `your-firebase-project-id` ใน `.firebaserc` เป็น project ID ของตัวเอง (ดูได้จาก Firebase Console → Project Settings)
+
+> **อย่า commit ไฟล์ `.firebaserc`** — มีอยู่ใน `.gitignore` แล้ว
+
+**4b. Firebase SDK config** — สร้างไฟล์ `.env` (copy จาก `.env.example`) แล้วใส่ค่าจาก Firebase:
 
 ```bash
 cp .env.example .env

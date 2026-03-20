@@ -26,7 +26,11 @@ dist-ssr
 # Firebase credentials — ห้าม commit เด็ดขาด
 .env
 
+# Firebase project pointer — project-specific, แต่ละคน config เอง
+.firebaserc
+
 # Firebase CLI cache — ไม่จำเป็น
 .firebase
 
-# firebase.json, .firebaserc, firestore.rules → ควร commit (source code / config)
+# firebase.json, firestore.rules → ควร commit (source code / config)
+# .firebaserc → ไม่ commit, ใช้ .firebaserc.example เป็น template
