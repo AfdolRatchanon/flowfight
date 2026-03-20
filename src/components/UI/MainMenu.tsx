@@ -13,6 +13,7 @@ const MENU_ITEMS = [
   { icon: '⚔️', label: 'Play Game', path: '/levels', color: '#e94560' },
   { icon: '🎨', label: 'Character', path: '/character', color: '#7c3aed' },
   { icon: '🏆', label: 'Leaderboard', path: '/leaderboard', color: '#10b981' },
+  { icon: '🥇', label: 'Achievements', path: '/achievements', color: '#f59e0b' },
 ];
 
 const ADMIN_ITEMS = [

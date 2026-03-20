@@ -693,6 +693,8 @@ export default function BattleScreen() {
           if (saved) {
             setFlowNodes(saved.nodes);
             setFlowEdges(saved.edges);
+            setLoadedFromCloud(true);
+            setTimeout(() => setLoadedFromCloud(false), 3000);
           }
         }).catch(() => {});
       }
@@ -701,11 +703,23 @@ export default function BattleScreen() {
 
   // Auto-save flowchart เมื่อ nodes/edges เปลี่ยน (debounce 800ms)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [loadedFromCloud, setLoadedFromCloud] = useState(false);
+
   useEffect(() => {
     if (!player?.id || isEndless || flowNodes.length === 0) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(() => {
-      saveFlowchart(player.id, levelId ?? '', flowNodes, flowEdges).catch(() => {});
+    setSaveStatus('saving');
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        await saveFlowchart(player.id, levelId ?? '', flowNodes, flowEdges);
+        setSaveStatus('saved');
+        if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
+        saveStatusTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2500);
+      } catch {
+        setSaveStatus('idle');
+      }
     }, 800);
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
@@ -1521,7 +1535,25 @@ export default function BattleScreen() {
               </FlowchartErrorBoundary>
             </div>
             {/* Reset flowchart to Start + End only */}
-            <div style={{ flexShrink: 0, padding: '6px 10px', borderTop: `1px solid ${colors.borderSubtle}`, display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ flexShrink: 0, padding: '6px 10px', borderTop: `1px solid ${colors.borderSubtle}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {/* Save/Load status indicator */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, minWidth: 0 }}>
+                {loadedFromCloud && (
+                  <span style={{ color: '#60a5fa', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>☁️</span> โหลด flowchart จาก cloud แล้ว
+                  </span>
+                )}
+                {!loadedFromCloud && saveStatus === 'saving' && (
+                  <span style={{ color: colors.textMuted, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>↻</span> กำลังบันทึก...
+                  </span>
+                )}
+                {!loadedFromCloud && saveStatus === 'saved' && (
+                  <span style={{ color: '#4ade80', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>☁️</span> บันทึกแล้ว ✓
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => {
                   setLevelUpData(null); setXpGained(0); setMissingBlocks([]);

@@ -18,6 +18,7 @@ const ShopPage          = lazy(() => import('./components/Shop/ShopPage'));
 const InfinityDevScreen = lazy(() => import('./modes/InfinityDev/InfinityDevScreen'));
 const TeacherDashboard  = lazy(() => import('./components/Teacher/TeacherDashboard'));
 const AdminDashboard    = lazy(() => import('./components/Admin/AdminDashboard'));
+const AchievementsPage  = lazy(() => import('./components/UI/AchievementsPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, player, character } = useGameStore();
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="/shop" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
           <Route path="/infinity-dev" element={<ProtectedRoute><InfinityDevScreen /></ProtectedRoute>} />
           <Route path="/infinity-dev/battle" element={<ProtectedRoute><InfinityDevScreen /></ProtectedRoute>} />
+          <Route path="/achievements" element={<ProtectedRoute><AchievementsPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
