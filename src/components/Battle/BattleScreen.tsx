@@ -474,6 +474,16 @@ export default function BattleScreen() {
     : LEVELS.find((l) => l.id === levelId)
   ) as (typeof LEVELS)[0] | undefined, [isEndless, waveNumber, levelId]);
 
+  // Level access guard — redirect if level is locked or invalid (prevents URL manipulation)
+  useEffect(() => {
+    if (isEndless) return;
+    if (!level) { navigate('/levels', { replace: true }); return; }
+    const idx = LEVELS.findIndex((l) => l.id === levelId);
+    const completed = player?.levelsCompleted ?? [];
+    const unlocked = idx === 0 || completed.includes(level.id) || completed.includes(LEVELS[idx - 1]?.id ?? '');
+    if (!unlocked) navigate('/levels', { replace: true });
+  }, [isEndless, level, levelId, player, navigate]);
+
   // Action budget per turn — scales with turn; base 5 for level ≥ 11
   const turnManaMax = Math.max(1, calcTurnManaMax(currentTurn, level?.number ?? 1) - extraManaDebuff);
   const turnManaUsed = useMemo(() => calcFlowchartManaCost(flowNodes), [flowNodes]);
