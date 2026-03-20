@@ -449,7 +449,7 @@ public/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026 | v0.17.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
+> อัปเดต: มีนาคม 2026 | v0.17.1 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -500,6 +500,7 @@ public/
 - [x] **Admin Dashboard** — สร้าง/ลบ Teacher Invite Code, ดู stats จำนวน users + classrooms
 - [x] **Upgrade to Teacher** — บัญชีนักเรียนที่มีอยู่แล้ว upgrade เป็นครูได้โดยใช้ invite code
 - [x] **Security Hardening** — ป้องกัน role self-escalation, route guard, Firestore transaction บน invite code, classroom create ต้องเป็น teacher/admin
+- [x] **Level Access Guard** — ป้องกันการแก้ URL เพื่อข้ามด่านที่ยังไม่ปลดล็อก (redirect กลับ Level Select ทันที)
 
 ### แผนพัฒนาในอนาคต
 
@@ -508,6 +509,13 @@ public/
 ---
 
 ## Changelog
+
+### v0.17.1 (มีนาคม 2026)
+
+**Bug Fixes**
+- **Level Access Guard** — ป้องกันผู้เล่นพิมพ์ URL ตรงเพื่อข้ามด่านที่ยังไม่ปลดล็อก (เช่น `/battle/level_05` ก่อนผ่านด่าน 4) — redirect กลับ Level Select พร้อม `replace: true`
+- Invalid levelId (ไม่มีในระบบ) ก็ถูก redirect เช่นกัน
+- Endless mode ไม่ได้รับผลกระทบ
 
 ### v0.17.0 (มีนาคม 2026)
 
@@ -724,7 +732,7 @@ public/
 
 ---
 
-`v0.17.0` — มีนาคม 2026
+`v0.17.1` — มีนาคม 2026
 
 ---
 
