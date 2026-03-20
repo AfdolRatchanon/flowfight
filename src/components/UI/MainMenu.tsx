@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '../../services/authService';
-import { upgradeToTeacher } from '../../services/teacherService';
+import { upgradeToTeacher, getClassroomAssignments } from '../../services/teacherService';
 import { useGameStore } from '../../stores/gameStore';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL } from '../../utils/levelSystem';
 import { useTheme } from '../../contexts/ThemeContext';
+import type { Assignment } from '../../types/game.types';
 import VolumeButton from './VolumeButton';
 import JoinClassroomModal from './JoinClassroomModal';
 
@@ -27,6 +28,12 @@ export default function MainMenu() {
   const [showJoinClassroom, setShowJoinClassroom] = useState(false);
   const [classroomCode, setClassroomCode] = useState(player?.classroomCode);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+
+  useEffect(() => {
+    if (!classroomCode) { setAssignments([]); return; }
+    getClassroomAssignments(classroomCode).then(setAssignments).catch(() => {});
+  }, [classroomCode]);
 
   return (
     <div style={{
@@ -196,6 +203,15 @@ export default function MainMenu() {
           />
         )}
 
+        {/* My Assignments — แสดงเมื่อนักเรียนอยู่ในห้องและมี assignment */}
+        {classroomCode && assignments.length > 0 && (
+          <AssignmentsPanel
+            assignments={assignments}
+            completedLevels={player?.levelsCompleted ?? []}
+            colors={colors}
+          />
+        )}
+
         {/* Upgrade to Teacher (student accounts only) */}
         {player && player.role !== 'teacher' && (
           <button
@@ -316,6 +332,53 @@ function UpgradeToTeacherModal({ uid, onClose, onSuccess }: { uid: string; onClo
             opacity: !inviteCode.trim() ? 0.5 : 1,
           }}>{loading ? 'กำลังสมัคร...' : 'ยืนยัน'}</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function AssignmentsPanel({ assignments, completedLevels, colors }: {
+  assignments: Assignment[];
+  completedLevels: string[];
+  colors: ReturnType<typeof import('../../contexts/ThemeContext').useTheme>['colors'];
+}) {
+  const now = Date.now();
+  const pending = assignments.filter((a) => {
+    const done = a.levelIds.every((id) => completedLevels.includes(id));
+    return !done;
+  });
+  if (pending.length === 0) return null;
+
+  return (
+    <div style={{
+      marginBottom: 12, borderRadius: 12,
+      border: '1px solid rgba(251,191,36,0.25)',
+      background: 'rgba(251,191,36,0.04)',
+      padding: '12px 14px',
+    }}>
+      <p style={{ color: '#FBBF24', fontWeight: 700, fontSize: 12, margin: '0 0 8px', letterSpacing: 1 }}>
+        งานที่ต้องส่ง ({pending.length})
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {pending.map((a) => {
+          const done = a.levelIds.filter((id) => completedLevels.includes(id)).length;
+          const overdue = a.deadline < now;
+          const deadlineStr = new Date(a.deadline).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+          return (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ color: colors.text, fontSize: 13, fontWeight: 600, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</p>
+                <p style={{ color: overdue ? '#f87171' : colors.textMuted, fontSize: 11, margin: 0 }}>
+                  {overdue ? 'เลยกำหนด!' : `ส่งภายใน ${deadlineStr}`}
+                </p>
+              </div>
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: done === a.levelIds.length ? '#4ade80' : '#FBBF24',
+                flexShrink: 0,
+              }}>{done}/{a.levelIds.length}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

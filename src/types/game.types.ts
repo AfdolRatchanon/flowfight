@@ -70,6 +70,16 @@ export interface StudentProgress {
   classroomCode?: string;
 }
 
+export interface Assignment {
+  id: string;
+  classroomCode: string;
+  teacherId: string;
+  title: string;
+  levelIds: string[];   // level IDs ที่ต้องผ่าน
+  deadline: number;     // Unix timestamp ms
+  createdAt: number;
+}
+
 export interface PlayerStats {
   totalKills: number;
   totalDefeats: number;

@@ -6,7 +6,7 @@ import {
   query, where, getDocs, serverTimestamp, deleteDoc, runTransaction,
 } from 'firebase/firestore';
 import { auth, db } from './firebaseService';
-import type { Classroom, StudentProgress } from '../types/game.types';
+import type { Assignment, Classroom, StudentProgress } from '../types/game.types';
 
 // ─── Admin: Manage teacher invite codes ──────────────────────────────────────
 
@@ -158,6 +158,33 @@ export async function upgradeToTeacher(uid: string, inviteCode: string): Promise
     t.update(doc(db, 'users', uid), { role: 'teacher' });
     t.update(codeRef, { usedBy: uid, usedAt: serverTimestamp() });
   });
+}
+
+// ─── Assignments ─────────────────────────────────────────────────────────────
+
+export async function createAssignment(
+  classroomCode: string,
+  teacherId: string,
+  title: string,
+  levelIds: string[],
+  deadline: number,
+): Promise<string> {
+  const ref = doc(collection(db, 'assignments'));
+  await setDoc(ref, {
+    id: ref.id, classroomCode, teacherId, title, levelIds, deadline,
+    createdAt: Date.now(),
+  } satisfies Assignment);
+  return ref.id;
+}
+
+export async function getClassroomAssignments(classroomCode: string): Promise<Assignment[]> {
+  const q = query(collection(db, 'assignments'), where('classroomCode', '==', classroomCode));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data() as Assignment);
+}
+
+export async function deleteAssignment(assignmentId: string): Promise<void> {
+  await deleteDoc(doc(db, 'assignments', assignmentId));
 }
 
 // ─── Get students in classroom ────────────────────────────────────────────────

@@ -449,7 +449,7 @@ public/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026 | v0.17.1 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
+> อัปเดต: มีนาคม 2026 | v0.18.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -501,6 +501,7 @@ public/
 - [x] **Upgrade to Teacher** — บัญชีนักเรียนที่มีอยู่แล้ว upgrade เป็นครูได้โดยใช้ invite code
 - [x] **Security Hardening** — ป้องกัน role self-escalation, route guard, Firestore transaction บน invite code, classroom create ต้องเป็น teacher/admin
 - [x] **Level Access Guard** — ป้องกันการแก้ URL เพื่อข้ามด่านที่ยังไม่ปลดล็อก (redirect กลับ Level Select ทันที)
+- [x] **Assignment System (Phase 1 ✅)** — ครูมอบหมายด่าน + deadline ในห้องเรียน นักเรียนเห็น progress ใน MainMenu, Firestore rules ป้องกัน unauthorized write
 
 ### แผนพัฒนาในอนาคต
 
@@ -509,6 +510,15 @@ public/
 ---
 
 ## Changelog
+
+### v0.18.0 (มีนาคม 2026)
+
+**Phase 1 — LMS Foundation ✅ เสร็จสมบูรณ์**
+- **Assignment System** — ครูสร้างงานในแต่ละห้องเรียน: เลือกด่าน + ตั้ง deadline
+- **Teacher Dashboard** — tab "งานที่มอบหมาย" สร้าง/ลบงาน, เลือกด่าน D1–D20, date picker
+- **Student MainMenu** — แสดง "งานที่ต้องส่ง" พร้อม progress (X/N ด่าน), สี overdue แดง
+- **Firestore rules** — `assignments` collection: teacher create, teacher/admin delete, all read
+- **Assignment type** — เพิ่ม `Assignment` interface ใน `game.types.ts`
 
 ### v0.17.1 (มีนาคม 2026)
 
@@ -732,7 +742,7 @@ public/
 
 ---
 
-`v0.17.1` — มีนาคม 2026
+`v0.18.0` — มีนาคม 2026
 
 ---
 

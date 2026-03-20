@@ -70,6 +70,24 @@ service cloud.firestore {
       );
     }
 
+    // ===== Assignments =====
+    // ครูสร้าง/ลบได้ นักเรียนอ่านได้ (filter classroom ด้วย client)
+    match /assignments/{assignmentId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.teacherId == request.auth.uid
+        && isTeacherOrAdmin()
+        && request.resource.data.keys().hasOnly([
+          'id','classroomCode','teacherId','title','levelIds','deadline','createdAt'
+        ])
+        && request.resource.data.levelIds.size() > 0
+        && request.resource.data.deadline is int;
+
+      allow delete: if request.auth != null
+        && (resource.data.teacherId == request.auth.uid || isAdmin());
+    }
+
     // ===== Overall Leaderboard =====
     // docId = playerId
     match /leaderboards/{playerId} {
