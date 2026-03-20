@@ -496,7 +496,7 @@ public/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026 | v0.14.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
+> อัปเดต: มีนาคม 2026 | v0.15.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -538,6 +538,7 @@ public/
 - [x] **Flowchart Save/Load** — auto-save nodes/edges ต่อด่านใน Firestore, โหลดกลับเมื่อเข้าด่านอีกครั้ง
 - [x] **Tooltip บน Action Block** — hover เพื่อดูคำอธิบายแต่ละ action
 - [x] **Mute button** — ปุ่ม 🔊/🔇 ใน battle header ปิด/เปิดเสียงได้ทันที
+- [x] **Learning Objective popup** — หลังชนะด่านแสดง "คุณเพิ่งเรียนรู้..." พร้อม icon และชื่อ concept
 
 ### แผนพัฒนาในอนาคต
 
@@ -546,6 +547,10 @@ public/
 ---
 
 ## Changelog
+
+### v0.15.0 (มีนาคม 2026)
+
+- **Learning Objective popup** — หลังชนะแต่ละด่านแสดง panel "คุณเพิ่งเรียนรู้..." พร้อม icon และชื่อ concept ที่สอนในด่านนั้น (เช่น 🔁 While Loop, ↕️ If/Else, 🧠 Full Algorithm)
 
 ### v0.14.0 (มีนาคม 2026)
 

@@ -18,10 +18,10 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 
 ## สิ่งที่ยังขาด (Quick Win — ทำได้ทันที)
 
-- [ ] **Flowchart Save/Load per level** — วาดแล้วปิด → หาย (สำคัญสูงสุด)
-- [ ] **Learning Objective popup** — หลังชนะแต่ละด่านบอกว่า "คุณเพิ่งเรียนรู้ [IF/ELSE] แล้ว!"
-- [ ] **Tooltip** — hover บน block แสดงคำอธิบายว่าทำอะไร
-- [ ] **Achievement System** — type พร้อมแล้ว ยังขาด UI + logic
+- [x] **Flowchart Save/Load per level** — auto-save nodes/edges ต่อด่านใน Firestore (v0.14.0)
+- [x] **Learning Objective popup** — หลังชนะแต่ละด่านบอกว่า "คุณเพิ่งเรียนรู้..." พร้อม icon + concept (v0.15.0)
+- [x] **Tooltip** — hover บน Action Block แสดงคำอธิบายสั้น ๆ (v0.14.0)
+- [x] **Achievement System** — 8 achievements + toast popup + บันทึก Firestore (v0.14.0)
 - [ ] **Sprite Animation** — ตัวละครยังเป็น PNG static
 - [ ] **Mobile / Tablet Support** — รองรับ touch screen
 
@@ -36,7 +36,7 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 | **Classroom** | สร้างห้องด้วยโค้ด 6 หลัก นักเรียน join ได้ทันที | [ ] |
 | **Student Dashboard (ครู)** | ดู progress นักเรียนแต่ละคน ด่านไหนผ่าน ใช้เวลาเท่าไหร่ | [ ] |
 | **Assignment** | ครูกำหนดด่านที่ต้องผ่านพร้อม deadline | [ ] |
-| **Flowchart Save/Load** | บันทึก flowchart ต่อด่านใน Firestore | [ ] |
+| **Flowchart Save/Load** | บันทึก flowchart ต่อด่านใน Firestore | [x] v0.14.0 |
 
 ---
 

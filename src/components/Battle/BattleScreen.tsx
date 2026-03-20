@@ -1138,6 +1138,22 @@ export default function BattleScreen() {
   // Overlay state derived from status + missingBlocks
   const isIncomplete = status === 'victory' && missingBlocks.length > 0;
   const isRealVictory = status === 'victory' && missingBlocks.length === 0;
+
+  // Learning Objective icon — based on concept keyword
+  const conceptIcon = (() => {
+    const c = level?.concept ?? '';
+    if (c.includes('Loop') || c.includes('While')) return '🔁';
+    if (c.includes('Nested')) return '🔀';
+    if (c.includes('Decision') || c.includes('If/Else')) return '↕️';
+    if (c.includes('Counter') || c.includes('Turn')) return '🔢';
+    if (c.includes('Ailment')) return '💀';
+    if (c.includes('Class Skills')) return '✨';
+    if (c.includes('Mastery') || c.includes('Final') || c.includes('Sub-Boss')) return '👑';
+    if (c.includes('Survival')) return '🌊';
+    if (c.includes('Full Algorithm')) return '🧠';
+    if (c.includes('Dodge')) return '💨';
+    return '📋';
+  })();
   const overlayIcon = isRealVictory ? '🏆' : isIncomplete ? '⚠️' : '💀';
   const overlayTitle = isRealVictory ? 'Victory!' : isIncomplete ? 'ยังไม่ผ่านด่าน!' : 'Defeated!';
   const overlayColor = isRealVictory ? '#fbbf24' : isIncomplete ? '#fb923c' : '#f87171';
@@ -1735,6 +1751,25 @@ export default function BattleScreen() {
                     </p>
                   </div>
                 </>
+              )}
+
+              {/* Learning Objective — แสดงเฉพาะ real victory */}
+              {isRealVictory && level?.concept && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))',
+                  border: '1px solid rgba(139,92,246,0.4)',
+                  borderRadius: 12, padding: '10px 16px', marginBottom: 12, textAlign: 'left',
+                }}>
+                  <p style={{ color: 'rgba(167,139,250,0.8)', fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 6px' }}>
+                    คุณเพิ่งเรียนรู้
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}>{conceptIcon}</span>
+                    <span style={{ color: '#c4b5fd', fontWeight: 700, fontSize: 13, lineHeight: 1.4 }}>
+                      {level.concept}
+                    </span>
+                  </div>
+                </div>
               )}
 
               {/* Objectives summary */}
