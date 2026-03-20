@@ -16,7 +16,9 @@ export interface ThemeColors {
   rfBg: string;
 }
 
-export const DARK: ThemeColors = {
+// ── Classic (backup) ─────────────────────────────────────────────────────────
+// เปลี่ยนกลับได้โดย: export const DARK = DARK_CLASSIC;
+export const DARK_CLASSIC: ThemeColors = {
   bg: '#0d0d1a',
   bgGrad: 'linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 50%, #0d1a2e 100%)',
   bgCard: 'rgba(26,26,62,0.95)',
@@ -28,6 +30,21 @@ export const DARK: ThemeColors = {
   border: 'rgba(255,255,255,0.1)',
   borderSubtle: 'rgba(255,255,255,0.07)',
   rfBg: '#080815',
+};
+
+// ── Dark Medieval ─────────────────────────────────────────────────────────────
+export const DARK: ThemeColors = {
+  bg: '#0E0B1A',
+  bgGrad: 'linear-gradient(135deg, #0E0B1A 0%, #180F2E 50%, #0E1525 100%)',
+  bgCard: 'rgba(22,16,42,0.97)',
+  bgSurface: 'rgba(251,191,36,0.05)',
+  bgSurfaceHover: 'rgba(251,191,36,0.10)',
+  text: '#F5F0E8',
+  textSub: 'rgba(245,240,232,0.65)',
+  textMuted: 'rgba(245,240,232,0.35)',
+  border: 'rgba(251,191,36,0.18)',
+  borderSubtle: 'rgba(251,191,36,0.09)',
+  rfBg: '#090716',
 };
 
 export const LIGHT: ThemeColors = {
@@ -64,8 +81,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('ff-theme', theme);
-    document.body.style.background = theme === 'dark' ? '#0d0d1a' : '#f0f2f8';
-    document.body.style.color = theme === 'dark' ? '#e2e8f0' : '#1a1a3e';
+    document.body.style.background = theme === 'dark' ? DARK.bg : LIGHT.bg;
+    document.body.style.color = theme === 'dark' ? DARK.text : LIGHT.text;
   }, [theme]);
 
   const toggle = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));

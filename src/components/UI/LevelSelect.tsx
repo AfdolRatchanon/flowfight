@@ -7,6 +7,7 @@ import { getMsUntilMidnightThai } from '../../services/authService';
 import { levelProgressPct, MAX_LEVEL } from '../../utils/levelSystem';
 import { useTheme } from '../../contexts/ThemeContext';
 import BagButton from './BagButton';
+import VolumeButton from './VolumeButton';
 
 // ── Enemy image map (by level.id — 1 ภาพต่อ 1 ด่าน) ──────────────────────
 const LEVEL_IMAGE: Record<string, string> = {
@@ -102,6 +103,7 @@ export default function LevelSelect() {
             </p>
           </div>
 
+          <VolumeButton variant="header" />
           <BagButton />
 
           {/* Shop */}

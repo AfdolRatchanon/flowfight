@@ -1,17 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Exo+2:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Sarabun:wght@400;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-primary:   #0d0d1a;
-  --color-secondary: #12122a;
-  --color-card:      #1a1a3e;
-  --color-accent:    #e94560;
-  --color-accent2:   #7c3aed;
-  --color-gold:      #f59e0b;
+  --color-primary:   #0E0B1A;
+  --color-secondary: #180F2E;
+  --color-card:      #16102A;
+  --color-accent:    #FBBF24;
+  --color-accent2:   #8B5CF6;
+  --color-gold:      #FBBF24;
 }
 
 /* ===== THEME VARIABLES ===== */
+/* ── Classic dark backup (uncomment to revert)
 :root,
 [data-theme="dark"] {
   --bg: #0d0d1a;
@@ -32,6 +34,30 @@
   --rf-minimap-bg: #12122a;
   --scrollbar-thumb: rgba(124,58,237,0.4);
   --scrollbar-thumb-hover: rgba(124,58,237,0.7);
+}
+── */
+
+/* ── Dark Medieval ── */
+:root,
+[data-theme="dark"] {
+  --bg: #0E0B1A;
+  --bg-card: rgba(22,16,42,0.97);
+  --bg-surface: rgba(251,191,36,0.05);
+  --bg-surface-hover: rgba(251,191,36,0.10);
+  --text: #F5F0E8;
+  --text-sub: rgba(245,240,232,0.65);
+  --text-muted: rgba(245,240,232,0.35);
+  --border: rgba(251,191,36,0.18);
+  --border-subtle: rgba(251,191,36,0.09);
+  --page-bg: linear-gradient(135deg, #0E0B1A 0%, #180F2E 50%, #0E1525 100%);
+  --rf-bg: #090716;
+  --rf-controls-bg: #1C1729;
+  --rf-controls-btn: #1C1729;
+  --rf-controls-btn-hover: #261F3D;
+  --rf-controls-fill: #C8B89A;
+  --rf-minimap-bg: #130E22;
+  --scrollbar-thumb: rgba(251,191,36,0.35);
+  --scrollbar-thumb-hover: rgba(251,191,36,0.65);
 }
 
 [data-theme="light"] {
@@ -64,15 +90,21 @@
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: 'Exo 2', system-ui, sans-serif;
+  font-family: 'Sarabun', 'Exo 2', system-ui, sans-serif;
   min-height: 100vh;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ===== MEDIEVAL HEADING FONT ===== */
+h1, h2, h3, .heading-medieval {
+  font-family: 'Cinzel', 'Sarabun', serif;
+  letter-spacing: 0.04em;
 }
 
 /* ===== GAME UI ===== */
 .game-card {
   background: var(--bg-card);
-  border: 1px solid rgba(124, 58, 237, 0.3);
+  border: 1px solid var(--border);
   border-radius: 16px;
 }
 

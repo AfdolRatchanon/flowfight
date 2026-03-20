@@ -180,7 +180,17 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
-      <div style={{ position: 'absolute', bottom: 16, width: '100%', textAlign: 'center', pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', bottom: 16, width: '100%', textAlign: 'center' }}>
+        <button
+          onClick={() => navigate('/teacher-register')}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'rgba(251,191,36,0.45)', fontSize: 11, textDecoration: 'underline',
+            marginBottom: 6, pointerEvents: 'auto',
+          }}
+        >สมัครบัญชีครู (Teacher Register)</button>
+      </div>
+      <div style={{ position: 'absolute', bottom: 16, width: '100%', textAlign: 'center', pointerEvents: 'none', marginTop: 22 }}>
         <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, margin: 0 }}>
           v{import.meta.env.VITE_APP_VERSION ?? '0.12.2'}
         </p>

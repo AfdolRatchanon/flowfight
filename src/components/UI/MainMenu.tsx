@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '../../services/authService';
 import { useGameStore } from '../../stores/gameStore';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL } from '../../utils/levelSystem';
 import { useTheme } from '../../contexts/ThemeContext';
+import VolumeButton from './VolumeButton';
+import JoinClassroomModal from './JoinClassroomModal';
 
 const MENU_ITEMS = [
   { icon: '⚔️', label: 'Play Game', path: '/levels', color: '#e94560' },
@@ -15,6 +18,8 @@ export default function MainMenu() {
   const { player, character } = useGameStore();
   const navigate = useNavigate();
   const { colors } = useTheme();
+  const [showJoinClassroom, setShowJoinClassroom] = useState(false);
+  const [classroomCode, setClassroomCode] = useState(player?.classroomCode);
 
   return (
     <div style={{
@@ -23,6 +28,11 @@ export default function MainMenu() {
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: 24, position: 'relative', overflow: 'hidden',
     }}>
+      {/* Volume button — top right corner */}
+      <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10 }}>
+        <VolumeButton variant="header" />
+      </div>
+
       {/* Background decoration */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 70%)', top: '10%', right: '-10%' }} />
@@ -136,6 +146,39 @@ export default function MainMenu() {
             />
           ))}
         </div>
+
+        {/* Join Classroom */}
+        <button
+          onClick={() => setShowJoinClassroom(true)}
+          style={{
+            width: '100%', padding: '12px 16px', borderRadius: 12, marginBottom: 12,
+            border: classroomCode
+              ? '1px solid rgba(251,191,36,0.4)'
+              : `1px solid ${colors.borderSubtle}`,
+            background: classroomCode ? 'rgba(251,191,36,0.08)' : 'transparent',
+            color: classroomCode ? '#FBBF24' : colors.textMuted,
+            cursor: 'pointer', fontSize: 13, textAlign: 'left',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}
+        >
+          <span>🏫</span>
+          <span style={{ flex: 1 }}>
+            {classroomCode ? `ห้องเรียน: ${classroomCode}` : 'เข้าร่วมห้องเรียน'}
+          </span>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>จัดการ</span>
+        </button>
+
+        {showJoinClassroom && player && (
+          <JoinClassroomModal
+            uid={player.id}
+            currentCode={classroomCode}
+            onClose={() => setShowJoinClassroom(false)}
+            onJoined={(_className, code) => {
+              setClassroomCode(code || undefined);
+              setShowJoinClassroom(false);
+            }}
+          />
+        )}
 
         {/* Sign out */}
         <button

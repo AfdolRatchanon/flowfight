@@ -22,7 +22,10 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 - [x] **Learning Objective popup** — หลังชนะแต่ละด่านบอกว่า "คุณเพิ่งเรียนรู้..." พร้อม icon + concept (v0.15.0)
 - [x] **Tooltip** — hover บน Action Block แสดงคำอธิบายสั้น ๆ (v0.14.0)
 - [x] **Achievement System** — 8 achievements + toast popup + บันทึก Firestore (v0.14.0)
-- [ ] **Sprite Animation** — ตัวละครยังเป็น PNG static
+- [x] **Sprite Animation** — hero/enemy idle float + hero กระพริบแดงเมื่อ HP < 30% (v0.16.0)
+- [x] **Keyboard Shortcuts** — Space = Run, R = Retry, Esc = Stop (v0.16.0)
+- [x] **Flowchart Undo/Redo** — Ctrl+Z / Ctrl+Y, history 50 steps (v0.16.0)
+- [x] **Volume Slider** — popup ปรับ BGM/SFX แยก + mute toggle (v0.16.0)
 - [ ] **Mobile / Tablet Support** — รองรับ touch screen
 
 ---

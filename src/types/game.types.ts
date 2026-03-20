@@ -45,10 +45,29 @@ export interface Player {
   dailyFarm?: { date: string; plays: Record<string, number> };
   /** Achievements ที่ปลดล็อคแล้ว — เก็บเป็น achievement ID */
   achievements?: string[];
+  role?: 'student' | 'teacher';
+  classroomCode?: string;   // รหัสห้องเรียนที่นักเรียน join อยู่
   createdAt: number;
   lastActive: number;
   stats: PlayerStats;
   preferences: PlayerPreferences;
+}
+
+export interface Classroom {
+  roomCode: string;        // 6-digit code
+  teacherId: string;
+  teacherName: string;
+  className: string;
+  students: string[];      // array of student uids
+  createdAt: number;
+}
+
+export interface StudentProgress {
+  uid: string;
+  username: string;
+  levelsCompleted: string[];
+  lastActive: number;
+  classroomCode?: string;
 }
 
 export interface PlayerStats {

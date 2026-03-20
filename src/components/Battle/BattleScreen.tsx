@@ -21,6 +21,7 @@ import type { ThemeColors } from '../../contexts/ThemeContext';
 import TutorialGuide from '../Tutorial/TutorialGuide';
 import type { TutorialTarget } from '../Tutorial/TutorialGuide';
 import BagButton from '../UI/BagButton';
+import VolumeButton from '../UI/VolumeButton';
 import { soundManager } from '../../services/soundManager';
 import type { Character, Enemy, RequiredBlock } from '../../types/game.types';
 
@@ -502,10 +503,6 @@ export default function BattleScreen() {
   const enemyIntentionLabel = enemyIntentionActions.map((a) => intentionLabelMap[a] ?? '👁️').join(' → ');
 
   // Animation state
-  const [isMuted, setIsMuted] = useState(() => soundManager.isMuted());
-  const [showVolumePanel, setShowVolumePanel] = useState(false);
-  const [bgmVol, setBgmVol] = useState(() => soundManager.getBGMVolume());
-  const [sfxVol, setSfxVol] = useState(() => soundManager.getSFXVolume());
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
   const [heroAnimKey, setHeroAnimKey] = useState(0);
   const [enemyAnimKey, setEnemyAnimKey] = useState(0);
@@ -1232,7 +1229,7 @@ export default function BattleScreen() {
           {/* Dark overlay so text stays readable over background image */}
           <div style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(180deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.42) 45%, rgba(0,0,0,0.72) 100%)',
+            background: 'linear-gradient(180deg, rgba(14,11,26,0.72) 0%, rgba(14,11,26,0.38) 45%, rgba(14,11,26,0.78) 100%)',
           }} />
 
           {/* Header */}
@@ -1267,51 +1264,8 @@ export default function BattleScreen() {
               </div>
             )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
-              <button
-                onClick={() => setShowVolumePanel((v) => !v)}
-                title="ตั้งค่าเสียง"
-                style={{
-                  background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)',
-                  backdropFilter: 'blur(6px)', color: 'rgba(255,255,255,0.9)',
-                  padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 16, lineHeight: 1,
-                }}
-              >{isMuted ? '🔇' : '🔊'}</button>
-              {showVolumePanel && (
-                <div style={{
-                  position: 'absolute', top: '110%', right: 0, zIndex: 500,
-                  background: 'rgba(15,15,30,0.96)', backdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12,
-                  padding: '12px 16px', minWidth: 180, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                  display: 'flex', flexDirection: 'column', gap: 10,
-                }}>
-                  {/* Mute toggle */}
-                  <button onClick={() => { const next = !isMuted; soundManager.setMuted(next); setIsMuted(next); }}
-                    style={{ background: isMuted ? 'rgba(239,68,68,0.2)' : 'rgba(74,222,128,0.15)', border: `1px solid ${isMuted ? 'rgba(239,68,68,0.4)' : 'rgba(74,222,128,0.3)'}`, borderRadius: 8, color: isMuted ? '#f87171' : '#4ade80', fontSize: 12, fontWeight: 700, padding: '5px 10px', cursor: 'pointer' }}>
-                    {isMuted ? '🔇 ปิดเสียง' : '🔊 เปิดเสียง'}
-                  </button>
-                  {/* BGM slider */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>BGM</span>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{Math.round(bgmVol * 100)}%</span>
-                    </div>
-                    <input type="range" min={0} max={1} step={0.05} value={bgmVol}
-                      onChange={(e) => { const v = parseFloat(e.target.value); setBgmVol(v); soundManager.setBGMVolume(v); }}
-                      style={{ width: '100%', accentColor: '#a78bfa' }} />
-                  </div>
-                  {/* SFX slider */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>SFX</span>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{Math.round(sfxVol * 100)}%</span>
-                    </div>
-                    <input type="range" min={0} max={1} step={0.05} value={sfxVol}
-                      onChange={(e) => { const v = parseFloat(e.target.value); setSfxVol(v); soundManager.setSFXVolume(v); }}
-                      style={{ width: '100%', accentColor: '#a78bfa' }} />
-                  </div>
-                </div>
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <VolumeButton />
               <BagButton compact onShopClick={() => { setShopFromBag(true); setShowShop(true); }} />
             </div>
           </div>

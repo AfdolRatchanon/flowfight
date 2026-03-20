@@ -86,10 +86,12 @@ const VOICE_MAP: Record<VoiceKey, string> = {
 class SoundManager {
   private bgmAudio: HTMLAudioElement | null = null;
   private currentBGMKey: BGMKey | null = null;
+  private pendingBGMKey: BGMKey | null = null;
   private sfxVolume = 0.6;
   private bgmVolume = 0.2;
   private muted = false;
   private voiceVolume = 0.45;
+  private interactionListenerAdded = false;
 
   constructor() {
     const saved = localStorage.getItem('ff_sound');
@@ -120,7 +122,29 @@ class SoundManager {
     const audio = new Audio(BGM_MAP[key]);
     audio.loop = true;
     audio.volume = this.bgmVolume;
-    audio.play().catch(() => {});
+    audio.play().then(() => {
+      this.pendingBGMKey = null;
+    }).catch(() => {
+      // autoplay blocked — retry on first user interaction
+      this.pendingBGMKey = key;
+      this.currentBGMKey = key;
+      if (!this.interactionListenerAdded) {
+        this.interactionListenerAdded = true;
+        const resume = () => {
+          if (this.pendingBGMKey) {
+            const k = this.pendingBGMKey;
+            this.pendingBGMKey = null;
+            this.currentBGMKey = null;
+            this.playBGM(k);
+          }
+          document.removeEventListener('click', resume);
+          document.removeEventListener('keydown', resume);
+          this.interactionListenerAdded = false;
+        };
+        document.addEventListener('click', resume);
+        document.addEventListener('keydown', resume);
+      }
+    });
     this.bgmAudio = audio;
     this.currentBGMKey = key;
   }
@@ -199,8 +223,16 @@ class SoundManager {
   }
 
   setMuted(val: boolean) {
-    this.muted = val;
-    if (val) this.stopBGM();
+    if (val) {
+      const keyToResume = this.currentBGMKey;
+      this.muted = true;
+      this.stopBGM();
+      this.currentBGMKey = keyToResume; // remember key so unmute can restore
+    } else {
+      const keyToResume = this.currentBGMKey;
+      this.muted = false;
+      if (keyToResume) this.playBGM(keyToResume);
+    }
     this.savePrefs();
   }
 

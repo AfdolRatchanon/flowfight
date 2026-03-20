@@ -7,6 +7,7 @@ import { useTheme } from './contexts/ThemeContext';
 import LoginPage from './components/Auth/LoginPage';
 import MainMenu from './components/UI/MainMenu';
 import ThemeToggle from './components/UI/ThemeToggle';
+import TeacherRegisterPage from './components/Auth/TeacherRegisterPage';
 
 const ModeSelect        = lazy(() => import('./components/UI/ModeSelect'));
 const LevelSelect       = lazy(() => import('./components/UI/LevelSelect'));
@@ -15,6 +16,7 @@ const CharacterCustomizer = lazy(() => import('./components/Character/CharacterC
 const Leaderboard       = lazy(() => import('./components/UI/Leaderboard'));
 const ShopPage          = lazy(() => import('./components/Shop/ShopPage'));
 const InfinityDevScreen = lazy(() => import('./modes/InfinityDev/InfinityDevScreen'));
+const TeacherDashboard  = lazy(() => import('./components/Teacher/TeacherDashboard'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, player, character } = useGameStore();
@@ -38,8 +40,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!player) return <Navigate to="/login" replace />;
 
+  // ครู → ไป teacher dashboard ทันที (ไม่ต้องมีตัวละคร)
+  if (player.role === 'teacher' && !location.pathname.startsWith('/teacher')) {
+    return <Navigate to="/teacher" replace />;
+  }
+
   // ผู้เล่นใหม่ที่ยังไม่มีตัวละคร ต้องสร้างตัวละครก่อนเสมอ
-  if (!character && location.pathname !== '/character') {
+  if (player.role !== 'teacher' && !character && location.pathname !== '/character') {
     return <Navigate to="/character" replace />;
   }
 
@@ -72,6 +79,8 @@ export default function App() {
       <Suspense fallback={null}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/teacher-register" element={<TeacherRegisterPage />} />
+          <Route path="/teacher" element={<ProtectedRoute><TeacherDashboard /></ProtectedRoute>} />
           <Route path="/" element={<ProtectedRoute><MainMenu /></ProtectedRoute>} />
           <Route path="/levels" element={<ProtectedRoute><ModeSelect /></ProtectedRoute>} />
           <Route path="/levels/tutorial" element={<ProtectedRoute><LevelSelect /></ProtectedRoute>} />

@@ -26,6 +26,7 @@ import {
 } from '../../engines/FlowchartEngine';
 import type { BattleState, PreviewStep } from '../../engines/FlowchartEngine';
 import { PATH_CARDS, SUP_CARDS, HARDWARE_ITEMS, VIRUSES } from '../../utils/infinityDevConstants';
+import VolumeButton from '../../components/UI/VolumeButton';
 
 // ===== Error Boundary for FlowchartEditor =====
 class FlowchartErrorBoundary extends Component<
@@ -862,7 +863,7 @@ export default function InfinityDevBattle() {
           {/* Dark overlay so text stays readable over background image */}
           <div style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(180deg, rgba(13,13,26,0.55) 0%, rgba(13,13,26,0.25) 50%, rgba(13,13,26,0.65) 100%)',
+            background: 'linear-gradient(180deg, rgba(14,11,26,0.60) 0%, rgba(14,11,26,0.28) 50%, rgba(14,11,26,0.68) 100%)',
           }} />
 
           {/* Header */}
@@ -901,6 +902,7 @@ export default function InfinityDevBattle() {
                 </div>
               )}
               <span style={{ color: '#fbbf24', fontSize: 11, fontWeight: 800 }}>💾 {infStore.dataFragments} DF</span>
+              <VolumeButton />
             </div>
           </div>
 
