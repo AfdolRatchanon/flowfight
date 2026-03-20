@@ -125,6 +125,19 @@ const ANIM_CSS = `
   0%,100% { box-shadow: 0 0 0 2px rgba(251,191,36,0.5), 0 0 16px rgba(251,191,36,0.25); }
   50%     { box-shadow: 0 0 0 3px rgba(251,191,36,0.9), 0 0 28px rgba(251,191,36,0.5); }
 }
+@keyframes heroIdle {
+  0%,100% { transform: translateY(0px); }
+  50%     { transform: translateY(-7px); }
+}
+@keyframes enemyIdle {
+  0%,100% { transform: translateY(0px) rotate(0deg); }
+  30%     { transform: translateY(-6px) rotate(1.5deg); }
+  70%     { transform: translateY(-3px) rotate(-1deg); }
+}
+@keyframes heroLowHP {
+  0%,100% { transform: translateY(0px); filter: drop-shadow(0 0 6px rgba(239,68,68,0.6)); }
+  50%     { transform: translateY(-4px); filter: drop-shadow(0 0 14px rgba(239,68,68,1)); }
+}
 `;
 
 // ===== Sub-components =====
@@ -1263,8 +1276,12 @@ export default function BattleScreen() {
               <div style={{ flex: 1, position: 'relative', minWidth: 0, overflow: 'hidden' }}>
                 <div key={`hero-${heroAnimKey}`} style={{
                   position: 'absolute', inset: 0,
-                  animation: heroAnim ? `${heroAnim} 0.52s ease` : undefined,
-                  filter: heroHP < heroMaxHP * 0.3 ? 'grayscale(0.5)' : undefined,
+                  animation: heroAnim
+                    ? `${heroAnim} 0.52s ease`
+                    : heroHP < heroMaxHP * 0.3
+                      ? 'heroLowHP 1.4s ease-in-out infinite'
+                      : 'heroIdle 2.8s ease-in-out infinite',
+                  filter: heroHP < heroMaxHP * 0.3 ? 'grayscale(0.4)' : undefined,
                   display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
                 }}>
                   <img src={`/characters/${heroChar.class}.png`} alt={heroChar.class}
@@ -1334,7 +1351,9 @@ export default function BattleScreen() {
               <div style={{ flex: 1, position: 'relative', minWidth: 0, overflow: 'hidden' }}>
                 <div key={`enemy-${enemyAnimKey}`} style={{
                   position: 'absolute', inset: 0,
-                  animation: enemyAnim ? `${enemyAnim} 0.52s ease` : undefined,
+                  animation: enemyAnim
+                    ? `${enemyAnim} 0.52s ease`
+                    : 'enemyIdle 3.2s ease-in-out infinite',
                   filter: isEnemyShielded && status === 'waiting'
                     ? 'grayscale(0.3) drop-shadow(0 0 12px rgba(99,102,241,0.8))'
                     : enemyHP < enemyMaxHP * 0.3 ? 'grayscale(0.5)' : undefined,
