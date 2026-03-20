@@ -23,9 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
+# Firebase credentials — ห้าม commit เด็ดขาด
 .env
 
+# Firebase CLI cache — ไม่จำเป็น
 .firebase
-firebase.json
-.firebaserc
-firestore.rules
+
+# firebase.json, .firebaserc, firestore.rules → ควร commit (source code / config)

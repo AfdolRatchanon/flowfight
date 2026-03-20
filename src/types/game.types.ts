@@ -45,7 +45,7 @@ export interface Player {
   dailyFarm?: { date: string; plays: Record<string, number> };
   /** Achievements ที่ปลดล็อคแล้ว — เก็บเป็น achievement ID */
   achievements?: string[];
-  role?: 'student' | 'teacher';
+  role?: 'student' | 'teacher' | 'admin';
   classroomCode?: string;   // รหัสห้องเรียนที่นักเรียน join อยู่
   createdAt: number;
   lastActive: number;

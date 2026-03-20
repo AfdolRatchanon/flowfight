@@ -73,98 +73,41 @@ npm run dev
 
 ### 4. ใส่ config ในโปรเจกต์
 
-แก้ไขไฟล์ `src/services/firebaseService.ts` ใส่ค่าจาก Firebase:
+สร้างไฟล์ `.env` ที่ root โปรเจกต์ (copy จาก `.env.example`) แล้วใส่ค่าจาก Firebase:
 
-```ts
-const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef123456",
-};
+```bash
+cp .env.example .env
 ```
+
+```env
+VITE_FIREBASE_API_KEY=AIzaSy...
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
+VITE_FIREBASE_APP_ID=1:123456789:web:abcdef123456
+```
+
+> **อย่า commit ไฟล์ `.env`** — มีอยู่ใน `.gitignore` แล้ว
 
 ### Firestore Security Rules
 
-คัดลอก rules นี้ไปวางใน Firebase Console → Firestore → Rules
+Rules อยู่ในไฟล์ `firestore.rules` ที่ root โปรเจกต์ — deploy ด้วย:
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    // ===== Users =====
-    match /users/{userId} {
-      allow read:  if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly([
-          'id','username','email','levelsCompleted','levelClearCounts',
-          'gold','stats','lastActive','createdAt','dailyFarm'
-        ]);
-    }
-
-    // ===== Overall Leaderboard =====
-    match /leaderboards/{playerId} {
-      allow read:  if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == playerId
-        && request.resource.data.keys().hasOnly([
-          'playerId','username','characterName','characterClass','characterLevel',
-          'totalWins','totalDamage','totalBattleTime','levelsCompleted',
-          'endlessHighScore','endlessHighWave',
-          'campaignStartedAt','campaignClearedAt','campaignTotalTimeMs',
-          'lastUpdated'
-        ])
-        && (request.resource.data.get('totalWins', 0) >= 0)
-        && (request.resource.data.get('totalWins', 0) <= 10000)
-        && (request.resource.data.get('endlessHighScore', 0) >= 0)
-        && (request.resource.data.get('endlessHighScore', 0) <= 999999)
-        && (request.resource.data.get('endlessHighWave', 0) >= 0)
-        && (request.resource.data.get('endlessHighWave', 0) <= 9999)
-        && (request.resource.data.get('characterLevel', 1) >= 1)
-        && (request.resource.data.get('characterLevel', 1) <= 10);
-    }
-
-    // ===== Per-level Leaderboard =====
-    // docId = levelId_playerId
-    match /levelboards/{docId} {
-      allow read:  if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.data.playerId == request.auth.uid
-        && request.resource.data.won == true
-        && request.resource.data.keys().hasOnly([
-          'levelId','levelNumber','playerId','won',
-          'playerName','characterName','characterClass','characterLevel',
-          'timeMs','damageDealt','damageTaken','heroHPRemaining','heroHPPercent',
-          'timestamp'
-        ])
-        && (request.resource.data.get('timeMs', 0) >= 0)
-        && (request.resource.data.get('timeMs', 0) <= 3600000)
-        && (request.resource.data.get('damageDealt', 0) >= 0)
-        && (request.resource.data.get('damageTaken', 0) >= 0)
-        && (request.resource.data.get('characterLevel', 1) >= 1)
-        && (request.resource.data.get('characterLevel', 1) <= 10);
-    }
-
-    // ===== Endless Mode Leaderboard =====
-    match /endlessboards/{playerId} {
-      allow read:  if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == playerId
-        && request.resource.data.keys().hasOnly([
-          'playerId','username','characterClass','characterLevel',
-          'endlessHighScore','endlessHighWave','lastUpdated'
-        ])
-        && (request.resource.data.get('endlessHighScore', 0) >= 0)
-        && (request.resource.data.get('endlessHighScore', 0) <= 999999)
-        && (request.resource.data.get('endlessHighWave', 0) >= 0)
-        && (request.resource.data.get('endlessHighWave', 0) <= 9999);
-    }
-  }
-}
+```bash
+firebase deploy --only firestore:rules
 ```
 
-> **หมายเหตุ:** หลังแก้ไข rules ต้อง deploy ด้วย `firebase deploy --only firestore:rules`
+> Rules ใช้ระบบ Role-based (student / teacher / admin) พร้อม input validation bounds บน leaderboard data
+
+### 5. ตั้งค่า Admin Account (ครั้งแรก)
+
+Admin account ต้องตั้งค่าผ่าน Firebase Console เท่านั้น:
+
+1. **Firebase Console** → **Firestore** → `users/{uid}`
+2. แก้ field `role` เป็น `"admin"`
+
+Admin สามารถสร้าง Teacher Invite Code ได้จาก Admin Dashboard ในแอป
 
 ---
 
@@ -496,7 +439,7 @@ public/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026 | v0.16.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
+> อัปเดต: มีนาคม 2026 | v0.17.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -543,6 +486,10 @@ public/
 - [x] **Keyboard shortcuts** — Space = Run, R = Retry, Esc = Stop
 - [x] **Flowchart Undo/Redo** — Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z (history 50 steps)
 - [x] **Volume slider** — popup จากปุ่ม 🔊 ปรับ BGM และ SFX แยกกัน
+- [x] **3 Roles** — student / teacher / admin พร้อม route guard แยกต่างหาก
+- [x] **Admin Dashboard** — สร้าง/ลบ Teacher Invite Code, ดู stats จำนวน users + classrooms
+- [x] **Upgrade to Teacher** — บัญชีนักเรียนที่มีอยู่แล้ว upgrade เป็นครูได้โดยใช้ invite code
+- [x] **Security Hardening** — ป้องกัน role self-escalation, route guard, Firestore transaction บน invite code, classroom create ต้องเป็น teacher/admin
 
 ### แผนพัฒนาในอนาคต
 
@@ -552,25 +499,73 @@ public/
 
 ## Changelog
 
+### v0.17.0 (มีนาคม 2026)
+
+**Roles & Access Control**
+- **Admin Role** — `role: 'admin'` เข้าถึงได้ทุก route, ไม่ถูก redirect บังคับ
+- **Admin Dashboard** (`/admin`) — สร้าง/ลบ Teacher Invite Code, ดู stats (users, classrooms, codes)
+- **Upgrade to Teacher** — บัญชีนักเรียนที่มีอยู่แล้ว upgrade เป็นครูได้จาก Main Menu โดยใช้ invite code
+
+**Security Hardening**
+- **Route Guard** — non-admin ถูก redirect ออกจาก `/admin`, non-teacher ถูก redirect ออกจาก `/teacher`
+- **Block role self-escalation** — Firestore rules ป้องกันไม่ให้ user เปลี่ยน role ตัวเองเป็น admin ผ่าน client (อนุญาตเฉพาะ student→teacher เท่านั้น)
+- **Classroom create guard** — เฉพาะ teacher/admin สร้างห้องเรียนได้ (Firestore rules)
+- **TOCTOU fix** — ใช้ Firestore `runTransaction` ป้องกัน race condition บน invite code claim
+- **Firestore rules ครบถ้วน** — แก้ `hasOnly` ที่ block leaderboard/endlessboard writes, เพิ่ม upper bounds บน stats
+
+**Bug Fixes**
+- แก้ `saveLeaderboardEntry` ถูก block (field names ไม่ตรง hasOnly list)
+- แก้ `saveEndlessLeaderboardEntry` ถูก block (field names ไม่ตรง hasOnly list)
+- แก้ `registerTeacher` ถูก block (Firestore rules ป้องกัน role='teacher' บน new document)
+- แก้ `.gitignore` ที่ ignore `firebase.json`, `.firebaserc`, `firestore.rules` ผิดพลาด
+
 ### v0.16.0 (มีนาคม 2026)
 
-- **Keyboard shortcuts** — Space = Run flowchart, R = Retry (หลังชนะ/แพ้), Esc = Stop execution
-- **Flowchart Undo/Redo** — Ctrl+Z ย้อนกลับ, Ctrl+Y / Ctrl+Shift+Z ทำซ้ำ (history 50 steps, รองรับ add/remove node & edge)
-- **Volume slider** — คลิกปุ่ม 🔊 เพื่อเปิด popup ปรับ BGM และ SFX แยกกัน พร้อม mute toggle
-- **Sprite idle animation** — hero ลอยขึ้นลง, enemy ลอยพร้อม rotate เล็กน้อย, hero กระพริบแดงเมื่อ HP < 30%
+**Teacher / LMS (Phase 1)**
+- **Teacher Role** — สมัครบัญชีครูด้วย Invite Code, redirect ไป Teacher Dashboard อัตโนมัติ
+- **Teacher Register Page** — หน้าสมัครบัญชีครูแยกต่างหาก (`/teacher-register`)
+- **Classroom** — ครูสร้างห้องได้ รหัส 6 หลัก, นักเรียน join จาก Main Menu
+- **Teacher Dashboard** — ดูรายชื่อนักเรียน, ด่านที่ผ่าน, Progress bar, วันที่เล่นล่าสุด
+
+**Infrastructure**
+- **Firestore rules** — เพิ่ม rule สำหรับ `teacher_codes` + `classrooms`
 
 ### v0.15.0 (มีนาคม 2026)
 
-- **Learning Objective popup** — หลังชนะแต่ละด่านแสดง panel "คุณเพิ่งเรียนรู้..." พร้อม icon และชื่อ concept ที่สอนในด่านนั้น (เช่น 🔁 While Loop, ↕️ If/Else, 🧠 Full Algorithm)
+**UX / UI**
+- **Dark Medieval Theme** — palette ใหม่ navy กลางคืน + ขอบทอง, font Cinzel (EN heading) + Sarabun (ไทย)
+- **Volume Slider** — ปุ่ม 🔊 เปิด popup ปรับ BGM / SFX แยก + mute toggle, รองรับทุกหน้า (Main Menu, Level Select, Battle, Endless)
+- **Volume restore after unmute** — เพลงกลับมาต่อจากเพลงเดิมทันที ไม่ต้องเริ่มใหม่
+- **BGM autoplay retry** — หลัง F5 เพลง resume ทันทีที่ user interaction แรก (รองรับ Browser Autoplay Policy)
+
+**Battle**
+- **Keyboard shortcuts** — Space = Run, R = Retry, Esc = Stop
+- **Mute button** — ปุ่ม 🔊/🔇 ใน battle header
+
+**Flowchart Editor**
+- **Undo / Redo** — Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, history 50 steps
 
 ### v0.14.0 (มีนาคม 2026)
 
-- **Achievement System** — 8 achievements (First Blood, สายฟ้า, ใจเหล็ก, ผ่องแผ้ว, ชำนาญ Loop, วีรบุรุษฯ, ทนทาน, นักสู้อาชีพ) ตรวจสอบหลังชนะแต่ละด่าน แสดง toast popup ทีละอัน บันทึกใน Firestore
-- **Flowchart Save/Load** — auto-save nodes/edges ต่อด่านใน Firestore (debounce 800ms), โหลดกลับอัตโนมัติเมื่อเข้าด่านอีกครั้ง (ไม่บันทึก Endless Mode)
-- **Tooltip บน Action Block** — hover บน node แสดงคำอธิบายสั้น ๆ ว่า block ทำอะไร (ครบ 22 action types)
-- **Mute button** — ปุ่ม 🔊/🔇 ใน battle header ปิด/เปิดเสียงทั้งหมดได้ทันที
+**Battle**
+- **Sprite idle animation** — hero ลอยขึ้นลง, enemy ลอยพร้อม rotate, hero กระพริบแดงเมื่อ HP < 30%
+- **Learning Objective popup** — หลังชนะแต่ละด่านแสดง concept ที่เพิ่งเรียนรู้ (🔁 Loop / ↕️ If-Else / 🧠 Algorithm ฯลฯ)
+
+**Flowchart Editor**
+- **Save / Load per level** — auto-save nodes/edges ใน Firestore (debounce 800ms), โหลดกลับเมื่อเข้าด่านอีกครั้ง
+- **Tooltip บน Action Block** — hover แสดงคำอธิบายแต่ละ action (ครบ 22 types)
+
+**Achievement & Progression**
+- **Achievement System** — 8 achievements, ตรวจหลังชนะ, toast popup ทีละอัน, บันทึก Firestore
 
 ### v0.13.0 (มีนาคม 2026)
+
+**Infrastructure**
+- **Vitest unit tests** — 22 test cases ครอบคลุม FlowchartEngine core logic
+- **GitHub Actions CI** — TypeScript check → Unit Test → Build ทุก push/PR
+- **CLAUDE.md + PROCESS.md + ROADMAP.md** — เอกสารกระบวนการทำงานและแผนพัฒนา LMS Platform
+
+### v0.12.3 (มีนาคม 2026)
 
 - **Team Credits** — เพิ่มชื่อทีมงานใน LICENSE, README, หน้า Login และ Main Menu (Lead Dev / Project & Creative Director / Lead QA / QA Tester)
 - **Version single source of truth** — `vite.config.ts` ดึง version จาก `package.json` อัตโนมัติ ลบ `GAME_VERSION` จาก `constants.ts` และ `VITE_APP_VERSION` จาก `.env`/`.env.example`
@@ -719,7 +714,7 @@ public/
 
 ---
 
-`v0.13.0` — มีนาคม 2026
+`v0.17.0` — มีนาคม 2026
 
 ---
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '../../services/authService';
+import { upgradeToTeacher } from '../../services/teacherService';
 import { useGameStore } from '../../stores/gameStore';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL } from '../../utils/levelSystem';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -13,6 +14,11 @@ const MENU_ITEMS = [
   { icon: '🏆', label: 'Leaderboard', path: '/leaderboard', color: '#10b981' },
 ];
 
+const ADMIN_ITEMS = [
+  { icon: '🛡️', label: 'Admin Panel', path: '/admin', color: '#FBBF24' },
+  { icon: '📊', label: 'Teacher Dashboard', path: '/teacher', color: '#f97316' },
+];
+
 
 export default function MainMenu() {
   const { player, character } = useGameStore();
@@ -20,6 +26,7 @@ export default function MainMenu() {
   const { colors } = useTheme();
   const [showJoinClassroom, setShowJoinClassroom] = useState(false);
   const [classroomCode, setClassroomCode] = useState(player?.classroomCode);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   return (
     <div style={{
@@ -136,6 +143,15 @@ export default function MainMenu() {
 
         {/* Menu buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+          {player?.role === 'admin' && ADMIN_ITEMS.map((item) => (
+            <MenuButton
+              key={item.path}
+              icon={item.icon}
+              label={item.label}
+              color={item.color}
+              onClick={() => navigate(item.path)}
+            />
+          ))}
           {MENU_ITEMS.map((item) => (
             <MenuButton
               key={item.path}
@@ -180,6 +196,32 @@ export default function MainMenu() {
           />
         )}
 
+        {/* Upgrade to Teacher (student accounts only) */}
+        {player && player.role !== 'teacher' && (
+          <button
+            onClick={() => setShowUpgradeModal(true)}
+            style={{
+              width: '100%', padding: '10px 16px', borderRadius: 12, marginBottom: 12,
+              border: '1px solid rgba(251,191,36,0.2)',
+              background: 'transparent',
+              color: 'rgba(251,191,36,0.45)',
+              cursor: 'pointer', fontSize: 12, textAlign: 'left',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}
+          >
+            <span>🎓</span>
+            <span style={{ flex: 1 }}>สมัครบัญชีครู (Upgrade to Teacher)</span>
+          </button>
+        )}
+
+        {showUpgradeModal && player && (
+          <UpgradeToTeacherModal
+            uid={player.id}
+            onClose={() => setShowUpgradeModal(false)}
+            onSuccess={() => { setShowUpgradeModal(false); navigate('/teacher'); }}
+          />
+        )}
+
         {/* Sign out */}
         <button
           onClick={() => logout()}
@@ -201,6 +243,79 @@ export default function MainMenu() {
           Lead QA: Phattrawut Nachirit · Watanyu Arjsurin<br />
           QA: Prapatpong Srikampol · Anon Mongkolwong · Jetsada Longkrathok
         </p>
+      </div>
+    </div>
+  );
+}
+
+function UpgradeToTeacherModal({ uid, onClose, onSuccess }: { uid: string; onClose: () => void; onSuccess: () => void }) {
+  const { colors } = useTheme();
+  const { setPlayer, player } = useGameStore();
+  const [inviteCode, setInviteCode] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleUpgrade() {
+    setError(''); setLoading(true);
+    try {
+      await upgradeToTeacher(uid, inviteCode.trim());
+      // update local player state to teacher so ProtectedRoute redirects immediately
+      if (player) setPlayer({ ...player, role: 'teacher' });
+      onSuccess();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: colors.bgCard, borderRadius: 20,
+        border: `1px solid ${colors.border}`, padding: 28,
+        width: '100%', maxWidth: 360,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+      }}>
+        <h2 style={{ fontFamily: "'Cinzel', serif", color: '#FBBF24', fontSize: 18, margin: '0 0 6px' }}>
+          สมัครบัญชีครู
+        </h2>
+        <p style={{ color: colors.textMuted, fontSize: 13, margin: '0 0 20px' }}>
+          ใส่รหัสเชิญครูที่ได้รับจากผู้ดูแลระบบ
+        </p>
+
+        <input
+          placeholder="INVITE CODE"
+          value={inviteCode}
+          onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+          maxLength={12}
+          style={{
+            width: '100%', padding: '10px 14px', borderRadius: 10,
+            background: colors.bgSurface, border: `1px solid ${colors.border}`,
+            color: '#FBBF24', fontSize: 16, fontWeight: 700, letterSpacing: 4,
+            textAlign: 'center', marginBottom: 12,
+          }}
+        />
+
+        {error && <p style={{ color: '#f87171', fontSize: 13, margin: '0 0 10px', textAlign: 'center' }}>{error}</p>}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '10px', borderRadius: 10,
+            border: `1px solid ${colors.borderSubtle}`, background: 'transparent',
+            color: colors.textMuted, fontSize: 13, cursor: 'pointer',
+          }}>ยกเลิก</button>
+          <button onClick={handleUpgrade} disabled={loading || !inviteCode.trim()} style={{
+            flex: 2, padding: '10px', borderRadius: 10,
+            border: '1px solid rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.12)',
+            color: '#FBBF24', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            opacity: !inviteCode.trim() ? 0.5 : 1,
+          }}>{loading ? 'กำลังสมัคร...' : 'ยืนยัน'}</button>
+        </div>
       </div>
     </div>
   );

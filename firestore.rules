@@ -1,0 +1,135 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== Helpers =====
+
+    function currentUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'student');
+    }
+
+    function isAdmin() {
+      return request.auth != null && currentUserRole() == 'admin';
+    }
+
+    function isTeacherOrAdmin() {
+      return request.auth != null && currentUserRole() in ['teacher', 'admin'];
+    }
+
+    // ===== Users =====
+    match /users/{userId} {
+      allow read: if request.auth != null;
+
+      // create — รองรับ registerTeacher (setDoc พร้อม role:'teacher' บน doc ใหม่)
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // update — เจ้าของเท่านั้น
+      // role เปลี่ยนได้เฉพาะ student → teacher เท่านั้น
+      // ป้องกัน: ใคร ๆ ก็ไม่สามารถ self-escalate ไปเป็น admin ผ่าน client ได้
+      // (admin ต้องตั้งใน Firebase Console เท่านั้น)
+      allow update: if request.auth != null && request.auth.uid == userId
+        && (
+          // ไม่แตะ role field เลย — ปลอดภัยที่สุด
+          !request.resource.data.keys().hasAny(['role'])
+          // หรือ student → teacher เท่านั้น (ผ่าน invite code ที่ตรวจแล้วจาก client)
+          || (resource.data.get('role', 'student') == 'student'
+              && request.resource.data.role == 'teacher')
+        );
+
+      // Flowchart Save/Load — เจ้าของเท่านั้น
+      match /flowcharts/{levelId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ===== Teacher Invite Codes =====
+    // อ่านได้ทุกคน (ตรวจ code), เขียนได้เฉพาะ admin เท่านั้น
+    match /teacher_codes/{code} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // ===== Classrooms =====
+    match /classrooms/{roomCode} {
+      allow read: if request.auth != null;
+
+      // create — เฉพาะ teacher หรือ admin เท่านั้น (ป้องกัน student สร้างห้องเอง)
+      allow create: if request.auth != null
+        && request.resource.data.teacherId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'roomCode','teacherId','teacherName','className','students','createdAt'
+        ])
+        && isTeacherOrAdmin();
+
+      allow update: if request.auth != null && (
+        // ครู/admin เจ้าของห้องแก้ได้ทุกอย่าง
+        resource.data.teacherId == request.auth.uid
+        // นักเรียน join — เพิ่มตัวเองใน students เท่านั้น
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['students'])
+            && request.resource.data.students.hasAll(resource.data.students))
+      );
+    }
+
+    // ===== Overall Leaderboard =====
+    // docId = playerId
+    match /leaderboards/{playerId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == playerId
+        && request.resource.data.playerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'playerId','playerName','characterName','characterClass','characterLevel',
+          'experience','levelReached','levelsCompleted',
+          'totalKills','totalPlayTime','totalDamageDealt','totalDamageTaken',
+          'gameMode','lastUpdated',
+          'campaignStartedAt','campaignClearedAt','campaignTotalTimeMs'
+        ])
+        && (request.resource.data.get('characterLevel', 1) >= 1)
+        && (request.resource.data.get('characterLevel', 1) <= 10)
+        && (request.resource.data.get('totalKills', 0) >= 0)
+        && (request.resource.data.get('totalKills', 0) <= 99999)
+        && (request.resource.data.get('totalDamageDealt', 0) >= 0)
+        && (request.resource.data.get('totalDamageDealt', 0) <= 999999999)
+        && (request.resource.data.get('totalPlayTime', 0) >= 0)
+        && (request.resource.data.get('totalPlayTime', 0) <= 864000000); // max 10 days ms
+    }
+
+    // ===== Per-level Leaderboard =====
+    // docId = levelId_playerId
+    match /levelboards/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.data.playerId == request.auth.uid
+        && request.resource.data.won == true
+        && request.resource.data.keys().hasOnly([
+          'levelId','levelNumber','playerId','won',
+          'playerName','characterName','characterClass','characterLevel',
+          'timeMs','damageDealt','damageTaken','heroHPRemaining','heroHPPercent',
+          'timestamp'
+        ])
+        && (request.resource.data.get('timeMs', 0) >= 0)
+        && (request.resource.data.get('timeMs', 0) <= 3600000)
+        && (request.resource.data.get('damageDealt', 0) >= 0)
+        && (request.resource.data.get('damageTaken', 0) >= 0)
+        && (request.resource.data.get('characterLevel', 1) >= 1)
+        && (request.resource.data.get('characterLevel', 1) <= 10);
+    }
+
+    // ===== Endless Mode Leaderboard =====
+    // docId = playerId
+    match /endlessboards/{playerId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == playerId
+        && request.resource.data.playerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'playerId','playerName','characterName','characterClass','characterLevel',
+          'score','wavesCleared',
+          'totalDamageDealt','totalDamageTaken',
+          'timestamp'
+        ])
+        && (request.resource.data.get('score', 0) >= 0)
+        && (request.resource.data.get('score', 0) <= 999999)
+        && (request.resource.data.get('wavesCleared', 0) >= 0)
+        && (request.resource.data.get('wavesCleared', 0) <= 9999);
+    }
+  }
+}

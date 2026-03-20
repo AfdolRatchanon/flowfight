@@ -17,6 +17,7 @@ const Leaderboard       = lazy(() => import('./components/UI/Leaderboard'));
 const ShopPage          = lazy(() => import('./components/Shop/ShopPage'));
 const InfinityDevScreen = lazy(() => import('./modes/InfinityDev/InfinityDevScreen'));
 const TeacherDashboard  = lazy(() => import('./components/Teacher/TeacherDashboard'));
+const AdminDashboard    = lazy(() => import('./components/Admin/AdminDashboard'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, player, character } = useGameStore();
@@ -40,13 +41,24 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!player) return <Navigate to="/login" replace />;
 
+  const role = player.role ?? 'student';
+
+  // ป้องกันผู้ใช้ที่ไม่มีสิทธิ์เข้า privileged routes โดยตรง
+  if (location.pathname.startsWith('/admin') && role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+  if (location.pathname.startsWith('/teacher') && role !== 'teacher' && role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
   // ครู → ไป teacher dashboard ทันที (ไม่ต้องมีตัวละคร)
-  if (player.role === 'teacher' && !location.pathname.startsWith('/teacher')) {
+  if (role === 'teacher' && !location.pathname.startsWith('/teacher')) {
     return <Navigate to="/teacher" replace />;
   }
 
-  // ผู้เล่นใหม่ที่ยังไม่มีตัวละคร ต้องสร้างตัวละครก่อนเสมอ
-  if (player.role !== 'teacher' && !character && location.pathname !== '/character') {
+  // admin เข้าถึงได้ทุก route — ไม่บังคับสร้างตัวละคร
+  // ผู้เล่นใหม่ที่ยังไม่มีตัวละคร ต้องสร้างตัวละครก่อนเสมอ (ยกเว้น teacher และ admin)
+  if (role !== 'teacher' && role !== 'admin' && !character && location.pathname !== '/character') {
     return <Navigate to="/character" replace />;
   }
 
@@ -80,6 +92,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/teacher-register" element={<TeacherRegisterPage />} />
+          <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
           <Route path="/teacher" element={<ProtectedRoute><TeacherDashboard /></ProtectedRoute>} />
           <Route path="/" element={<ProtectedRoute><MainMenu /></ProtectedRoute>} />
           <Route path="/levels" element={<ProtectedRoute><ModeSelect /></ProtectedRoute>} />
