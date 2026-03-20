@@ -496,7 +496,7 @@ public/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026 | v0.13.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
+> อัปเดต: มีนาคม 2026 | v0.14.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -534,6 +534,10 @@ public/
 - [x] Lazy loading routes — initial bundle ลดจาก 558 KB → 271 KB
 - [x] Version single source of truth — ดึงจาก `package.json` อัตโนมัติ
 - [x] MIT License + Team Credits
+- [x] **Achievement System** — 8 achievements, ตรวจหลังชนะ, toast popup แสดงทีละอัน
+- [x] **Flowchart Save/Load** — auto-save nodes/edges ต่อด่านใน Firestore, โหลดกลับเมื่อเข้าด่านอีกครั้ง
+- [x] **Tooltip บน Action Block** — hover เพื่อดูคำอธิบายแต่ละ action
+- [x] **Mute button** — ปุ่ม 🔊/🔇 ใน battle header ปิด/เปิดเสียงได้ทันที
 
 ### แผนพัฒนาในอนาคต
 
@@ -545,15 +549,10 @@ public/
 
 ### v0.14.0 (มีนาคม 2026)
 
-- **Flowchart Save/Load** — บันทึก nodes/edges ต่อด่านใน Firestore โหลดกลับมาอัตโนมัติเมื่อเข้าด่านอีกครั้ง
-- **Tooltip บน Action Block** — hover บน node แสดงคำอธิบายสั้น ๆ ว่า block ทำอะไร
-- **Unit Tests (Vitest)** — 22 test cases ครอบคลุม FlowchartEngine (calcManaCost, calcTurnMana, executeEnemyAction, resolveHeroStatuses)
-- **GitHub Actions CI** — รัน TypeScript check → Unit Test → Build อัตโนมัติทุก push/PR ไป `master`
-- **Firestore Security Rules** — เพิ่ม field validation (`hasOnly`), range check (score/wave/level), ป้องกันเขียน record แทนคนอื่น
-- **Firebase Emulator + Rules Test** — `npm run test:rules` ทดสอบ rules โดยไม่แตะ database จริง
-- **Sentry Error Tracking** — จับ runtime error จาก production อัตโนมัติ (ต้องตั้งค่า `VITE_SENTRY_DSN`)
-- **ROADMAP.md** — แผน LMS Platform เต็มรูปแบบ Phase 1–5 รองรับประถม–ปวส.
-- **Firebase CLI** — อัปเดท 14.9.0 → 15.11.0
+- **Achievement System** — 8 achievements (First Blood, สายฟ้า, ใจเหล็ก, ผ่องแผ้ว, ชำนาญ Loop, วีรบุรุษฯ, ทนทาน, นักสู้อาชีพ) ตรวจสอบหลังชนะแต่ละด่าน แสดง toast popup ทีละอัน บันทึกใน Firestore
+- **Flowchart Save/Load** — auto-save nodes/edges ต่อด่านใน Firestore (debounce 800ms), โหลดกลับอัตโนมัติเมื่อเข้าด่านอีกครั้ง (ไม่บันทึก Endless Mode)
+- **Tooltip บน Action Block** — hover บน node แสดงคำอธิบายสั้น ๆ ว่า block ทำอะไร (ครบ 22 action types)
+- **Mute button** — ปุ่ม 🔊/🔇 ใน battle header ปิด/เปิดเสียงทั้งหมดได้ทันที
 
 ### v0.13.0 (มีนาคม 2026)
 
