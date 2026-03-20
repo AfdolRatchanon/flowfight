@@ -43,6 +43,8 @@ export interface Player {
   levelClearCounts?: Record<string, number>;
   /** รายวัน — reset ทุกเที่ยงคืน UTC+7 */
   dailyFarm?: { date: string; plays: Record<string, number> };
+  /** Achievements ที่ปลดล็อคแล้ว — เก็บเป็น achievement ID */
+  achievements?: string[];
   createdAt: number;
   lastActive: number;
   stats: PlayerStats;

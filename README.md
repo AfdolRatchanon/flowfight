@@ -86,26 +86,85 @@ const firebaseConfig = {
 };
 ```
 
-### Firestore Security Rules (แนะนำสำหรับ production)
+### Firestore Security Rules
+
+คัดลอก rules นี้ไปวางใน Firebase Console → Firestore → Rules
 
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ===== Users =====
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'id','username','email','levelsCompleted','levelClearCounts',
+          'gold','stats','lastActive','createdAt','dailyFarm'
+        ]);
     }
-    match /leaderboard/{entry} {
-      allow read: if true;
-      allow write: if request.auth != null;
+
+    // ===== Overall Leaderboard =====
+    match /leaderboards/{playerId} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == playerId
+        && request.resource.data.keys().hasOnly([
+          'playerId','username','characterName','characterClass','characterLevel',
+          'totalWins','totalDamage','totalBattleTime','levelsCompleted',
+          'endlessHighScore','endlessHighWave',
+          'campaignStartedAt','campaignClearedAt','campaignTotalTimeMs',
+          'lastUpdated'
+        ])
+        && (request.resource.data.get('totalWins', 0) >= 0)
+        && (request.resource.data.get('totalWins', 0) <= 10000)
+        && (request.resource.data.get('endlessHighScore', 0) >= 0)
+        && (request.resource.data.get('endlessHighScore', 0) <= 999999)
+        && (request.resource.data.get('endlessHighWave', 0) >= 0)
+        && (request.resource.data.get('endlessHighWave', 0) <= 9999)
+        && (request.resource.data.get('characterLevel', 1) >= 1)
+        && (request.resource.data.get('characterLevel', 1) <= 10);
     }
-    match /levelLeaderboard/{levelId}/entries/{entry} {
-      allow read: if true;
-      allow write: if request.auth != null;
+
+    // ===== Per-level Leaderboard =====
+    // docId = levelId_playerId
+    match /levelboards/{docId} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.data.playerId == request.auth.uid
+        && request.resource.data.won == true
+        && request.resource.data.keys().hasOnly([
+          'levelId','levelNumber','playerId','won',
+          'playerName','characterName','characterClass','characterLevel',
+          'timeMs','damageDealt','damageTaken','heroHPRemaining','heroHPPercent',
+          'timestamp'
+        ])
+        && (request.resource.data.get('timeMs', 0) >= 0)
+        && (request.resource.data.get('timeMs', 0) <= 3600000)
+        && (request.resource.data.get('damageDealt', 0) >= 0)
+        && (request.resource.data.get('damageTaken', 0) >= 0)
+        && (request.resource.data.get('characterLevel', 1) >= 1)
+        && (request.resource.data.get('characterLevel', 1) <= 10);
+    }
+
+    // ===== Endless Mode Leaderboard =====
+    match /endlessboards/{playerId} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == playerId
+        && request.resource.data.keys().hasOnly([
+          'playerId','username','characterClass','characterLevel',
+          'endlessHighScore','endlessHighWave','lastUpdated'
+        ])
+        && (request.resource.data.get('endlessHighScore', 0) >= 0)
+        && (request.resource.data.get('endlessHighScore', 0) <= 999999)
+        && (request.resource.data.get('endlessHighWave', 0) >= 0)
+        && (request.resource.data.get('endlessHighWave', 0) <= 9999);
     }
   }
 }
 ```
+
+> **หมายเหตุ:** หลังแก้ไข rules ต้อง deploy ด้วย `firebase deploy --only firestore:rules`
 
 ---
 
@@ -476,17 +535,25 @@ public/
 - [x] Version single source of truth — ดึงจาก `package.json` อัตโนมัติ
 - [x] MIT License + Team Credits
 
-### สิ่งที่ยังขาด
+### แผนพัฒนาในอนาคต
 
-- [ ] **Flowchart Save/Load per level** — วาดแล้วปิด → หาย (สำคัญสูงสุด)
-- [ ] Tooltip อธิบาย block แต่ละตัวเมื่อ hover
-- [ ] Sprite animation จริง (ปัจจุบันใช้ PNG static)
-- [ ] Mobile / Touch screen support
-- [ ] Achievement System (type พร้อมแล้ว ยังขาด UI + logic)
+ดู [ROADMAP.md](ROADMAP.md) สำหรับแผน LMS Platform เต็มรูปแบบ รวมถึงสิ่งที่ยังขาดและ Phase การพัฒนาถัดไป
 
 ---
 
 ## Changelog
+
+### v0.14.0 (มีนาคม 2026)
+
+- **Flowchart Save/Load** — บันทึก nodes/edges ต่อด่านใน Firestore โหลดกลับมาอัตโนมัติเมื่อเข้าด่านอีกครั้ง
+- **Tooltip บน Action Block** — hover บน node แสดงคำอธิบายสั้น ๆ ว่า block ทำอะไร
+- **Unit Tests (Vitest)** — 22 test cases ครอบคลุม FlowchartEngine (calcManaCost, calcTurnMana, executeEnemyAction, resolveHeroStatuses)
+- **GitHub Actions CI** — รัน TypeScript check → Unit Test → Build อัตโนมัติทุก push/PR ไป `master`
+- **Firestore Security Rules** — เพิ่ม field validation (`hasOnly`), range check (score/wave/level), ป้องกันเขียน record แทนคนอื่น
+- **Firebase Emulator + Rules Test** — `npm run test:rules` ทดสอบ rules โดยไม่แตะ database จริง
+- **Sentry Error Tracking** — จับ runtime error จาก production อัตโนมัติ (ต้องตั้งค่า `VITE_SENTRY_DSN`)
+- **ROADMAP.md** — แผน LMS Platform เต็มรูปแบบ Phase 1–5 รองรับประถม–ปวส.
+- **Firebase CLI** — อัปเดท 14.9.0 → 15.11.0
 
 ### v0.13.0 (มีนาคม 2026)
 

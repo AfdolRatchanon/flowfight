@@ -7,7 +7,10 @@ import { useGameStore } from '../../stores/gameStore';
 import { useFlowchartStore } from '../../stores/flowchartStore';
 import { useShopStore } from '../../stores/shopStore';
 import ShopScreen from '../Shop/ShopScreen';
-import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry, saveShopData, saveEndlessLeaderboardEntry, saveEndlessProgress, recordDailyLevelWin } from '../../services/authService';
+import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry, saveShopData, saveEndlessLeaderboardEntry, saveEndlessProgress, recordDailyLevelWin, saveFlowchart, loadFlowchart, saveAchievements } from '../../services/authService';
+import { checkAchievements } from '../../utils/achievements';
+import type { Achievement } from '../../utils/achievements';
+import AchievementToast from '../UI/AchievementToast';
 import type { LevelBattleStats } from '../../services/authService';
 import { gainXP, levelProgressPct, xpToNextLevel, LEVEL_XP_TABLE, MAX_LEVEL } from '../../utils/levelSystem';
 import FlowchartEditor from '../FlowchartEditor/FlowchartEditor';
@@ -409,7 +412,7 @@ export default function BattleScreen() {
   const { character, player, setPlayer, setCharacter, dailyFarmPlays, setDailyFarmPlays } = useGameStore();
   const { status, heroHP, heroMaxHP, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, heroBurnRounds, heroFreezeRounds, heroPoisonRounds, enemyStunnedRounds, enemyBurnRounds, enemyFreezeRounds, enemyPoisonRounds, heroBerserkRounds, healCharges, comboCount, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
   const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold, addGold, setPotions, setAntidotes } = useShopStore();
-  const { validationError, nodes: flowNodes, clearToStartEnd } = useFlowchartStore();
+  const { validationError, nodes: flowNodes, edges: flowEdges, setNodes: setFlowNodes, setEdges: setFlowEdges, clearToStartEnd } = useFlowchartStore();
   const [speedIdx, setSpeedIdx] = useState(1);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
@@ -485,6 +488,8 @@ export default function BattleScreen() {
   const enemyIntentionLabel = enemyIntentionActions.map((a) => intentionLabelMap[a] ?? '👁️').join(' → ');
 
   // Animation state
+  const [isMuted, setIsMuted] = useState(() => soundManager.isMuted());
+  const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
   const [heroAnimKey, setHeroAnimKey] = useState(0);
   const [enemyAnimKey, setEnemyAnimKey] = useState(0);
   const [heroAnim, setHeroAnim] = useState('');
@@ -642,7 +647,7 @@ export default function BattleScreen() {
     }
   };
 
-  // Init battle on level change
+  // Init battle on level change + load saved flowchart
   useEffect(() => {
     battleReady.current = false;
     if (level) {
@@ -657,8 +662,31 @@ export default function BattleScreen() {
       startBattle(getBoostedChar() as any, level.enemy as any, level.id);
       applyInitialHeroState(level);
       battleReady.current = true;
+
+      // โหลด flowchart ที่บันทึกไว้ (ถ้ามี)
+      if (player?.id && !isEndless) {
+        loadFlowchart(player.id, level.id).then((saved) => {
+          if (saved) {
+            setFlowNodes(saved.nodes);
+            setFlowEdges(saved.edges);
+          }
+        }).catch(() => {});
+      }
     }
   }, [levelId]);
+
+  // Auto-save flowchart เมื่อ nodes/edges เปลี่ยน (debounce 800ms)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!player?.id || isEndless || flowNodes.length === 0) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      saveFlowchart(player.id, levelId ?? '', flowNodes, flowEdges).catch(() => {});
+    }, 800);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [flowNodes, flowEdges]);
 
   // Trigger animation + floating numbers on each new log entry
   useEffect(() => {
@@ -957,6 +985,25 @@ export default function BattleScreen() {
             const wasFirstClear = !player.levelsCompleted?.includes(level.id);
             saveLeaderboardEntry(mergedPlayer, savedChar, battleStats, wasFirstClear).catch((e) => console.error('[Leaderboard] overall save error:', e));
             saveLevelLeaderboardEntry(mergedPlayer, savedChar, battleStats).catch((e) => console.error('[Leaderboard] level save error:', e));
+
+            // ── Achievement check ──
+            const actionsUsed = flowNodes
+              .filter((n) => n.type === 'action')
+              .map((n) => n.data.actionType ?? '');
+            const unlocked = checkAchievements({
+              levelId: level.id,
+              won: true,
+              turnCount: currentTurn,
+              heroHPPercent: Math.round((heroHP / heroMaxHP) * 100),
+              damageTaken: totalDamageTaken,
+              wave: waveNumber,
+              actionsUsed,
+              player: mergedPlayer,
+            });
+            if (unlocked.length > 0) {
+              setNewAchievements(unlocked);
+              saveAchievements(player.id, unlocked.map((a) => a.id)).catch(() => {});
+            }
           }
         }
       }).catch(() => { });
@@ -1099,6 +1146,12 @@ export default function BattleScreen() {
   return (
     <>
       <style>{ANIM_CSS}</style>
+      {newAchievements.length > 0 && (
+        <AchievementToast
+          achievements={newAchievements}
+          onDone={() => setNewAchievements([])}
+        />
+      )}
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: colors.bg, overflow: 'hidden' }}>
 
         {/* ===== BATTLE ARENA ===== */}
@@ -1153,7 +1206,18 @@ export default function BattleScreen() {
               </div>
             )}
 
-            <BagButton compact onShopClick={() => { setShopFromBag(true); setShowShop(true); }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => { const next = !isMuted; soundManager.setMuted(next); setIsMuted(next); }}
+                title={isMuted ? 'เปิดเสียง' : 'ปิดเสียง'}
+                style={{
+                  background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)',
+                  backdropFilter: 'blur(6px)', color: 'rgba(255,255,255,0.9)',
+                  padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 16, lineHeight: 1,
+                }}
+              >{isMuted ? '🔇' : '🔊'}</button>
+              <BagButton compact onShopClick={() => { setShopFromBag(true); setShowShop(true); }} />
+            </div>
           </div>
 
           {/* Level info bar — compact */}
@@ -1235,17 +1299,17 @@ export default function BattleScreen() {
                     fontWeight: 700, fontSize: 'clamp(12px,1.3vw,17px)', boxShadow: isExecuting ? '0 4px 12px rgba(220,38,38,0.4)' : 'none',
                   }}>⏹</button>
                 </div>
-                <div style={{ display: 'flex', gap: 2, alignItems: 'center', width: '100%', justifyContent: 'center' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'clamp(7px,0.8vw,11px)' }}>ช้า</span>
+                <div style={{ display: 'flex', gap: 2, alignItems: 'center', width: '100%', justifyContent: 'center', minWidth: 0 }}>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(6px,0.7vw,10px)', flexShrink: 1, minWidth: 0, overflow: 'hidden' }}>ช้า</span>
                   {SPEED_LEVELS.map((s, i) => (
                     <button key={i} onClick={() => setSpeedIdx(i)} disabled={isExecuting} style={{
                       width: 'clamp(20px,2.2vw,30px)', height: 'clamp(16px,1.8vh,24px)', borderRadius: 3, border: 'none',
                       background: speedIdx === i ? 'linear-gradient(135deg,#e94560,#7c3aed)' : 'rgba(255,255,255,0.15)',
                       color: speedIdx === i ? '#fff' : 'rgba(255,255,255,0.75)',
-                      fontSize: 'clamp(7px,0.8vw,11px)', fontWeight: 700, cursor: isExecuting ? 'not-allowed' : 'pointer',
+                      fontSize: 'clamp(7px,0.8vw,11px)', fontWeight: 700, cursor: isExecuting ? 'not-allowed' : 'pointer', flexShrink: 0,
                     }}>{s.label}</button>
                   ))}
-                  <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'clamp(7px,0.8vw,11px)' }}>เร็ว</span>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(6px,0.7vw,10px)', flexShrink: 1, minWidth: 0, overflow: 'hidden' }}>เร็ว</span>
                 </div>
                 {validationError && <p style={{ color: '#f87171', fontSize: 'clamp(8px,0.9vw,12px)', maxWidth: '100%', textAlign: 'center', margin: 0 }}>{validationError}</p>}
               </div>

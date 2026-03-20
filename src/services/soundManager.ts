@@ -86,10 +86,10 @@ const VOICE_MAP: Record<VoiceKey, string> = {
 class SoundManager {
   private bgmAudio: HTMLAudioElement | null = null;
   private currentBGMKey: BGMKey | null = null;
-  private sfxVolume = 0.55;
-  private bgmVolume = 0.3;
+  private sfxVolume = 0.6;
+  private bgmVolume = 0.2;
   private muted = false;
-  private voiceVolume = 0.7;
+  private voiceVolume = 0.45;
 
   constructor() {
     const saved = localStorage.getItem('ff_sound');

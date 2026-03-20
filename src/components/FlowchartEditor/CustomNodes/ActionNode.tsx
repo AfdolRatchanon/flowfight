@@ -2,6 +2,30 @@ import { Handle, Position } from 'reactflow';
 import { useFlowchartStore } from '../../../stores/flowchartStore';
 import { BLOCK_MANA_COST } from '../../../engines/FlowchartEngine';
 
+const ACTION_TOOLTIPS: Record<string, string> = {
+  attack:        'โจมตีศัตรู — ดาเมจปกติตาม ATK',
+  power_strike:  'โจมตีหนัก — ดาเมจ 2× แต่ใช้ 💎 มากกว่า',
+  dodge:         'หลบการโจมตี — ลดดาเมจที่รับ 65% ใน turn นี้',
+  cast_spell:    'ร่ายคาถา — ดาเมจสูง ทะลุ Armor',
+  heal:          'ฟื้นฟู HP — ใช้ได้สูงสุด 3 ครั้ง/การต่อสู้',
+  berserk:       'คลั่ง — ATK +50%, รับดาเมจ -20% เป็นเวลา 3 turn',
+  use_potion:    'ใช้ยา — ฟื้น HP จำนวนมาก (จาก inventory)',
+  use_antidote:  'ใช้ยาถอนพิษ — ลบสถานะ Poison/Burn',
+  debug_block:   'Debug — ลบ Virus ออกจาก Flowchart',
+  shield:        '[Knight] ป้องกัน — ลดดาเมจที่รับ turn นี้',
+  counter:       '[Knight] สวนกลับ — โจมตีเมื่อถูกโจมตี',
+  war_cry:       '[Knight] ตะโกนรบ — buff ทีมและ debuff ศัตรู',
+  fireball:      '[Mage] ลูกไฟ — ดาเมจสูง + Burn 3 turn',
+  frost_nova:    '[Mage] น้ำแข็ง — Freeze ศัตรู 2 turn',
+  arcane_surge:  '[Mage] Arcane — ดาเมจสูงมาก ทะลุทุก Defense',
+  backstab:      '[Rogue] แทงหลัง — โจมตีสูงมากถ้าศัตรูไม่ทัน',
+  poison_strike: '[Rogue] พิษ — โจมตี + Poison ศัตรู 5 turn',
+  shadow_step:   '[Rogue] เงา — เพิ่มโอกาส dodge และ ATK turn นี้',
+  whirlwind:     '[Barbarian] ลมหมุน — โจมตี AoE ทุกศัตรู',
+  bloodthirst:   '[Barbarian] โหยหาเลือด — โจมตีและดูด HP คืน',
+  battle_cry:    '[Barbarian] คำรามสงคราม — buff ATK สูงสุด 3 turn',
+};
+
 const ACTION_ICONS: Record<string, string> = {
   attack:       '⚔️',
   power_strike: '💥',
@@ -69,9 +93,11 @@ export default function ActionNode({
   const active = data.isActive;
   const icon = ACTION_ICONS[data.actionType ?? ''] ?? '▶';
   const cost = BLOCK_MANA_COST[data.actionType ?? ''] ?? 1;
+  const tooltip = ACTION_TOOLTIPS[data.actionType ?? ''];
 
   return (
     <div
+      title={tooltip}
       style={{
         position: 'relative',
         width: 180,

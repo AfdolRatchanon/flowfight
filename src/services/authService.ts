@@ -304,6 +304,8 @@ export async function saveLevelLeaderboardEntry(
       );
       await setDoc(ref, {
         ...prev,
+        playerId: player.id,
+        won: true,
         playerName: player.username ?? player.email ?? prev.playerName ?? 'Unknown',
         characterName: character.name ?? prev.characterName ?? 'Unknown',
         damageTaken: newTaken,
@@ -320,6 +322,7 @@ export async function saveLevelLeaderboardEntry(
 
   await setDoc(ref, {
     playerId: player.id,
+    won: true,
     playerName: player.username ?? player.email ?? 'Unknown',
     characterName: character.name ?? 'Unknown',
     characterClass: character.class,
@@ -426,4 +429,83 @@ export async function saveEndlessLeaderboardEntry(
     totalDamageTaken: stats.damageTaken,
     timestamp: Date.now(),
   });
+}
+
+// ===== Flowchart Save/Load =====
+
+import type { FlowNode, FlowEdge } from '../types/game.types';
+
+/**
+ * บันทึก flowchart (nodes + edges) ของ user ต่อด่าน
+ * เก็บใน users/{uid}/flowcharts/{levelId}
+ * ลบ execution state และ virus node ออกก่อน save
+ */
+export async function saveFlowchart(
+  uid: string,
+  levelId: string,
+  nodes: FlowNode[],
+  edges: FlowEdge[],
+): Promise<void> {
+  // กรอง virus node และ execution state ออกก่อน save
+  const cleanNodes = nodes
+    .filter((n) => !n.data.isVirus)
+    .map((n) => ({
+      id: n.id, type: n.type,
+      position: n.position,
+      data: {
+        label: n.data.label,
+        actionType: n.data.actionType,
+        conditionType: n.data.conditionType,
+        threshold: n.data.threshold,
+        // ไม่ save isActive, isVirus, glow state
+      },
+    }));
+
+  const cleanEdges = edges
+    .filter((e) => !e.id.includes('virus'))
+    .map((e) => ({
+      id: e.id, source: e.source, target: e.target,
+      sourceHandle: e.sourceHandle ?? null,
+      label: e.label ?? null,
+    }));
+
+  const ref = doc(db, 'users', uid, 'flowcharts', levelId);
+  await setDoc(ref, {
+    nodes: cleanNodes,
+    edges: cleanEdges,
+    savedAt: Date.now(),
+  });
+}
+
+/**
+ * โหลด flowchart ที่เคย save ไว้
+ * คืน null ถ้าไม่เคย save
+ */
+export async function loadFlowchart(
+  uid: string,
+  levelId: string,
+): Promise<{ nodes: FlowNode[]; edges: FlowEdge[] } | null> {
+  const ref = doc(db, 'users', uid, 'flowcharts', levelId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    nodes: (data.nodes ?? []) as FlowNode[],
+    edges: (data.edges ?? []) as FlowEdge[],
+  };
+}
+
+// ===== Achievement System =====
+
+/**
+ * บันทึก achievements ที่ปลดล็อคใหม่ไปยัง Firestore
+ * merge เข้ากับ achievements ที่มีอยู่แล้ว ไม่ overwrite
+ */
+export async function saveAchievements(uid: string, newIds: string[]): Promise<void> {
+  if (newIds.length === 0) return;
+  const ref = doc(db, 'users', uid);
+  const snap = await getDoc(ref);
+  const existing: string[] = snap.exists() ? (snap.data().achievements ?? []) : [];
+  const merged = Array.from(new Set([...existing, ...newIds]));
+  await setDoc(ref, { achievements: merged }, { merge: true });
 }

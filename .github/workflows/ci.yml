@@ -1,0 +1,44 @@
+name: CI
+
+# รันทุกครั้งที่ push หรือเปิด Pull Request ไปที่ master
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. ดึง source code จาก repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. ติดตั้ง Node.js version 20
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # 3. ติดตั้ง dependencies จาก package-lock.json (เร็วกว่า npm install)
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. ตรวจ TypeScript — หากมี type error จะ fail ที่นี่
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      # 5. รัน Unit Tests — หาก test ใด fail จะ fail ที่นี่
+      - name: Run tests
+        run: npm test
+
+      # 6. Build production — ตรวจว่า bundle สำเร็จ
+      - name: Build
+        run: npm run build
+        env:
+          # ส่ง env ที่จำเป็นสำหรับ build (ไม่มี Firebase key จริงในนี้)
+          NODE_ENV: production
