@@ -2,6 +2,10 @@
 
 กฎและกระบวนการที่ใช้ทุกครั้งเมื่อทำงานในโปรเจกต์นี้
 
+> **บทบาท:** ผู้ใช้ = Product Owner (ออกคำสั่ง / approve)
+> Claude = ทุก role ที่เหลือ (SA, BA, Developer, QA, PM, Release Manager)
+> ดูกระบวนการเต็มได้ที่ [PROCESS.md](PROCESS.md)
+
 ---
 
 ## Stack
