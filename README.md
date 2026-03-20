@@ -496,7 +496,7 @@ public/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026 | v0.15.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
+> อัปเดต: มีนาคม 2026 | v0.16.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -539,6 +539,10 @@ public/
 - [x] **Tooltip บน Action Block** — hover เพื่อดูคำอธิบายแต่ละ action
 - [x] **Mute button** — ปุ่ม 🔊/🔇 ใน battle header ปิด/เปิดเสียงได้ทันที
 - [x] **Learning Objective popup** — หลังชนะด่านแสดง "คุณเพิ่งเรียนรู้..." พร้อม icon และชื่อ concept
+- [x] **Sprite idle animation** — hero/enemy ลอยขึ้นลงเมื่อ idle, hero กระพริบแดงเมื่อ HP < 30%
+- [x] **Keyboard shortcuts** — Space = Run, R = Retry, Esc = Stop
+- [x] **Flowchart Undo/Redo** — Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z (history 50 steps)
+- [x] **Volume slider** — popup จากปุ่ม 🔊 ปรับ BGM และ SFX แยกกัน
 
 ### แผนพัฒนาในอนาคต
 
@@ -547,6 +551,13 @@ public/
 ---
 
 ## Changelog
+
+### v0.16.0 (มีนาคม 2026)
+
+- **Keyboard shortcuts** — Space = Run flowchart, R = Retry (หลังชนะ/แพ้), Esc = Stop execution
+- **Flowchart Undo/Redo** — Ctrl+Z ย้อนกลับ, Ctrl+Y / Ctrl+Shift+Z ทำซ้ำ (history 50 steps, รองรับ add/remove node & edge)
+- **Volume slider** — คลิกปุ่ม 🔊 เพื่อเปิด popup ปรับ BGM และ SFX แยกกัน พร้อม mute toggle
+- **Sprite idle animation** — hero ลอยขึ้นลง, enemy ลอยพร้อม rotate เล็กน้อย, hero กระพริบแดงเมื่อ HP < 30%
 
 ### v0.15.0 (มีนาคม 2026)
 

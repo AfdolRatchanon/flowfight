@@ -162,6 +162,20 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
   }, [shieldRequiredTypes]);
   useEffect(() => { setEdges(storeEdges as Edge[]); }, [storeEdges]);
 
+  // Undo / Redo keyboard shortcuts
+  useEffect(() => {
+    const undo = useFlowchartStore.getState().undo;
+    const redo = useFlowchartStore.getState().redo;
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Close menu on outside click or Escape
   useEffect(() => {
     if (!ctxMenu) return;

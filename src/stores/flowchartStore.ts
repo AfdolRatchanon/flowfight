@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type { FlowNode, FlowEdge, ExecutionStep } from '../types/game.types';
 
+type HistoryEntry = { nodes: FlowNode[]; edges: FlowEdge[] };
+const MAX_HISTORY = 50;
+
 interface FlowchartState {
   nodes: FlowNode[];
   edges: FlowEdge[];
@@ -18,8 +21,15 @@ interface FlowchartState {
   activeHandleKey: string | null; // `${nodeId}::${handleId}` — which handle is highlighted
   setActiveHandleKey: (key: string | null) => void;
 
-  setNodes: (nodes: FlowNode[]) => void;
-  setEdges: (edges: FlowEdge[]) => void;
+  // Undo/Redo history
+  _past: HistoryEntry[];
+  _future: HistoryEntry[];
+  undo: () => void;
+  redo: () => void;
+  _pushHistory: () => void;
+
+  setNodes: (nodes: FlowNode[], recordHistory?: boolean) => void;
+  setEdges: (edges: FlowEdge[], recordHistory?: boolean) => void;
   addNode: (node: FlowNode) => void;
   removeNode: (nodeId: string) => void;
   addEdge: (edge: FlowEdge) => void;
@@ -63,29 +73,71 @@ export const useFlowchartStore = create<FlowchartState>((set, get) => ({
   visitedNodeIds: [],
   visitedConditionResults: {},
   shieldGlowTypes: [],
+  _past: [],
+  _future: [],
 
   setShieldGlowTypes: (types) => set({ shieldGlowTypes: types }),
   activeHandleKey: null,
   setActiveHandleKey: (key) => set({ activeHandleKey: key }),
-  setNodes: (nodes) => set({ nodes }),
-  setEdges: (edges) => set({ edges }),
 
-  addNode: (node) => set((state) => ({
-    nodes: [...state.nodes, node],
+  _pushHistory: () => set((state) => ({
+    _past: [...state._past, { nodes: state.nodes, edges: state.edges }].slice(-MAX_HISTORY),
+    _future: [],
   })),
 
-  removeNode: (nodeId) => set((state) => ({
-    nodes: state.nodes.filter((n) => n.id !== nodeId),
-    edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
-  })),
+  undo: () => set((state) => {
+    if (state._past.length === 0) return state;
+    const prev = state._past[state._past.length - 1];
+    return {
+      nodes: prev.nodes,
+      edges: prev.edges,
+      _past: state._past.slice(0, -1),
+      _future: [{ nodes: state.nodes, edges: state.edges }, ...state._future].slice(0, MAX_HISTORY),
+    };
+  }),
 
-  addEdge: (edge) => set((state) => ({
-    edges: [...state.edges, edge],
-  })),
+  redo: () => set((state) => {
+    if (state._future.length === 0) return state;
+    const next = state._future[0];
+    return {
+      nodes: next.nodes,
+      edges: next.edges,
+      _past: [...state._past, { nodes: state.nodes, edges: state.edges }].slice(-MAX_HISTORY),
+      _future: state._future.slice(1),
+    };
+  }),
 
-  removeEdge: (edgeId) => set((state) => ({
-    edges: state.edges.filter((e) => e.id !== edgeId),
-  })),
+  setNodes: (nodes, recordHistory = false) => {
+    if (recordHistory) get()._pushHistory();
+    set({ nodes });
+  },
+  setEdges: (edges, recordHistory = false) => {
+    if (recordHistory) get()._pushHistory();
+    set({ edges });
+  },
+
+  addNode: (node) => {
+    get()._pushHistory();
+    set((state) => ({ nodes: [...state.nodes, node] }));
+  },
+
+  removeNode: (nodeId) => {
+    get()._pushHistory();
+    set((state) => ({
+      nodes: state.nodes.filter((n) => n.id !== nodeId),
+      edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+    }));
+  },
+
+  addEdge: (edge) => {
+    get()._pushHistory();
+    set((state) => ({ edges: [...state.edges, edge] }));
+  },
+
+  removeEdge: (edgeId) => {
+    get()._pushHistory();
+    set((state) => ({ edges: state.edges.filter((e) => e.id !== edgeId) }));
+  },
 
   setExecutionLog: (executionLog) => set({ executionLog }),
   setCurrentStep: (currentStepIndex) => set({ currentStepIndex }),

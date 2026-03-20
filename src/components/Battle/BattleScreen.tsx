@@ -22,6 +22,7 @@ import TutorialGuide from '../Tutorial/TutorialGuide';
 import type { TutorialTarget } from '../Tutorial/TutorialGuide';
 import BagButton from '../UI/BagButton';
 import { soundManager } from '../../services/soundManager';
+import type { Character, Enemy, RequiredBlock } from '../../types/game.types';
 
 // ===== Error Boundary for FlowchartEditor =====
 class FlowchartErrorBoundary extends Component<
@@ -502,6 +503,9 @@ export default function BattleScreen() {
 
   // Animation state
   const [isMuted, setIsMuted] = useState(() => soundManager.isMuted());
+  const [showVolumePanel, setShowVolumePanel] = useState(false);
+  const [bgmVol, setBgmVol] = useState(() => soundManager.getBGMVolume());
+  const [sfxVol, setSfxVol] = useState(() => soundManager.getSFXVolume());
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
   const [heroAnimKey, setHeroAnimKey] = useState(0);
   const [enemyAnimKey, setEnemyAnimKey] = useState(0);
@@ -852,6 +856,34 @@ export default function BattleScreen() {
       setShowWaveClear(true);
     }
   }, [isEndless, status]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (!isExecuting && battlePhase === 'planning' && status !== 'victory' && status !== 'defeat' && level) {
+          battleStartTime.current = Date.now();
+          setBattlePhase('running');
+          executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as RequiredBlock[], turnManaMax);
+        }
+      } else if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) {
+        if ((status === 'victory' || status === 'defeat') && level) {
+          setLevelUpData(null); setXpGained(0); setBonusXpGained(0); setXpMultiplierPct(100); setMissingBlocks([]);
+          progressSaved.current = false;
+          setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
+          liveBattleStateRef.current = null;
+          restartBattle(getBoostedChar() as unknown as Character, level.enemy as unknown as Enemy, level.id); applyInitialHeroState(level);
+        }
+      } else if (e.code === 'Escape') {
+        if (isExecuting) stopBattle();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isExecuting, battlePhase, status, speedIdx, turnManaMax]);
 
   // Play victory/defeat SFX
   useEffect(() => {
@@ -1235,16 +1267,51 @@ export default function BattleScreen() {
               </div>
             )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
               <button
-                onClick={() => { const next = !isMuted; soundManager.setMuted(next); setIsMuted(next); }}
-                title={isMuted ? 'เปิดเสียง' : 'ปิดเสียง'}
+                onClick={() => setShowVolumePanel((v) => !v)}
+                title="ตั้งค่าเสียง"
                 style={{
                   background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)',
                   backdropFilter: 'blur(6px)', color: 'rgba(255,255,255,0.9)',
                   padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 16, lineHeight: 1,
                 }}
               >{isMuted ? '🔇' : '🔊'}</button>
+              {showVolumePanel && (
+                <div style={{
+                  position: 'absolute', top: '110%', right: 0, zIndex: 500,
+                  background: 'rgba(15,15,30,0.96)', backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12,
+                  padding: '12px 16px', minWidth: 180, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                  display: 'flex', flexDirection: 'column', gap: 10,
+                }}>
+                  {/* Mute toggle */}
+                  <button onClick={() => { const next = !isMuted; soundManager.setMuted(next); setIsMuted(next); }}
+                    style={{ background: isMuted ? 'rgba(239,68,68,0.2)' : 'rgba(74,222,128,0.15)', border: `1px solid ${isMuted ? 'rgba(239,68,68,0.4)' : 'rgba(74,222,128,0.3)'}`, borderRadius: 8, color: isMuted ? '#f87171' : '#4ade80', fontSize: 12, fontWeight: 700, padding: '5px 10px', cursor: 'pointer' }}>
+                    {isMuted ? '🔇 ปิดเสียง' : '🔊 เปิดเสียง'}
+                  </button>
+                  {/* BGM slider */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>BGM</span>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{Math.round(bgmVol * 100)}%</span>
+                    </div>
+                    <input type="range" min={0} max={1} step={0.05} value={bgmVol}
+                      onChange={(e) => { const v = parseFloat(e.target.value); setBgmVol(v); soundManager.setBGMVolume(v); }}
+                      style={{ width: '100%', accentColor: '#a78bfa' }} />
+                  </div>
+                  {/* SFX slider */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>SFX</span>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{Math.round(sfxVol * 100)}%</span>
+                    </div>
+                    <input type="range" min={0} max={1} step={0.05} value={sfxVol}
+                      onChange={(e) => { const v = parseFloat(e.target.value); setSfxVol(v); soundManager.setSFXVolume(v); }}
+                      style={{ width: '100%', accentColor: '#a78bfa' }} />
+                  </div>
+                </div>
+              )}
               <BagButton compact onShopClick={() => { setShopFromBag(true); setShowShop(true); }} />
             </div>
           </div>
