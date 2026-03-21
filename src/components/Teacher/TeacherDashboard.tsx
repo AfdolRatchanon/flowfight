@@ -59,9 +59,14 @@ export default function TeacherDashboard() {
 
   async function handleCreateAssignment() {
     if (!newAssTitle.trim() || newAssLevels.length === 0 || !newAssDeadline || !player || !selectedRoom) return;
+    const deadlineMs = new Date(newAssDeadline).getTime();
+    if (deadlineMs <= Date.now()) {
+      alert('กรุณากำหนดวันส่งงานในอนาคต');
+      return;
+    }
     setCreatingAss(true);
     try {
-      await createAssignment(selectedRoom, player.id, newAssTitle.trim(), newAssLevels, new Date(newAssDeadline).getTime());
+      await createAssignment(selectedRoom, player.id, newAssTitle.trim(), newAssLevels, deadlineMs);
       setAssignments(await getClassroomAssignments(selectedRoom));
       setNewAssTitle(''); setNewAssLevels([]); setNewAssDeadline('');
     } finally { setCreatingAss(false); }

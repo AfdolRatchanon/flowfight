@@ -91,7 +91,12 @@ service cloud.firestore {
           'id','classroomCode','teacherId','title','levelIds','deadline','createdAt'
         ])
         && request.resource.data.levelIds.size() > 0
-        && request.resource.data.deadline is int;
+        && request.resource.data.levelIds.size() <= 20
+        && request.resource.data.deadline is int
+        && request.resource.data.deadline > request.time.toMillis()
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200;
 
       allow delete: if request.auth != null
         && (resource.data.teacherId == request.auth.uid || isAdmin());

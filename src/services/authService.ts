@@ -52,10 +52,14 @@ export async function loginWithGoogle(): Promise<User> {
 }
 
 export async function loginAnonymous(firstName: string, surname: string): Promise<User> {
+  const fn = firstName.trim();
+  const sn = surname.trim();
+  if (!fn || fn.length > 50) throw new Error('ชื่อต้องมี 1-50 ตัวอักษร');
+  if (!sn || sn.length > 50) throw new Error('นามสกุลต้องมี 1-50 ตัวอักษร');
   const result = await signInAnonymously(auth);
-  const displayName = `${firstName} ${surname}`.trim();
+  const displayName = `${fn} ${sn}`;
   await updateProfile(result.user, { displayName });
-  await createPlayerProfile(result.user, { username: displayName, firstName, surname, email: '', isAnonymous: true });
+  await createPlayerProfile(result.user, { username: displayName, firstName: fn, surname: sn, email: '', isAnonymous: true });
   return result.user;
 }
 
@@ -115,6 +119,10 @@ export async function getPlayerProfile(uid: string): Promise<Player | null> {
 }
 
 export async function savePlayerProgress(uid: string, levelId: string, won: boolean, username?: string): Promise<Player | null> {
+  // Validate levelId against known levels to prevent arbitrary data injection
+  const isKnownLevel = LEVELS.some((l) => l.id === levelId) || levelId === 'endless';
+  if (!isKnownLevel) throw new Error(`Invalid levelId: ${levelId}`);
+
   const ref = doc(db, 'users', uid);
   const snap = await getDoc(ref);
 
@@ -370,6 +378,7 @@ export async function getDailyFarmPlays(uid: string): Promise<Record<string, num
 
 /** บันทึกการชนะด่าน level รายวัน → คืนค่า plays วันนี้หลังนับแล้ว */
 export async function recordDailyLevelWin(uid: string, levelId: string): Promise<number> {
+  if (!LEVELS.some((l) => l.id === levelId)) throw new Error(`Invalid levelId: ${levelId}`);
   const ref = doc(db, 'users', uid);
   const snap = await getDoc(ref);
   const data = snap.exists() ? snap.data() : {};
