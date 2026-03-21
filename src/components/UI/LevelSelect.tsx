@@ -158,47 +158,6 @@ export default function LevelSelect() {
 
         <div className="level-grid">
 
-          {/* ── Endless Mode Card ──────────────────────────────────────────── */}
-          {/* <div
-            onClick={() => navigate('/battle/' + ENDLESS_LEVEL.id)}
-            style={{
-              background: 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(239,68,68,0.08))',
-              border: '1px solid rgba(124,58,237,0.4)',
-              borderRadius: 16, padding: '18px 22px',
-              cursor: 'pointer', transition: 'all 0.2s', position: 'relative', overflow: 'hidden',
-              gridColumn: '1 / -1',
-            }}
-            onMouseEnter={(e) => {
-              const d = e.currentTarget as HTMLDivElement;
-              d.style.background = 'linear-gradient(135deg, rgba(124,58,237,0.22), rgba(239,68,68,0.14))';
-              d.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              const d = e.currentTarget as HTMLDivElement;
-              d.style.background = 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(239,68,68,0.08))';
-              d.style.transform = 'none';
-            }}
-          >
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#7c3aed,#e94560)', borderRadius: '16px 0 0 16px' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-              <div style={{ fontSize: 38, width: 48, textAlign: 'center' }}>∞</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ background: 'rgba(124,58,237,0.25)', color: '#c4b5fd', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, border: '1px solid rgba(124,58,237,0.5)' }}>
-                    ENDLESS MODE
-                  </span>
-                  <DifficultyStars n={5} />
-                </div>
-                <h3 style={{ color: colors.text, fontWeight: 700, fontSize: 16, margin: '0 0 3px' }}>{ENDLESS_LEVEL.name}</h3>
-                <p style={{ color: colors.textSub, fontSize: 12, margin: 0 }}>{ENDLESS_LEVEL.description}</p>
-              </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ color: '#c4b5fd', fontSize: 12, fontWeight: 600, margin: '0 0 2px' }}>Wave × Score</p>
-                <p style={{ color: '#4ade80', fontSize: 11, margin: 0 }}>ไม่จำกัด</p>
-              </div>
-            </div>
-          </div> */}
-
           {/* ── Level Cards ────────────────────────────────────────────────── */}
           {LEVELS.map((level, i) => {
             const done = completed.includes(level.id);

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { logout } from '../../services/authService';
 import {
   getTeacherCodes, createTeacherCode, deleteTeacherCode,
@@ -13,6 +14,7 @@ import VolumeButton from '../UI/VolumeButton';
 export default function AdminDashboard() {
   const { colors } = useTheme();
   const { player } = useGameStore();
+  const navigate = useNavigate();
 
   const [codes, setCodes] = useState<TeacherCodeDoc[]>([]);
   const [newCode, setNewCode] = useState('');
@@ -34,12 +36,17 @@ export default function AdminDashboard() {
   }
 
   async function loadStats() {
-    const [usersSnap, classSnap] = await Promise.all([
-      getDocs(collection(db, 'users')),
-      getDocs(collection(db, 'classrooms')),
-    ]);
-    setUserCount(usersSnap.size);
-    setClassroomCount(classSnap.size);
+    try {
+      const [usersSnap, classSnap] = await Promise.all([
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'classrooms')),
+      ]);
+      setUserCount(usersSnap.size);
+      setClassroomCount(classSnap.size);
+    } catch {
+      setUserCount(-1);
+      setClassroomCount(-1);
+    }
   }
 
   async function handleCreateCode() {
@@ -77,13 +84,19 @@ export default function AdminDashboard() {
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-        <div>
-          <h1 style={{ fontFamily: "'Cinzel', serif", color: '#FBBF24', fontSize: 26, margin: 0 }}>
-            Admin Dashboard
-          </h1>
-          <p style={{ color: colors.textMuted, fontSize: 13, margin: '4px 0 0' }}>
-            {player?.username} · role: admin
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => navigate('/')} style={{
+            background: colors.bgSurface, border: `1px solid ${colors.borderSubtle}`,
+            color: colors.text, width: 40, height: 40, borderRadius: 10, cursor: 'pointer', fontSize: 18, flexShrink: 0,
+          }}>←</button>
+          <div>
+            <h1 style={{ fontFamily: "'Cinzel', serif", color: '#FBBF24', fontSize: 26, margin: 0 }}>
+              Admin Dashboard
+            </h1>
+            <p style={{ color: colors.textMuted, fontSize: 13, margin: '4px 0 0' }}>
+              {player?.username} · role: admin
+            </p>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <VolumeButton variant="header" />
@@ -108,8 +121,8 @@ export default function AdminDashboard() {
             display: 'flex', flexDirection: 'column', gap: 4,
           }}>
             <span style={{ fontSize: 22 }}>{s.icon}</span>
-            <span style={{ color: '#FBBF24', fontSize: 28, fontWeight: 800 }}>
-              {s.value ?? '…'}
+            <span style={{ color: s.value === -1 ? '#f87171' : '#FBBF24', fontSize: 28, fontWeight: 800 }}>
+              {s.value === null ? '…' : s.value === -1 ? '?' : s.value}
             </span>
             <span style={{ color: colors.textMuted, fontSize: 12 }}>{s.label}</span>
           </div>
