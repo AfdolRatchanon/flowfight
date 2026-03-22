@@ -67,7 +67,7 @@ export default function SandboxMode() {
 
       {/* FlowchartEditor — ใช้ dummy levelId ที่ไม่มีจริง */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        <FlowchartEditor levelId="sandbox" isExecuting={false} />
+        <FlowchartEditor />
       </div>
     </div>
   );
