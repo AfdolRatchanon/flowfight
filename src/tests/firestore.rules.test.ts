@@ -146,27 +146,26 @@ describe('leaderboards/{playerId}', () => {
     const db = testEnv.authenticatedContext('user-a').firestore();
     await assertSucceeds(
       setDoc(doc(db, 'leaderboards/user-a'), {
-        playerId: 'user-a', username: 'A',
+        playerId: 'user-a', playerName: 'A',
         characterName: 'Hero', characterClass: 'knight', characterLevel: 5,
-        totalWins: 10, totalDamage: 500, totalBattleTime: 12000,
-        levelsCompleted: ['level_1'],
-        endlessHighScore: 100, endlessHighWave: 5,
-        lastUpdated: Date.now(),
+        experience: 500, levelReached: 5, levelsCompleted: 3,
+        totalKills: 10, totalPlayTime: 12000,
+        totalDamageDealt: 500, totalDamageTaken: 100,
+        gameMode: 'normal', lastUpdated: Date.now(),
       })
     );
   });
 
-  it('endlessHighScore เกิน 999999 ไม่ได้', async () => {
+  it('characterLevel เกิน 10 ไม่ได้ (leaderboards)', async () => {
     const db = testEnv.authenticatedContext('user-a').firestore();
     await assertFails(
       setDoc(doc(db, 'leaderboards/user-a'), {
-        playerId: 'user-a', username: 'A',
-        characterName: 'Hero', characterClass: 'knight', characterLevel: 5,
-        totalWins: 10, totalDamage: 500, totalBattleTime: 12000,
-        levelsCompleted: [],
-        endlessHighScore: 9999999, // โกง!
-        endlessHighWave: 5,
-        lastUpdated: Date.now(),
+        playerId: 'user-a', playerName: 'A',
+        characterName: 'Hero', characterClass: 'knight', characterLevel: 99, // โกง!
+        experience: 500, levelReached: 5, levelsCompleted: 3,
+        totalKills: 10, totalPlayTime: 12000,
+        totalDamageDealt: 500, totalDamageTaken: 100,
+        gameMode: 'normal', lastUpdated: Date.now(),
       })
     );
   });

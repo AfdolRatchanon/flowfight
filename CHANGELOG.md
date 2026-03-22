@@ -4,6 +4,25 @@
 
 ---
 
+### v0.25.0 (มีนาคม 2026)
+
+**Sandbox Mode — Flowgorithm-style Flowchart Editor**
+- **SandboxEditor** (`src/components/Sandbox/SandboxEditor.tsx`) — editor แบบ Flowgorithm แยกระบบจากเกมทั้งหมด คลิก canvas = เพิ่ม node, คลิก node/edge = เมนู Copy/Delete, ลาก handle = เชื่อม
+- **sandboxEngine** (`src/components/Sandbox/sandboxEngine.ts`) — Recursive Descent Parser รองรับ arithmetic, comparison, logical operators, string concat, boolean literals; `sandboxStepper` generator สำหรับ step-by-step execution
+- **Custom nodes** — Start/End (oval), Process (rectangle), Decision (diamond + YES/NO labels), Input/Output (parallelogram) — ทุก node มี width 180px
+- **Input Dialog** — ก่อน Run จะถามค่า input variables ทุกตัว
+- **Step Execution** — speed selector x1(1.2s)–x5(20ms), ⊳ Step (ทีละขั้น), ▶ Auto / ⏸ Pause / ▶ Resume, ■ Stop
+- **Live highlight** — node กำลัง execute → white glow; node ผ่านแล้ว → colored glow; status pill แสดง "Running... / Step N / Done (N steps)"
+- **Output panel** — แสดง VARIABLES + CONSOLE live ขณะรัน
+
+### v0.24.1 (มีนาคม 2026)
+
+**Tests & Build Fix**
+- **constants.test.ts** — 35 unit tests ตรวจ LEVELS integrity ครบ 30 ด่าน (id/number consistency, required fields, objectives, enemy stats, rewards, unlockRequirements, ENDLESS_LEVEL)
+- **TESTING.md** — manual test plan ทั้งระบบ 15 sections ตั้งแต่ v0.1 (Auth, Character, Battle, Flowchart Editor, Shop, Achievements, Leaderboard, Teacher, Admin, Endless, Sandbox, Certificate, Mobile, Security + Regression Checklist)
+- **useAuth.ts** — แก้ dynamic `await import('../utils/constants')` เป็น static import ลบ Vite build warning
+- **firestore.rules.test.ts** — แก้ test payload `leaderboards/{playerId}` ให้ตรงกับ schema จริง (playerName, totalDamageDealt, totalPlayTime แทน username/totalDamage/totalBattleTime)
+
 ### v0.24.0 (มีนาคม 2026)
 
 **Bug Fixes & AI Hint System**

@@ -5,6 +5,7 @@ import { useGameStore } from '../stores/gameStore';
 import { useShopStore } from '../stores/shopStore';
 import { useCharacterStore } from '../stores/characterStore';
 import type { Character } from '../types/game.types';
+import { WEAPONS, ARMORS, HELMETS, ACCESSORIES } from '../utils/constants';
 
 export function useAuth() {
   const { player, setPlayer, setLoading, setCharacter, setDailyFarmPlays } = useGameStore();
@@ -60,7 +61,6 @@ export function useAuth() {
                 // Restore equipped items for this class
                 const savedEquipped = (cp as any).equippedItems;
                 if (savedEquipped) {
-                  const { WEAPONS, ARMORS, HELMETS, ACCESSORIES } = await import('../utils/constants');
                   const allItems = [...WEAPONS, ...ARMORS, ...HELMETS, ...ACCESSORIES];
                   const findItem = (id: string | null) => id ? allItems.find(i => i.id === id) ?? null : null;
                   useCharacterStore.getState().setEquipment({
