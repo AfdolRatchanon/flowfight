@@ -1043,7 +1043,13 @@ export default function BattleScreen() {
         heroMaxHP: heroMaxHP,
       };
 
-      savePlayerProgress(player.id, level.id, won, player.username ?? undefined).then((updated) => {
+      // Auto-grading score: HP% (60%) + node efficiency (40%)
+      const hpScore = Math.round((Math.max(0, heroHP) / heroMaxHP) * 60);
+      const nodeCount = flowNodes.filter((n) => n.type === 'action' || n.type === 'condition' || n.type === 'loop').length;
+      const nodeScore = Math.max(0, 40 - Math.max(0, nodeCount - 3) * 4);
+      const levelScore = won ? Math.min(100, hpScore + nodeScore) : 0;
+
+      savePlayerProgress(player.id, level.id, won, player.username ?? undefined, won ? levelScore : undefined).then((updated) => {
         if (updated) {
           // merge username จาก store เพราะ Firestore อาจไม่มี field นี้
           const mergedPlayer = { ...updated, username: updated.username ?? player.username };

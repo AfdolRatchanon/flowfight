@@ -20,7 +20,7 @@ export default function TeacherDashboard() {
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'students' | 'assignments'>('students');
+  const [activeTab, setActiveTab] = useState<'students' | 'assignments' | 'analytics'>('students');
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [newAssTitle, setNewAssTitle] = useState('');
   const [newAssLevels, setNewAssLevels] = useState<string[]>([]);
@@ -198,15 +198,17 @@ export default function TeacherDashboard() {
 
               {/* Tabs */}
               <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-                {(['students', 'assignments'] as const).map((tab) => (
-                  <button key={tab} onClick={() => setActiveTab(tab)} style={{
+                {([
+                  { key: 'students', label: `นักเรียน (${students.length})` },
+                  { key: 'assignments', label: `งาน (${assignments.length})` },
+                  { key: 'analytics', label: 'Analytics' },
+                ] as const).map(({ key, label }) => (
+                  <button key={key} onClick={() => setActiveTab(key)} style={{
                     padding: '6px 18px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                    border: activeTab === tab ? '1px solid rgba(251,191,36,0.5)' : `1px solid ${colors.borderSubtle}`,
-                    background: activeTab === tab ? 'rgba(251,191,36,0.1)' : 'transparent',
-                    color: activeTab === tab ? '#FBBF24' : colors.textMuted,
-                  }}>
-                    {tab === 'students' ? `นักเรียน (${students.length})` : `งานที่มอบหมาย (${assignments.length})`}
-                  </button>
+                    border: activeTab === key ? '1px solid rgba(251,191,36,0.5)' : `1px solid ${colors.borderSubtle}`,
+                    background: activeTab === key ? 'rgba(251,191,36,0.1)' : 'transparent',
+                    color: activeTab === key ? '#FBBF24' : colors.textMuted,
+                  }}>{label}</button>
                 ))}
               </div>
 
@@ -219,22 +221,38 @@ export default function TeacherDashboard() {
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 120px 100px', gap: 12, padding: '6px 16px' }}>
-                      {['นักเรียน', 'ด่านที่ผ่าน', 'Progress', 'เล่นล่าสุด'].map((h) => (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 100px 120px 80px', gap: 12, padding: '6px 16px' }}>
+                      {['ชื่อ-นามสกุล', 'อีเมล / UID', 'ด่านที่ผ่าน', 'Progress', 'เล่นล่าสุด'].map((h) => (
                         <span key={h} style={{ color: colors.textMuted, fontSize: 11, fontWeight: 700 }}>{h}</span>
                       ))}
                     </div>
                     {students.map((s) => {
                       const pct = Math.round((s.levelsCompleted.length / totalLevels) * 100);
+                      const displayName = s.firstName && s.surname ? `${s.firstName} ${s.surname}` : s.username;
+                      const scores = Object.values(s.levelScores ?? {});
+                      const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
                       const lastActive = s.lastActive
                         ? new Date(s.lastActive).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
                         : '—';
                       return (
                         <div key={s.uid} style={{
                           ...cardStyle, display: 'grid',
-                          gridTemplateColumns: '1fr 100px 120px 100px', gap: 12, alignItems: 'center',
+                          gridTemplateColumns: '1fr 140px 100px 120px 80px', gap: 12, alignItems: 'center',
                         }}>
-                          <span style={{ color: colors.text, fontWeight: 600, fontSize: 14 }}>{s.username}</span>
+                          <div>
+                            <span style={{ color: colors.text, fontWeight: 600, fontSize: 13 }}>{displayName}</span>
+                            {avgScore !== null && (
+                              <span style={{
+                                marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                                background: avgScore >= 70 ? 'rgba(74,222,128,0.15)' : avgScore >= 50 ? 'rgba(251,191,36,0.15)' : 'rgba(248,113,113,0.15)',
+                                color: avgScore >= 70 ? '#4ade80' : avgScore >= 50 ? '#fbbf24' : '#f87171',
+                                fontWeight: 700,
+                              }}>avg {avgScore}</span>
+                            )}
+                          </div>
+                          <span style={{ color: colors.textMuted, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {s.email || s.uid.slice(0, 10) + '…'}
+                          </span>
                           <span style={{ color: '#FBBF24', fontWeight: 700, fontSize: 14 }}>
                             {s.levelsCompleted.length}/{totalLevels}
                           </span>
@@ -254,6 +272,88 @@ export default function TeacherDashboard() {
                     })}
                   </div>
                 )
+              ) : activeTab === 'analytics' ? (
+                (() => {
+                  // คำนวณ avg score ต่อด่าน จากนักเรียนทุกคนในห้อง
+                  const levelAvgs = LEVELS.map((lv) => {
+                    const scores = students.map((s) => s.levelScores?.[lv.id]).filter((v): v is number => v !== undefined);
+                    return {
+                      id: lv.id, number: lv.number, name: lv.name, concept: lv.concept,
+                      avg: scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+                      completedCount: students.filter((s) => s.levelsCompleted.includes(lv.id)).length,
+                    };
+                  });
+                  const needHelp = students.filter((s) => {
+                    const scores = Object.values(s.levelScores ?? {});
+                    const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+                    return avg !== null && avg < 60;
+                  });
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      {/* Summary */}
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {[
+                          { label: 'นักเรียนทั้งหมด', value: students.length },
+                          { label: 'ต้องช่วยเหลือ (avg < 60)', value: needHelp.length },
+                          { label: 'ผ่านทุกด่าน', value: students.filter((s) => s.levelsCompleted.length >= totalLevels).length },
+                        ].map((s) => (
+                          <div key={s.label} style={{ ...cardStyle, flex: 1, minWidth: 110 }}>
+                            <p style={{ color: '#FBBF24', fontSize: 22, fontWeight: 800, margin: 0 }}>{s.value}</p>
+                            <p style={{ color: colors.textMuted, fontSize: 11, margin: '2px 0 0' }}>{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Per-level score bar */}
+                      <div style={{ ...cardStyle }}>
+                        <p style={{ color: colors.textSub, fontWeight: 700, fontSize: 13, margin: '0 0 10px' }}>คะแนนเฉลี่ยต่อด่าน</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          {levelAvgs.map((lv) => (
+                            <div key={lv.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ color: colors.textMuted, fontSize: 10, width: 28, flexShrink: 0 }}>D{lv.number}</span>
+                              <div style={{ flex: 1, height: 14, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+                                {lv.avg !== null && (
+                                  <div style={{
+                                    height: '100%', borderRadius: 3, width: lv.avg + '%',
+                                    background: lv.avg >= 70 ? '#16A34A' : lv.avg >= 50 ? '#FBBF24' : '#DC2626',
+                                    transition: 'width 0.4s ease',
+                                  }} />
+                                )}
+                              </div>
+                              <span style={{ color: colors.textMuted, fontSize: 10, width: 36, textAlign: 'right', flexShrink: 0 }}>
+                                {lv.avg !== null ? `${lv.avg}` : '—'}
+                              </span>
+                              <span style={{ color: colors.textMuted, fontSize: 10, width: 50, flexShrink: 0 }}>
+                                {lv.completedCount}/{students.length}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* นักเรียนที่ต้องช่วย */}
+                      {needHelp.length > 0 && (
+                        <div style={{ ...cardStyle, borderColor: 'rgba(248,113,113,0.3)' }}>
+                          <p style={{ color: '#f87171', fontWeight: 700, fontSize: 13, margin: '0 0 10px' }}>นักเรียนที่ต้องช่วยเหลือ</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {needHelp.map((s) => {
+                              const scores = Object.values(s.levelScores ?? {});
+                              const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+                              const displayName = s.firstName && s.surname ? `${s.firstName} ${s.surname}` : s.username;
+                              return (
+                                <div key={s.uid} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <span style={{ color: colors.text, fontSize: 13, flex: 1 }}>{displayName}</span>
+                                  <span style={{ color: colors.textMuted, fontSize: 11 }}>{s.levelsCompleted.length}/{totalLevels} ด่าน</span>
+                                  <span style={{ color: '#f87171', fontWeight: 700, fontSize: 12 }}>avg {avg}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {/* Create assignment form */}

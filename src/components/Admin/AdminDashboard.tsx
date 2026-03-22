@@ -9,7 +9,21 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebaseService';
 import { useGameStore } from '../../stores/gameStore';
 import { useTheme } from '../../contexts/ThemeContext';
+import { LEVELS } from '../../utils/constants';
 import VolumeButton from '../UI/VolumeButton';
+
+interface UserRecord {
+  uid: string;
+  username?: string;
+  firstName?: string;
+  surname?: string;
+  email?: string;
+  role?: string;
+  levelsCompleted?: string[];
+  levelScores?: Record<string, number>;
+  lastActive?: number;
+  createdAt?: number;
+}
 
 export default function AdminDashboard() {
   const { colors } = useTheme();
@@ -21,8 +35,11 @@ export default function AdminDashboard() {
   const [codeError, setCodeError] = useState('');
   const [codeSaving, setCodeSaving] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<'codes' | 'users'>('codes');
   const [userCount, setUserCount]       = useState<number | null>(null);
   const [classroomCount, setClassroomCount] = useState<number | null>(null);
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   useEffect(() => {
     loadCodes();
@@ -46,6 +63,18 @@ export default function AdminDashboard() {
     } catch {
       setUserCount(-1);
       setClassroomCount(-1);
+    }
+  }
+
+  async function loadUsers() {
+    setUsersLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const list: UserRecord[] = snap.docs.map((d) => ({ uid: d.id, ...d.data() } as UserRecord));
+      list.sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
+      setUsers(list);
+    } finally {
+      setUsersLoading(false);
     }
   }
 
@@ -129,6 +158,77 @@ export default function AdminDashboard() {
         ))}
       </div>
 
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
+        {([
+          { key: 'codes', label: 'Invite Codes' },
+          { key: 'users', label: `ผู้ใช้ทั้งหมด${userCount !== null && userCount >= 0 ? ` (${userCount})` : ''}` },
+        ] as const).map(({ key, label }) => (
+          <button key={key} onClick={() => { setActiveTab(key); if (key === 'users' && users.length === 0) loadUsers(); }} style={{
+            padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            border: activeTab === key ? '1px solid rgba(251,191,36,0.5)' : `1px solid ${colors.border}`,
+            background: activeTab === key ? 'rgba(251,191,36,0.1)' : 'transparent',
+            color: activeTab === key ? '#FBBF24' : colors.textMuted,
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {activeTab === 'users' ? (
+        <div>
+          {usersLoading ? (
+            <p style={{ color: colors.textMuted, fontSize: 13 }}>กำลังโหลด...</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 80px 80px 80px 100px', gap: 10, padding: '4px 14px' }}>
+                {['ชื่อ / Username', 'อีเมล', 'Role', 'ด่าน', 'Avg Score', 'เล่นล่าสุด'].map((h) => (
+                  <span key={h} style={{ color: colors.textMuted, fontSize: 11, fontWeight: 700 }}>{h}</span>
+                ))}
+              </div>
+              {users.map((u) => {
+                const displayName = u.firstName && u.surname
+                  ? `${u.firstName} ${u.surname}`
+                  : (u.username ?? u.uid.slice(0, 10) + '…');
+                const levelsDone = (u.levelsCompleted ?? []).length;
+                const scores = Object.values(u.levelScores ?? {});
+                const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+                const lastActive = u.lastActive
+                  ? new Date(u.lastActive).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
+                  : '—';
+                const roleColor = u.role === 'admin' ? '#a78bfa' : u.role === 'teacher' ? '#FBBF24' : colors.textMuted;
+                return (
+                  <div key={u.uid} style={{
+                    ...card, display: 'grid',
+                    gridTemplateColumns: '1fr 150px 80px 80px 80px 100px', gap: 10, alignItems: 'center', padding: '10px 14px',
+                  }}>
+                    <div>
+                      <span style={{ color: colors.text, fontWeight: 600, fontSize: 13 }}>{displayName}</span>
+                      {u.username && u.firstName && (
+                        <span style={{ color: colors.textMuted, fontSize: 10, display: 'block' }}>{u.username}</span>
+                      )}
+                    </div>
+                    <span style={{ color: colors.textMuted, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.email || '—'}
+                    </span>
+                    <span style={{ color: roleColor, fontWeight: 700, fontSize: 12 }}>
+                      {u.role ?? 'student'}
+                    </span>
+                    <span style={{ color: '#FBBF24', fontWeight: 700, fontSize: 13 }}>
+                      {levelsDone}/{LEVELS.length}
+                    </span>
+                    <span style={{
+                      color: avgScore === null ? colors.textMuted : avgScore >= 70 ? '#4ade80' : avgScore >= 50 ? '#FBBF24' : '#f87171',
+                      fontWeight: avgScore !== null ? 700 : 400, fontSize: 13,
+                    }}>
+                      {avgScore !== null ? avgScore : '—'}
+                    </span>
+                    <span style={{ color: colors.textMuted, fontSize: 11 }}>{lastActive}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
       <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
 
         {/* Create invite code */}
@@ -218,6 +318,7 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

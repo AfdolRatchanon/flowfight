@@ -47,6 +47,7 @@ export interface Player {
   achievements?: string[];
   role?: 'student' | 'teacher' | 'admin';
   classroomCode?: string;   // รหัสห้องเรียนที่นักเรียน join อยู่
+  levelScores?: Record<string, number>; // best score 0-100 ต่อด่าน (auto-grading)
   createdAt: number;
   lastActive: number;
   stats: PlayerStats;
@@ -65,7 +66,12 @@ export interface Classroom {
 export interface StudentProgress {
   uid: string;
   username: string;
+  firstName?: string;
+  surname?: string;
+  email?: string;
+  role?: string;
   levelsCompleted: string[];
+  levelScores?: Record<string, number>;
   lastActive: number;
   classroomCode?: string;
 }

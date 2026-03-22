@@ -118,7 +118,7 @@ export async function getPlayerProfile(uid: string): Promise<Player | null> {
   return null;
 }
 
-export async function savePlayerProgress(uid: string, levelId: string, won: boolean, username?: string): Promise<Player | null> {
+export async function savePlayerProgress(uid: string, levelId: string, won: boolean, username?: string, score?: number): Promise<Player | null> {
   // Validate levelId against known levels to prevent arbitrary data injection
   const isKnownLevel = LEVELS.some((l) => l.id === levelId) || levelId === 'endless';
   if (!isKnownLevel) throw new Error(`Invalid levelId: ${levelId}`);
@@ -144,12 +144,18 @@ export async function savePlayerProgress(uid: string, levelId: string, won: bool
     totalPlayTime: prevStats.totalPlayTime ?? 0,
   };
 
-  const payload: Record<string, unknown> = { levelsCompleted, levelClearCounts, stats: newStats, lastActive: Date.now() };
+  // Auto-grading: เก็บ best score ต่อด่าน (ไม่ overwrite ถ้า score ใหม่ต่ำกว่าเดิม)
+  const prevScores: Record<string, number> = { ...((data.levelScores ?? {}) as Record<string, number>) };
+  if (won && score !== undefined) {
+    prevScores[levelId] = Math.max(prevScores[levelId] ?? 0, score);
+  }
+
+  const payload: Record<string, unknown> = { levelsCompleted, levelClearCounts, stats: newStats, levelScores: prevScores, lastActive: Date.now() };
   if (username) payload.username = username;
 
   await setDoc(ref, payload, { merge: true });
 
-  return { ...data, id: uid, levelsCompleted, levelClearCounts, stats: newStats } as Player;
+  return { ...data, id: uid, levelsCompleted, levelClearCounts, stats: newStats, levelScores: prevScores } as Player;
 }
 
 export async function saveCharacterProgress(uid: string, character: Character): Promise<void> {

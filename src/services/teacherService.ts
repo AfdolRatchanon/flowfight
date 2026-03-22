@@ -203,7 +203,12 @@ export async function getClassroomStudents(roomCode: string): Promise<StudentPro
       results.push({
         uid,
         username: u.username ?? uid,
+        firstName: u.firstName,
+        surname: u.surname,
+        email: u.email,
+        role: u.role ?? 'student',
         levelsCompleted: u.levelsCompleted ?? [],
+        levelScores: u.levelScores ?? {},
         lastActive: u.lastActive ?? 0,
         classroomCode: u.classroomCode,
       });
