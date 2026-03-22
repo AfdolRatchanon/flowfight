@@ -172,7 +172,7 @@ npm run lint       # รันเพื่อตรวจสอบ — อย่
 **กฎ:** ทุกครั้งที่เริ่ม feature ใหม่ → อัปเดต ROADMAP.md เปลี่ยน `[ ]` เป็น `[x] vX.Y.Z`
 
 ## Current Version
-**v0.21.1** — ดู ROADMAP.md สำหรับ Phase ถัดไป
+**v0.24.0** — ดู ROADMAP.md สำหรับ Phase ถัดไป
 
 ### กฎการจัดการ Version (ห้ามผิดเด็ดขาด)
 

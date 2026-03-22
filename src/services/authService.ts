@@ -10,7 +10,7 @@ import {
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebaseService';
 import type { Player, Character } from '../types/game.types';
 import { LEVELS } from '../utils/constants';
@@ -523,4 +523,49 @@ export async function saveAchievements(uid: string, newIds: string[]): Promise<v
   const existing: string[] = snap.exists() ? (snap.data().achievements ?? []) : [];
   const merged = Array.from(new Set([...existing, ...newIds]));
   await setDoc(ref, { achievements: merged }, { merge: true });
+}
+
+// ===== Classroom Leaderboard =====
+
+export interface ClassroomBoardEntry {
+  uid: string;
+  name: string;
+  levelsCompleted: number;
+  avgScore: number;
+  totalXP: number;
+  classroomCode: string;
+  updatedAt: number;
+}
+
+/**
+ * บันทึก / อัปเดต entry ของ student ใน classroom leaderboard
+ * เก็บใน classroomBoards/{roomCode}/members/{uid}
+ */
+export async function saveClassroomBoardEntry(
+  player: Player,
+  character: Character,
+): Promise<void> {
+  if (!player.classroomCode) return;
+  const scores = Object.values(player.levelScores ?? {}) as number[];
+  const avgScore = scores.length > 0
+    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    : 0;
+  const ref = doc(db, 'classroomBoards', player.classroomCode, 'members', player.id);
+  await setDoc(ref, {
+    uid: player.id,
+    name: player.username ?? player.email ?? 'Unknown',
+    levelsCompleted: (player.levelsCompleted ?? []).length,
+    avgScore,
+    totalXP: character.experience ?? 0,
+    classroomCode: player.classroomCode,
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * โหลด classroom leaderboard ทั้งหมดในห้อง
+ */
+export async function getClassroomBoard(roomCode: string): Promise<ClassroomBoardEntry[]> {
+  const snap = await getDocs(collection(db, 'classroomBoards', roomCode, 'members'));
+  return snap.docs.map((d) => d.data() as ClassroomBoardEntry);
 }

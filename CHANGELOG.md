@@ -4,6 +4,54 @@
 
 ---
 
+### v0.24.0 (มีนาคม 2026)
+
+**Bug Fixes & AI Hint System**
+- **Undo/Redo fix** — แก้สาเหตุหลัก: `FlowchartEditor` ไม่เคย push history ก่อน addBlock/deleteNode/changeAction/changeCondition/copyNode/deleteEdge/onConnect ทำให้ `_past` ว่างเสมอ → เพิ่ม `recordHistory=true` ทุก operation ที่ควรบันทึก
+- **Mobile Hint position** — ย้าย TutorialGuide default position จาก `bottom:24 right:24` เป็น `top:8 center` บน mobile ป้องกันบัง footer bar
+- **AI Hint System** — popup คำใบ้เมื่อนักเรียนอยู่ใน planning phase นานเกิน 3 นาทีโดยไม่กด Run, แสดง `level.objectives` + concept, หายไปเมื่อกด Run หรือ dismiss, รีเซ็ตเมื่อเพิ่ม/ลบ node
+
+### v0.23.0 (มีนาคม 2026)
+
+**Phase 5 — Class Competition (Classroom Leaderboard)**
+- **ClassroomLeaderboard** (`src/components/UI/ClassroomLeaderboard.tsx`) — หน้าอันดับห้องเรียน แสดง ranking ของนักเรียนทุกคนในห้อง เรียงตาม ด่านผ่าน → Avg Score → XP, highlight row ของตัวเอง
+- **authService** — เพิ่ม `saveClassroomBoardEntry` (บันทึกหลังชนะด่าน) และ `getClassroomBoard` (โหลด leaderboard)
+- **BattleScreen** — เรียก `saveClassroomBoardEntry` อัตโนมัติเมื่อชนะด่าน (ถ้าอยู่ในห้องเรียน)
+- **MainMenu** — เพิ่มปุ่ม "อันดับห้องเรียน" (สีเขียว) ใต้ปุ่มห้องเรียน เมื่ออยู่ใน classroom
+- **App.tsx** — เพิ่ม route `/classroom-leaderboard`
+- **firestore.rules** — เพิ่ม `classroomBoards/{roomCode}/members/{uid}` rules (เจ้าของเขียน, auth อ่าน)
+
+### v0.22.0 (มีนาคม 2026)
+
+**Phase 5 — Custom Level Editor**
+- **CustomLevelEditor** (`src/components/Teacher/CustomLevelEditor.tsx`) — ฟอร์มสร้าง/แก้ไขด่านสำหรับครู: ชื่อ, คำอธิบาย, concept, difficulty, config ศัตรู (HP/ATK/DEF/behaviors/budget), allowedBlocks, requiredBlocks, nodeLimit, objectives, bonusObjective, publish toggle
+- **TeacherDashboard** — เพิ่ม tab "ด่านของฉัน" พร้อม list, create, edit, delete, publish/unpublish
+- **BattleScreen** — รองรับ route `/custom-battle/:levelId` โหลด `CustomLevel` จาก Firestore และแปลงเป็น Level format
+- **LevelSelect** — เพิ่ม section "ด่านของครู" สำหรับนักเรียน (เฉพาะที่ published)
+- **App.tsx** — เพิ่ม route `/custom-battle/:levelId` + BGMController รองรับ path นี้
+- **firestore.rules** — เพิ่ม `customLevels` collection rules (teacher/admin write, auth read)
+- **customLevelService.ts** — CRUD functions: createCustomLevel, updateCustomLevel, deleteCustomLevel, getClassroomCustomLevels, getCustomLevel, publishCustomLevel
+- **game.types.ts** — เพิ่ม types: EnemyBehavior, CustomLevelEnemy, CustomLevel, CustomLevelFormData
+
+### v0.21.2 (มีนาคม 2026)
+
+**Mobile / Tablet Support**
+- **BattleScreen** — speed buttons ใหญ่ขึ้นบน mobile (36px), เพิ่ม undo/redo buttons ใน footer bar
+- **FlowchartEditor** — ลบ mobile undo/redo ออกจาก canvas (ReactFlow ดัก touch events), เพิ่ม Backspace/Delete เป็น deleteKeyCode
+- **Mobile hint** — ย้าย position ไป top-center ป้องกันบัง footer buttons
+- รองรับ `touch-action: manipulation` ป้องกัน 300ms delay
+
+### v0.21.1 (มีนาคม 2026)
+
+**Docs & Keyboard Shortcuts Fix**
+- **README.md** — เขียนใหม่ย่อจาก ~800 → ~110 บรรทัด (entry point เท่านั้น)
+- **CHANGELOG.md** — แยกออกจาก README, ครอบคลุม v0.1.0–v0.21.0
+- **GAMEPLAY.md** — แยกเนื้อหาวิธีเล่น, ด่านทั้งหมด, level system ออกจาก README
+- **CLAUDE.md** — อัปเดต File Structure, Error Monitoring, lint policy, references
+- **Keyboard Shortcuts** — แก้ R key ทำงานระหว่าง planning phase ด้วย (ไม่แค่ post-battle)
+
+---
+
 ### v0.21.0 (มีนาคม 2026)
 
 **Phase 3+4 — Certificate, Sandbox & PWA**

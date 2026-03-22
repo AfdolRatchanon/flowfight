@@ -86,9 +86,9 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 
 | ฟีเจอร์ | รายละเอียด | สถานะ |
 |---|---|---|
-| **Custom Level Editor** | ครูสร้างด่านเองได้ กำหนด enemy, allowed blocks, objective | [ ] |
-| **Class Competition** | Leaderboard แบบ classroom เทียบกันในห้อง | [ ] |
-| **AI Hint System** | แนะนำเมื่อนักเรียนติดนานเกิน N นาที | [ ] |
+| **Custom Level Editor** | ครูสร้างด่านเองได้ กำหนด enemy, allowed blocks, objective | [x] v0.22.0 |
+| **Class Competition** | Leaderboard แบบ classroom เทียบกันในห้อง | [x] v0.23.0 |
+| **AI Hint System** | แนะนำเมื่อนักเรียนติดนานเกิน N นาที | [x] v0.24.0 |
 | **Peer Review** | แชร์ flowchart ให้เพื่อนวิจารณ์และให้ feedback | [ ] |
 | **Curriculum Alignment** | เชื่อมโยงกับหลักสูตร **สอศ.** เป็นหลัก (ปวช./ปวส.) — สสวท./อศจ. ทำทีหลัง | [ ] |
 

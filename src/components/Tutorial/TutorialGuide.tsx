@@ -182,9 +182,12 @@ export default function TutorialGuide({ levelId, onClose, onTargetChange }: Tuto
     else setStep(s => s + 1);
   }
 
+  const isMobile = window.innerWidth < 640;
   const posStyle: React.CSSProperties = pos
     ? { position: 'fixed', left: pos.x, top: pos.y }
-    : { position: 'fixed', bottom: 24, right: 24 };
+    : isMobile
+      ? { position: 'fixed', top: 8, left: '50%', transform: 'translateX(-50%)', width: 'calc(100vw - 32px)', maxWidth: 360 }
+      : { position: 'fixed', bottom: 24, right: 24 };
 
   return (
     <div

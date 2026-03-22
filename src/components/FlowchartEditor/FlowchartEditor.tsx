@@ -222,7 +222,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
       };
 
       const updatedEdges = addEdge(newEdge, storeEdges as Edge[]);
-      store.setEdges(updatedEdges as FlowEdge[]);
+      store.setEdges(updatedEdges as FlowEdge[], true);
     },
     [storeEdges, store],
   );
@@ -239,6 +239,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
     const deletions = filtered.filter((c: any) => c.type === 'remove');
     if (deletions.length > 0) {
       const ids = new Set(deletions.map((c: any) => c.id));
+      store._pushHistory();
       store.setNodes(storeNodes.filter((n) => !ids.has(n.id)) as FlowNode[]);
       store.setEdges(storeEdges.filter((e) => !ids.has(e.source) && !ids.has(e.target)) as FlowEdge[]);
     }
@@ -257,7 +258,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
     const deletions = changes.filter((c: any) => c.type === 'remove');
     if (deletions.length > 0) {
       const ids = new Set(deletions.map((c: any) => c.id));
-      store.setEdges(storeEdges.filter((e) => !ids.has(e.id)) as FlowEdge[]);
+      store.setEdges(storeEdges.filter((e) => !ids.has(e.id)) as FlowEdge[], true);
     }
   }
 
@@ -276,7 +277,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
       const rect = wrapperRef.current.getBoundingClientRect();
       position = rfInstance.current.project({ x: screenPos.x - rect.left, y: screenPos.y - rect.top });
     }
-    store.setNodes([...storeNodes, { id, type, position, data } as FlowNode]);
+    store.setNodes([...storeNodes, { id, type, position, data } as FlowNode], true);
     soundManager.playSFX('click');
     closeAll();
   }
@@ -287,6 +288,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
       storeNodes.map((n) =>
         n.id !== nodeId ? n : { ...n, data: { ...n.data, actionType, label } },
       ) as FlowNode[],
+      true,
     );
     closeAll();
   }
@@ -297,6 +299,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
       storeNodes.map((n) =>
         n.id !== nodeId ? n : { ...n, data: { ...n.data, ...patch } },
       ) as FlowNode[],
+      true,
     );
     closeAll();
   }
@@ -305,18 +308,19 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
     const src = storeNodes.find((n) => n.id === id);
     if (!src) return;
     const newId = `${src.type}_${Date.now()}`;
-    store.setNodes([...storeNodes, { ...src, id: newId, position: { x: src.position.x + 40, y: src.position.y + 40 }, data: { ...src.data } } as FlowNode]);
+    store.setNodes([...storeNodes, { ...src, id: newId, position: { x: src.position.x + 40, y: src.position.y + 40 }, data: { ...src.data } } as FlowNode], true);
     closeAll();
   }
 
   function deleteNode(id: string) {
+    store._pushHistory();
     store.setNodes(storeNodes.filter((n) => n.id !== id) as FlowNode[]);
     store.setEdges(storeEdges.filter((e) => e.source !== id && e.target !== id) as FlowEdge[]);
     closeAll();
   }
 
   function deleteEdge(id: string) {
-    store.setEdges(storeEdges.filter((e) => e.id !== id) as FlowEdge[]);
+    store.setEdges(storeEdges.filter((e) => e.id !== id) as FlowEdge[], true);
     closeAll();
   }
 

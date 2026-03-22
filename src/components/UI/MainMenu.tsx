@@ -176,7 +176,7 @@ export default function MainMenu() {
         <button
           onClick={() => setShowJoinClassroom(true)}
           style={{
-            width: '100%', padding: '12px 16px', borderRadius: 12, marginBottom: 12,
+            width: '100%', padding: '12px 16px', borderRadius: 12, marginBottom: 8,
             border: classroomCode
               ? '1px solid rgba(251,191,36,0.4)'
               : `1px solid ${colors.borderSubtle}`,
@@ -192,6 +192,24 @@ export default function MainMenu() {
           </span>
           <span style={{ fontSize: 11, opacity: 0.6 }}>จัดการ</span>
         </button>
+
+        {/* Classroom Leaderboard — แสดงเมื่ออยู่ในห้องเรียน */}
+        {classroomCode && (
+          <button
+            onClick={() => navigate('/classroom-leaderboard')}
+            style={{
+              width: '100%', padding: '10px 16px', borderRadius: 12, marginBottom: 12,
+              border: '1px solid rgba(16,185,129,0.3)',
+              background: 'rgba(16,185,129,0.06)',
+              color: '#10b981',
+              cursor: 'pointer', fontSize: 13, textAlign: 'left',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}
+          >
+            <span>📊</span>
+            <span>อันดับห้องเรียน</span>
+          </button>
+        )}
 
         {showJoinClassroom && player && (
           <JoinClassroomModal

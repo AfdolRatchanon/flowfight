@@ -9,7 +9,7 @@ import { useGameStore } from '../../stores/gameStore';
 import { useFlowchartStore } from '../../stores/flowchartStore';
 import { useShopStore } from '../../stores/shopStore';
 import ShopScreen from '../Shop/ShopScreen';
-import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry, saveShopData, saveEndlessLeaderboardEntry, saveEndlessProgress, recordDailyLevelWin, saveFlowchart, loadFlowchart, saveAchievements } from '../../services/authService';
+import { savePlayerProgress, saveCharacterProgress, saveLeaderboardEntry, saveLevelLeaderboardEntry, saveShopData, saveEndlessLeaderboardEntry, saveEndlessProgress, recordDailyLevelWin, saveFlowchart, loadFlowchart, saveAchievements, saveClassroomBoardEntry } from '../../services/authService';
 import { checkAchievements } from '../../utils/achievements';
 import type { Achievement } from '../../utils/achievements';
 import AchievementToast from '../UI/AchievementToast';
@@ -502,6 +502,13 @@ export default function BattleScreen() {
   });
   const [tutorialTarget, setTutorialTarget] = useState<TutorialTarget>(null);
 
+  // ── AI Hint System ──
+  const HINT_DELAY_MS = 3 * 60 * 1000; // 3 minutes idle in planning
+  const planningEnteredAt = useRef<number | null>(null);
+  const [showHint, setShowHint] = useState(false);
+  const [hintStep, setHintStep] = useState(0);
+  const [hintDismissed, setHintDismissed] = useState(false);
+
   // Load custom level from Firestore if not found in campaign list
   useEffect(() => {
     if (isEndless || !levelId) return;
@@ -934,6 +941,7 @@ export default function BattleScreen() {
         if (!isExecuting && battlePhase === 'planning' && status !== 'victory' && status !== 'defeat' && level) {
           battleStartTime.current = Date.now();
           setBattlePhase('running');
+          setShowHint(false);
           executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as RequiredBlock[], turnManaMax);
         }
       } else if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) {
@@ -951,6 +959,32 @@ export default function BattleScreen() {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [isExecuting, battlePhase, status, speedIdx, turnManaMax]);
+
+  // ── AI Hint: reset timer when entering planning or flowchart changes ──
+  useEffect(() => {
+    if (battlePhase === 'planning' && status === 'waiting') {
+      planningEnteredAt.current = Date.now();
+      setHintDismissed(false);
+    } else {
+      planningEnteredAt.current = null;
+      setShowHint(false);
+    }
+  }, [battlePhase, status]);
+
+  useEffect(() => {
+    // Reset idle timer when user adds/removes nodes (activity signal)
+    if (battlePhase === 'planning') planningEnteredAt.current = Date.now();
+  }, [flowNodes.length]);
+
+  useEffect(() => {
+    if (battlePhase !== 'planning' || status !== 'waiting' || hintDismissed || isEndless) return;
+    const id = setInterval(() => {
+      if (planningEnteredAt.current && Date.now() - planningEnteredAt.current >= HINT_DELAY_MS) {
+        setShowHint(true);
+      }
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [battlePhase, status, hintDismissed, isEndless]);
 
   // Play victory/defeat SFX
   useEffect(() => {
@@ -1103,6 +1137,7 @@ export default function BattleScreen() {
             const wasFirstClear = !player.levelsCompleted?.includes(level.id);
             saveLeaderboardEntry(mergedPlayer, savedChar, battleStats, wasFirstClear).catch((e) => console.error('[Leaderboard] overall save error:', e));
             saveLevelLeaderboardEntry(mergedPlayer, savedChar, battleStats).catch((e) => console.error('[Leaderboard] level save error:', e));
+            saveClassroomBoardEntry(mergedPlayer, savedChar).catch(() => {});
 
             // ── Achievement check ──
             const actionsUsed = flowNodes
@@ -1411,7 +1446,7 @@ export default function BattleScreen() {
                 )}
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button
-                    onClick={() => { battleStartTime.current = Date.now(); setBattlePhase('running'); executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as any, turnManaMax); }}
+                    onClick={() => { battleStartTime.current = Date.now(); setBattlePhase('running'); setShowHint(false); executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as any, turnManaMax); }}
                     disabled={isExecuting || status === 'victory' || status === 'defeat' || battlePhase !== 'planning'}
                     style={{
                       background: isExecuting ? 'rgba(74,222,128,0.15)' : 'linear-gradient(135deg,#16a34a,#15803d)',
@@ -1583,6 +1618,67 @@ export default function BattleScreen() {
           {showTutorial && !isEndless && battlePhase === 'planning' && (
             <TutorialGuide levelId={levelId!} onClose={() => setShowTutorial(false)} onTargetChange={setTutorialTarget} />
           )}
+
+          {/* AI Hint — แสดงเมื่อนักเรียนติดนาน 3 นาที */}
+          {showHint && !showTutorial && !isEndless && level && (() => {
+            const hints: string[] = [
+              ...(level.objectives ?? []),
+              `แนวคิด: ${level.concept}`,
+              'ลองกด ▶ Run ดูผลลัพธ์ก่อน แล้วค่อยปรับแก้!',
+            ];
+            const hint = hints[hintStep % hints.length];
+            return (
+              <div style={{
+                position: 'fixed',
+                bottom: isMobile ? 70 : 80, right: isMobile ? 8 : 24,
+                zIndex: 900,
+                width: isMobile ? 'calc(100vw - 16px)' : 280,
+                background: 'rgba(10,10,30,0.97)',
+                border: '1.5px solid rgba(96,165,250,0.5)',
+                borderRadius: 14,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  background: 'linear-gradient(135deg,rgba(96,165,250,0.2),rgba(96,165,250,0.05))',
+                  borderBottom: '1px solid rgba(96,165,250,0.2)',
+                  padding: '7px 12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <span style={{ color: '#60a5fa', fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>
+                    💡 คำใบ้ ({hintStep % hints.length + 1}/{hints.length})
+                  </span>
+                  <button
+                    onClick={() => { setShowHint(false); setHintDismissed(true); }}
+                    style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14 }}
+                  >✕</button>
+                </div>
+                <div style={{ padding: '10px 14px' }}>
+                  <p style={{ color: '#e2e8f0', fontSize: 13, lineHeight: 1.5, margin: '0 0 10px' }}>{hint}</p>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    {hints.length > 1 && (
+                      <button
+                        onClick={() => setHintStep((s) => s + 1)}
+                        style={{
+                          background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.3)',
+                          color: '#60a5fa', borderRadius: 8, padding: '4px 12px',
+                          cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                        }}
+                      >คำใบ้ถัดไป →</button>
+                    )}
+                    <button
+                      onClick={() => { setShowHint(false); setHintDismissed(true); }}
+                      style={{
+                        background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
+                        color: 'rgba(255,255,255,0.5)', borderRadius: 8, padding: '4px 12px',
+                        cursor: 'pointer', fontSize: 11,
+                      }}
+                    >เข้าใจแล้ว</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
         </div>
 
