@@ -1256,6 +1256,7 @@ export default function BattleScreen() {
           backgroundRepeat: 'no-repeat',
           padding: '10px 16px', gap: 6,
           position: 'relative',
+          maxHeight: isMobile ? '42vh' : undefined,
         }}>
           {/* Dark overlay so text stays readable over background image */}
           <div style={{
@@ -1375,7 +1376,7 @@ export default function BattleScreen() {
                       boxShadow: isExecuting ? 'none' : '0 4px 12px rgba(22,163,74,0.4)', minWidth: 'clamp(56px,6vw,80px)',
                     }}>
                     <span style={{ display: 'block' }}>{isExecuting ? '⏳' : battlePhase === 'enemy_turn' ? '👹...' : battlePhase === 'resolution' ? '⚙️...' : '▶ Run'}</span>
-                  <span style={{ display: 'block', fontSize: 'clamp(6px,0.6vw,9px)', opacity: 0.55, fontWeight: 400, letterSpacing: 0.5 }}>Space</span>
+                  {!isMobile && <span style={{ display: 'block', fontSize: 'clamp(6px,0.6vw,9px)', opacity: 0.55, fontWeight: 400, letterSpacing: 0.5 }}>Space</span>}
                   </button>
                   <button onClick={stopBattle} disabled={!isExecuting} style={{
                     background: isExecuting ? 'linear-gradient(135deg,#dc2626,#991b1b)' : colors.bgSurface,
@@ -1386,7 +1387,7 @@ export default function BattleScreen() {
                     lineHeight: 1.2,
                   }}>
                     <span style={{ display: 'block' }}>⏹</span>
-                    <span style={{ display: 'block', fontSize: 'clamp(6px,0.6vw,9px)', opacity: 0.55, fontWeight: 400, letterSpacing: 0.5 }}>Esc</span>
+                    {!isMobile && <span style={{ display: 'block', fontSize: 'clamp(6px,0.6vw,9px)', opacity: 0.55, fontWeight: 400, letterSpacing: 0.5 }}>Esc</span>}
                   </button>
                 </div>
                 <div style={{ display: 'flex', gap: 2, alignItems: 'center', width: '100%', justifyContent: 'center', minWidth: 0 }}>

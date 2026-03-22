@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFlowchartStore } from '../../stores/flowchartStore';
@@ -8,6 +9,12 @@ export default function SandboxMode() {
   const navigate = useNavigate();
   const { colors } = useTheme();
   const { clearToStartEnd } = useFlowchartStore();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   function handleClear() {
     clearToStartEnd();
@@ -51,7 +58,10 @@ export default function SandboxMode() {
       }}>
         <span style={{ color: '#FBBF24', fontSize: 12 }}>Sandbox:</span>
         <span style={{ color: colors.textMuted, fontSize: 11 }}>
-          คลิกขวาบน canvas เพื่อเพิ่ม block · ลากเส้นเชื่อม node · Ctrl+Z = Undo · ไม่มีการสู้รบ ฝึกได้อิสระ
+          {isMobile
+            ? 'แตะบน canvas เพื่อเพิ่ม block · ลากเส้นเชื่อม node · ไม่มีการสู้รบ ฝึกได้อิสระ'
+            : 'คลิกบน canvas เพื่อเพิ่ม block · ลากเส้นเชื่อม node · Ctrl+Z = Undo · ไม่มีการสู้รบ ฝึกได้อิสระ'
+          }
         </span>
       </div>
 
