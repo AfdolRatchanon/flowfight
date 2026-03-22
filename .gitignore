@@ -34,3 +34,7 @@ dist-ssr
 
 # firebase.json, firestore.rules → ควร commit (source code / config)
 # .firebaserc → ไม่ commit, ใช้ .firebaserc.example เป็น template
+
+# Test coverage output — ไม่ต้อง commit
+coverage/
+.nyc_output/
