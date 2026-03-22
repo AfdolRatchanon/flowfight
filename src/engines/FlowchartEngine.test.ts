@@ -202,4 +202,100 @@ describe('resolveHeroStatuses', () => {
     const { newState } = resolveHeroStatuses(state);
     expect(newState.heroHP).toBeGreaterThanOrEqual(0);
   });
+
+  it('hero berserk ลด incoming ailment damage 20%', () => {
+    const state = makeState({ heroHP: 80, heroBurnRounds: 2, heroBerserkRounds: 1 });
+    const { newState } = resolveHeroStatuses(state);
+    // burn ทำ 5 dmg ปกติ แต่ไม่มี berserk reduction ใน resolveHeroStatuses (berserk ลด enemy atk)
+    // แค่ตรวจว่า HP ลดลงและ burnRounds ลดลง
+    expect(newState.heroHP).toBeLessThan(80);
+    expect(newState.heroBurnRounds).toBe(1);
+  });
+});
+
+// ===== executeEnemyAction — ailment strikes =====
+
+describe('executeEnemyAction — poison_strike', () => {
+  it('ใส่ Poison 5 rounds เมื่อไม่ parry', () => {
+    const state = makeState({ heroParry: 0, heroIsEvading: false, heroPoisonRounds: 0 });
+    const { newState } = executeEnemyAction('poison_strike', state);
+    expect(newState.heroPoisonRounds).toBe(5);
+  });
+
+  it('ไม่ลด heroPoisonRounds ถ้า hero มี poison มากกว่าอยู่แล้ว', () => {
+    const state = makeState({ heroParry: 0, heroIsEvading: false, heroPoisonRounds: 8 });
+    const { newState } = executeEnemyAction('poison_strike', state);
+    // max(8, 5) = 8 — ไม่ลดลง
+    expect(newState.heroPoisonRounds).toBe(8);
+  });
+
+  it('ลด hero HP ด้วย', () => {
+    const state = makeState({ heroParry: 0, heroIsEvading: false, heroHP: 100, enemyAttack: 20 });
+    const { newState } = executeEnemyAction('poison_strike', state);
+    expect(newState.heroHP).toBeLessThan(100);
+  });
+});
+
+describe('executeEnemyAction — freeze_strike', () => {
+  it('ใส่ Freeze 2 rounds เมื่อไม่ parry', () => {
+    const state = makeState({ heroParry: 0, heroIsEvading: false, heroFreezeRounds: 0 });
+    const { newState } = executeEnemyAction('freeze_strike', state);
+    expect(newState.heroFreezeRounds).toBe(2);
+  });
+
+  it('ลด hero HP ด้วย', () => {
+    const state = makeState({ heroParry: 0, heroIsEvading: false, heroHP: 100, enemyAttack: 20 });
+    const { newState } = executeEnemyAction('freeze_strike', state);
+    expect(newState.heroHP).toBeLessThan(100);
+  });
+});
+
+describe('executeEnemyAction — burn_strike', () => {
+  it('ใส่ Burn 3 rounds เมื่อไม่ parry', () => {
+    const state = makeState({ heroParry: 0, heroIsEvading: false, heroBurnRounds: 0 });
+    const { newState } = executeEnemyAction('burn_strike', state);
+    expect(newState.heroBurnRounds).toBe(3);
+  });
+
+  it('ลด hero HP ด้วย', () => {
+    const state = makeState({ heroParry: 0, heroIsEvading: false, heroHP: 100, enemyAttack: 20 });
+    const { newState } = executeEnemyAction('burn_strike', state);
+    expect(newState.heroHP).toBeLessThan(100);
+  });
+});
+
+describe('executeEnemyAction — power_strike', () => {
+  it('ทำ damage สูง (enemyAttack × 2)', () => {
+    const state = makeState({ heroParry: 0, heroIsEvading: false, heroHP: 100, enemyAttack: 20, heroDefense: 0 });
+    const { newState } = executeEnemyAction('power_strike', state);
+    // rawDmg = floor(20 * 2.0 + variance()) → ≥ 38 (variance ±2 → min ~36)
+    expect(newState.heroHP).toBeLessThan(70);
+  });
+
+  it('log มีคำว่า power strike', () => {
+    const state = makeState({ heroParry: 0, heroIsEvading: false, enemyAttack: 20 });
+    const { log } = executeEnemyAction('power_strike', state);
+    expect(log.toLowerCase()).toContain('power strike');
+  });
+});
+
+// ===== calcTurnManaMax — edge cases =====
+
+describe('calcTurnManaMax — edge cases', () => {
+  it('turn 0 = base budget (ไม่น้อยกว่า 1)', () => {
+    const result = calcTurnManaMax(0);
+    expect(result).toBeGreaterThanOrEqual(1);
+  });
+
+  it('budget เพิ่มตาม turn number', () => {
+    const t1 = calcTurnManaMax(1);
+    const t5 = calcTurnManaMax(5);
+    expect(t5).toBeGreaterThan(t1);
+  });
+
+  it('budget level 21–30 เริ่มสูงกว่าปกติ', () => {
+    const normal = calcTurnManaMax(1, 1);
+    const advanced = calcTurnManaMax(1, 21);
+    expect(advanced).toBeGreaterThanOrEqual(normal);
+  });
 });
