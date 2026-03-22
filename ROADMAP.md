@@ -90,7 +90,7 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 | **Class Competition** | Leaderboard แบบ classroom เทียบกันในห้อง | [ ] |
 | **AI Hint System** | แนะนำเมื่อนักเรียนติดนานเกิน N นาที | [ ] |
 | **Peer Review** | แชร์ flowchart ให้เพื่อนวิจารณ์และให้ feedback | [ ] |
-| **Curriculum Alignment** | เชื่อมโยงกับหลักสูตรแกนกลาง สสวท. / อศจ. | [ ] |
+| **Curriculum Alignment** | เชื่อมโยงกับหลักสูตร **สอศ.** เป็นหลัก (ปวช./ปวส.) — สสวท./อศจ. ทำทีหลัง | [ ] |
 
 ---
 
