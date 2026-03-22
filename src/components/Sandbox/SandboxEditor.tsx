@@ -102,7 +102,7 @@ export default function SandboxEditor({ onBack }: Props) {
     if (!ctxMenu) return;
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeMenu(); }
     function onDown(e: MouseEvent)   {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) closeMenu();
+      if (menuRef.current && !menuRef.current.contains(e.target as HTMLElement)) closeMenu();
     }
     document.addEventListener('keydown', onKey);
     document.addEventListener('mousedown', onDown);
@@ -129,6 +129,8 @@ export default function SandboxEditor({ onBack }: Props) {
     const strokeColor = sh === 'yes' ? '#4ade80' : sh === 'no' ? '#f87171' : '#94a3b8';
     const edge: Edge = {
       ...connection,
+      source: connection.source ?? '',
+      target: connection.target ?? '',
       id: `e-${connection.source}-${sh ?? 'out'}-${connection.target}-${Date.now()}`,
       type: (sh === 'yes' || sh === 'no') ? 'smoothstep' : 'step',
       label,
