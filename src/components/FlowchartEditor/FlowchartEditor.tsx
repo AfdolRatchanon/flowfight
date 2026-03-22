@@ -137,12 +137,6 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
   const setActiveHandleKey = useFlowchartStore((s) => s.setActiveHandleKey);
   const store = useFlowchartStore();
   const { colors } = useTheme();
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 640);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(storeNodes as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges as Edge[]);

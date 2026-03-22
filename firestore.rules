@@ -102,6 +102,21 @@ service cloud.firestore {
         && (resource.data.teacherId == request.auth.uid || isAdmin());
     }
 
+    // ===== Custom Levels (Teacher-created) =====
+    match /customLevels/{levelId} {
+      // อ่าน: auth ทุกคน (นักเรียนต้องอ่านเพื่อเล่น)
+      allow read: if request.auth != null;
+
+      // สร้าง: teacher/admin เท่านั้น และต้องเป็น createdBy ตัวเอง
+      allow create: if request.auth != null
+        && isTeacherOrAdmin()
+        && request.resource.data.createdBy == request.auth.uid;
+
+      // แก้ไข/ลบ: เจ้าของ (teacher) หรือ admin เท่านั้น
+      allow update, delete: if request.auth != null
+        && (resource.data.createdBy == request.auth.uid || isAdmin());
+    }
+
     // ===== Overall Leaderboard =====
     // docId = playerId
     match /leaderboards/{playerId} {

@@ -4,11 +4,13 @@ import {
   createClassroom, getTeacherClassrooms, getClassroomStudents,
   createAssignment, getClassroomAssignments, deleteAssignment,
 } from '../../services/teacherService';
+import { getClassroomCustomLevels, deleteCustomLevel, publishCustomLevel } from '../../services/customLevelService';
 import { useGameStore } from '../../stores/gameStore';
 import { useTheme } from '../../contexts/ThemeContext';
-import type { Assignment, Classroom, StudentProgress } from '../../types/game.types';
+import type { Assignment, Classroom, CustomLevel, StudentProgress } from '../../types/game.types';
 import { LEVELS } from '../../utils/constants';
 import VolumeButton from '../UI/VolumeButton';
+import CustomLevelEditor from './CustomLevelEditor';
 
 function exportClassroomCSV(className: string, students: StudentProgress[]) {
   const levelHeaders = LEVELS.map((l) => `D${l.number} Score`).join(',');
@@ -41,7 +43,10 @@ export default function TeacherDashboard() {
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'students' | 'assignments' | 'analytics'>('students');
+  const [activeTab, setActiveTab] = useState<'students' | 'assignments' | 'analytics' | 'custom'>('students');
+  const [customLevels, setCustomLevels] = useState<CustomLevel[]>([]);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingLevel, setEditingLevel] = useState<CustomLevel | undefined>();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [newAssTitle, setNewAssTitle] = useState('');
   const [newAssLevels, setNewAssLevels] = useState<string[]>([]);
@@ -62,7 +67,12 @@ export default function TeacherDashboard() {
     setStudents([]);
     getClassroomStudents(selectedRoom).then(setStudents);
     getClassroomAssignments(selectedRoom).then(setAssignments);
+    getClassroomCustomLevels(selectedRoom).then(setCustomLevels);
   }, [selectedRoom]);
+
+  function refreshCustomLevels() {
+    if (selectedRoom) getClassroomCustomLevels(selectedRoom).then(setCustomLevels);
+  }
 
   async function handleCreateClassroom() {
     if (!newClassName.trim() || !player) return;
@@ -223,6 +233,7 @@ export default function TeacherDashboard() {
                   { key: 'students', label: `นักเรียน (${students.length})` },
                   { key: 'assignments', label: `งาน (${assignments.length})` },
                   { key: 'analytics', label: 'Analytics' },
+                  { key: 'custom', label: `ด่านของฉัน (${customLevels.length})` },
                 ] as const).map(({ key, label }) => (
                   <button key={key} onClick={() => setActiveTab(key)} style={{
                     padding: '6px 18px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
@@ -386,6 +397,56 @@ export default function TeacherDashboard() {
                     </div>
                   );
                 })()
+              ) : activeTab === 'custom' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <p style={{ color: colors.textSub, fontSize: 13, margin: 0 }}>
+                      ด่านที่สร้างสำหรับห้องนี้ — นักเรียนเล่นได้ผ่านแท็บ "ด่านของครู" ใน LevelSelect
+                    </p>
+                    <button onClick={() => { setEditingLevel(undefined); setShowEditor(true); }} style={{
+                      padding: '6px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                      background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', fontWeight: 700, fontSize: 13,
+                    }}>+ สร้างด่านใหม่</button>
+                  </div>
+                  {customLevels.length === 0 ? (
+                    <div style={{ ...cardStyle, textAlign: 'center', padding: 32 }}>
+                      <p style={{ color: colors.textMuted, fontSize: 13 }}>ยังไม่มีด่าน — กด "สร้างด่านใหม่" เพื่อเริ่ม</p>
+                    </div>
+                  ) : (
+                    customLevels.map((lv) => (
+                      <div key={lv.id} style={{ ...cardStyle, display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                            <span style={{ color: colors.text, fontWeight: 700, fontSize: 14 }}>{lv.name}</span>
+                            <span style={{ fontSize: 11, padding: '1px 7px', borderRadius: 5, fontWeight: 700,
+                              background: lv.published ? 'rgba(74,222,128,0.2)' : 'rgba(100,116,139,0.2)',
+                              color: lv.published ? '#4ade80' : colors.textMuted }}>
+                              {lv.published ? 'เผยแพร่แล้ว' : 'ฉบับร่าง'}
+                            </span>
+                            <span style={{ color: colors.textMuted, fontSize: 11 }}>ยาก Lv.{lv.difficulty}</span>
+                          </div>
+                          <p style={{ color: colors.textMuted, fontSize: 12, margin: 0 }}>
+                            {lv.concept} — HP {lv.enemy.hp} / ATK {lv.enemy.atk} / {lv.enemy.behaviors.join(', ')}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <button onClick={() => publishCustomLevel(lv.id, !lv.published).then(refreshCustomLevels)} style={{
+                            padding: '4px 10px', borderRadius: 8, border: `1px solid ${colors.border}`,
+                            background: colors.bgSurface, color: colors.textSub, cursor: 'pointer', fontSize: 12,
+                          }}>{lv.published ? 'ซ่อน' : 'เผยแพร่'}</button>
+                          <button onClick={() => { setEditingLevel(lv); setShowEditor(true); }} style={{
+                            padding: '4px 10px', borderRadius: 8, border: 'none',
+                            background: 'rgba(59,130,246,0.2)', color: '#60a5fa', cursor: 'pointer', fontSize: 12,
+                          }}>แก้ไข</button>
+                          <button onClick={() => { if (confirm('ลบด่านนี้?')) deleteCustomLevel(lv.id).then(refreshCustomLevels); }} style={{
+                            padding: '4px 10px', borderRadius: 8, border: 'none',
+                            background: 'rgba(239,68,68,0.15)', color: '#f87171', cursor: 'pointer', fontSize: 12,
+                          }}>ลบ</button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {/* Create assignment form */}
@@ -475,6 +536,19 @@ export default function TeacherDashboard() {
           )}
         </div>
       </div>
+
+      {/* Custom Level Editor Modal */}
+      {showEditor && selectedRoom && player && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <CustomLevelEditor
+            classroomCode={selectedRoom}
+            teacherUid={player.id}
+            existing={editingLevel}
+            onSaved={() => { setShowEditor(false); setEditingLevel(undefined); refreshCustomLevels(); setActiveTab('custom'); }}
+            onCancel={() => { setShowEditor(false); setEditingLevel(undefined); }}
+          />
+        </div>
+      )}
     </div>
   );
 }

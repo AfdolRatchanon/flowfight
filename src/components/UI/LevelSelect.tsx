@@ -6,6 +6,8 @@ import { useShopStore } from '../../stores/shopStore';
 import { getMsUntilMidnightThai } from '../../services/authService';
 import { levelProgressPct, MAX_LEVEL } from '../../utils/levelSystem';
 import { useTheme } from '../../contexts/ThemeContext';
+import { getClassroomCustomLevels } from '../../services/customLevelService';
+import type { CustomLevel } from '../../types/game.types';
 import BagButton from './BagButton';
 import VolumeButton from './VolumeButton';
 
@@ -84,12 +86,19 @@ export default function LevelSelect() {
   const completed = player?.levelsCompleted ?? [];
 
   const [countdown, setCountdown] = useState('');
+  const [customLevels, setCustomLevels] = useState<CustomLevel[]>([]);
   useEffect(() => {
     function update() { setCountdown(formatCountdown(getMsUntilMidnightThai())); }
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, []);
+  useEffect(() => {
+    if (player?.classroomCode) {
+      getClassroomCustomLevels(player.classroomCode)
+        .then((levels) => setCustomLevels(levels.filter((l) => l.published)));
+    }
+  }, [player?.classroomCode]);
 
   function isUnlocked(_levelId: string, idx: number) {
     if (idx === 0) return true;
@@ -286,6 +295,46 @@ export default function LevelSelect() {
             );
           })}
         </div>
+
+        {/* ── ด่านของครู (Custom Levels) ── */}
+        {customLevels.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ height: 1, flex: 1, background: colors.borderSubtle }} />
+              <span style={{ color: colors.textSub, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>ด่านของครู</span>
+              <div style={{ height: 1, flex: 1, background: colors.borderSubtle }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {customLevels.map((lv) => (
+                <div key={lv.id}
+                  onClick={() => navigate(`/custom-battle/${lv.id}`)}
+                  style={{
+                    background: colors.bgSurface, border: `1px solid ${colors.borderSubtle}`,
+                    borderRadius: 16, padding: '14px 18px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 14,
+                    transition: 'transform 0.15s, box-shadow 0.15s',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 20px rgba(124,58,237,0.2)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = ''; (e.currentTarget as HTMLDivElement).style.boxShadow = ''; }}>
+                  <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(124,58,237,0.15)', borderRadius: 10, fontSize: 22 }}>
+                    🎯
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                      <span style={{ color: colors.text, fontWeight: 700, fontSize: 14 }}>{lv.name}</span>
+                      <span style={{ background: 'rgba(124,58,237,0.2)', color: '#c4b5fd', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>ครู</span>
+                      {'★'.repeat(lv.difficulty).padEnd(5, '☆') && (
+                        <span style={{ color: '#fbbf24', fontSize: 11 }}>{'★'.repeat(lv.difficulty)}{'☆'.repeat(5 - lv.difficulty)}</span>
+                      )}
+                    </div>
+                    <p style={{ color: colors.textMuted, fontSize: 12, margin: 0 }}>{lv.concept} — {lv.description || lv.enemy.name}</p>
+                  </div>
+                  <span style={{ color: colors.textMuted, fontSize: 13 }}>→</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

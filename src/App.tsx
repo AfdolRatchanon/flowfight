@@ -73,7 +73,7 @@ function BGMController() {
   useEffect(() => {
     const path = location.pathname;
     let key: BGMKey | null = null;
-    if (path.startsWith('/battle') || path.startsWith('/infinity-dev')) key = path.startsWith('/infinity-dev') ? 'endless' : 'battle';
+    if (path.startsWith('/battle') || path.startsWith('/custom-battle') || path.startsWith('/infinity-dev')) key = path.startsWith('/infinity-dev') ? 'endless' : 'battle';
     else if (path === '/levels/tutorial' || path === '/levels') key = 'level-select';
     else if (path === '/login') key = null;
     else key = 'menu';
@@ -101,6 +101,7 @@ export default function App() {
           <Route path="/levels" element={<ProtectedRoute><ModeSelect /></ProtectedRoute>} />
           <Route path="/levels/tutorial" element={<ProtectedRoute><LevelSelect /></ProtectedRoute>} />
           <Route path="/battle/:levelId" element={<ProtectedRoute><BattleScreen /></ProtectedRoute>} />
+          <Route path="/custom-battle/:levelId" element={<ProtectedRoute><BattleScreen /></ProtectedRoute>} />
           <Route path="/character" element={<ProtectedRoute><CharacterCustomizer /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
           <Route path="/shop" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />

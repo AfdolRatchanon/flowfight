@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, Component } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getCustomLevel } from '../../services/customLevelService';
+import type { CustomLevel } from '../../types/game.types';
 import { LEVELS, ENDLESS_LEVEL, getEndlessWaveEnemy, PASSIVE_BONUSES } from '../../utils/constants';
 import { useBattle } from '../../hooks/useBattle';
 import { useBattleStore } from '../../stores/battleStore';
@@ -419,6 +421,37 @@ function getRewardMultiplier(clearCountBefore: number): { xp: number; gold: numb
 
 const BONUS_OBJECTIVE_XP_RATIO = 0.5; // bonus XP = 50% ของ base XP เมื่อผ่าน bonus objective
 
+/** แปลง CustomLevel (Firestore) → Level format ที่ BattleScreen ใช้ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function customLevelToLevel(cl: CustomLevel): any {
+  return {
+    id: cl.id,
+    number: 0,
+    name: cl.name,
+    description: cl.description,
+    difficultyEstimate: cl.difficulty,
+    concept: cl.concept,
+    enemy: {
+      id: cl.id,
+      name: cl.enemy.name,
+      spriteId: 'slime',             // ใช้ sprite default จนกว่าจะมีระบบ custom sprite
+      stats: { hp: cl.enemy.hp, atk: cl.enemy.atk, def: cl.enemy.def, speed: 1 },
+      behaviors: cl.enemy.behaviors,
+      budgetPerTurn: cl.enemy.budgetPerTurn,
+    },
+    allowedBlocks: cl.allowedBlocks?.length ? cl.allowedBlocks : undefined,
+    requiredBlocks: (cl.requiredBlocks ?? []) as any,
+    objectives: cl.objectives,
+    bonusObjective: cl.bonusObjective,
+    unlockRequirements: { levelsCompleted: [] },
+    rewards: { experience: 100, gold: 50 },
+    nodeLimit: cl.nodeLimit,
+    tutorialText: undefined,
+    initialHeroHPPercent: undefined,
+    initialHeroStatus: undefined,
+  };
+}
+
 // ===== Main Component =====
 export default function BattleScreen() {
   const { colors, theme } = useTheme();
@@ -457,6 +490,7 @@ export default function BattleScreen() {
 
   // Endless Wave state
   const isEndless = levelId === 'level_endless';
+  const [customLevelData, setCustomLevelData] = useState<CustomLevel | null>(null);
   const [waveNumber, setWaveNumber] = useState(1);
   const [endlessScore, setEndlessScore] = useState(0);
   const [showWaveClear, setShowWaveClear] = useState(false);
@@ -468,11 +502,22 @@ export default function BattleScreen() {
   });
   const [tutorialTarget, setTutorialTarget] = useState<TutorialTarget>(null);
 
+  // Load custom level from Firestore if not found in campaign list
+  useEffect(() => {
+    if (isEndless || !levelId) return;
+    const isCampaign = LEVELS.some((l) => l.id === levelId);
+    if (isCampaign) return;
+    getCustomLevel(levelId).then((cl) => setCustomLevelData(cl));
+  }, [levelId, isEndless]);
+
   // useMemo prevents new object reference every render (would cause infinite loop via shieldRequiredTypes)
-  const level = useMemo(() => (isEndless
-    ? { ...ENDLESS_LEVEL, enemy: getEndlessWaveEnemy(waveNumber) }
-    : LEVELS.find((l) => l.id === levelId)
-  ) as (typeof LEVELS)[0] | undefined, [isEndless, waveNumber, levelId]);
+  const level = useMemo(() => {
+    if (isEndless) return { ...ENDLESS_LEVEL, enemy: getEndlessWaveEnemy(waveNumber) } as unknown as (typeof LEVELS)[0];
+    const campaign = LEVELS.find((l) => l.id === levelId);
+    if (campaign) return campaign;
+    if (customLevelData) return customLevelToLevel(customLevelData);
+    return undefined;
+  }, [isEndless, waveNumber, levelId, customLevelData]) as (typeof LEVELS)[0] | undefined;
 
   // Level access guard — redirect if level is locked, invalid, or no character (prevents URL manipulation)
   useEffect(() => {

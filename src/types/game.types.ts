@@ -86,6 +86,55 @@ export interface Assignment {
   createdAt: number;
 }
 
+// ===========================
+// Custom Level (Teacher-created)
+// ===========================
+
+export type EnemyBehavior = 'attack' | 'poison_strike' | 'freeze_strike' | 'burn_strike' | 'heal' | 'cast_spell' | 'power_strike';
+
+export interface CustomLevelEnemy {
+  name: string;
+  hp: number;          // 50–1000
+  atk: number;         // 5–80
+  def: number;         // 0–30
+  behaviors: EnemyBehavior[];
+  budgetPerTurn: number; // 1–3
+  shield?: boolean;    // ต้องวาง required block ก่อนโจมตีได้
+}
+
+export interface CustomLevel {
+  id: string;                    // Firestore doc ID
+  classroomCode: string;
+  createdBy: string;             // teacher uid
+  createdAt: number;
+  updatedAt: number;
+  name: string;
+  description: string;
+  concept: string;               // programming concept สอน
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  enemy: CustomLevelEnemy;
+  allowedBlocks?: string[];      // undefined = ทุก block
+  requiredBlocks?: string[];     // ต้องวางก่อน run
+  nodeLimit?: number;            // จำกัด action nodes
+  objectives: string[];
+  bonusObjective?: string;
+  published: boolean;            // true = นักเรียนเห็นได้
+}
+
+export interface CustomLevelFormData {
+  name: string;
+  description: string;
+  concept: string;
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  enemy: CustomLevelEnemy;
+  allowedBlocks: string[];
+  requiredBlocks: string[];
+  nodeLimit: number | '';
+  objectives: string;
+  bonusObjective: string;
+  published: boolean;
+}
+
 export interface PlayerStats {
   totalKills: number;
   totalDefeats: number;
