@@ -63,8 +63,8 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 | **Auto-grading** | ให้คะแนน flowchart ตาม efficiency (จำนวน node, turn, HP เหลือ) | [x] v0.20.0 |
 | **Learning Objective Tag** | แต่ละด่าน tag concept ที่สอน (IF/ELSE, LOOP, etc.) | [x] มีอยู่แล้ว (concept field) |
 | **Teacher Analytics Dashboard** | กราฟ class average, นักเรียนที่ต้องช่วยเหลือ, concept ที่ทุกคนติด | [x] v0.20.0 |
-| **Export Report** | PDF/Excel สรุป progress ส่งผู้ปกครองหรือ ผอ. | [ ] |
-| **Badge & Certificate** | ใบประกาศเมื่อผ่านครบ curriculum ระดับ | [ ] |
+| **Export Report** | CSV สรุป progress ส่งผู้ปกครองหรือ ผอ. (Teacher Dashboard → Export CSV) | [x] v0.21.0 |
+| **Badge & Certificate** | ใบประกาศเมื่อผ่านครบ curriculum ระดับ | [x] v0.21.0 |
 
 ---
 
@@ -74,8 +74,8 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 | ฟีเจอร์ | รายละเอียด | สถานะ |
 |---|---|---|
 | **Mobile / Tablet Support** | Responsive layout สำหรับ touch screen | [ ] |
-| **PWA / Offline Mode** | เล่นได้แม้ internet ไม่เสถียร sync ทีหลัง | [ ] |
-| **Sandbox Mode** | วาด flowchart อิสระ ไม่มีศัตรู ฝึก logic ล้วน ๆ | [ ] |
+| **PWA / Offline Mode** | เล่นได้แม้ internet ไม่เสถียร sync ทีหลัง | [x] v0.21.0 |
+| **Sandbox Mode** | วาด flowchart อิสระ ไม่มีศัตรู ฝึก logic ล้วน ๆ | [x] v0.21.0 |
 | **Multi-language** | ภาษาอังกฤษ สำหรับ international | [ ] |
 | **Parent Portal** | ผู้ปกครองดู progress บุตรหลานได้ | [ ] |
 

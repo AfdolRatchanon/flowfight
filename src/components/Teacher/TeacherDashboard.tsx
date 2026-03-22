@@ -10,6 +10,27 @@ import type { Assignment, Classroom, StudentProgress } from '../../types/game.ty
 import { LEVELS } from '../../utils/constants';
 import VolumeButton from '../UI/VolumeButton';
 
+function exportClassroomCSV(className: string, students: StudentProgress[]) {
+  const levelHeaders = LEVELS.map((l) => `D${l.number} Score`).join(',');
+  const header = `ชื่อ-นามสกุล,Username,Email,Role,ด่านที่ผ่าน,Avg Score,${levelHeaders},เล่นล่าสุด\n`;
+  const rows = students.map((s) => {
+    const displayName = s.firstName && s.surname ? `${s.firstName} ${s.surname}` : s.username;
+    const scores = Object.values(s.levelScores ?? {});
+    const avg = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : '';
+    const levelScores = LEVELS.map((l) => s.levelScores?.[l.id] ?? '').join(',');
+    const lastActive = s.lastActive ? new Date(s.lastActive).toLocaleDateString('th-TH') : '';
+    return `"${displayName}","${s.username}","${s.email ?? ''}","${s.role ?? 'student'}",${s.levelsCompleted.length},${avg},${levelScores},"${lastActive}"`;
+  }).join('\n');
+  const bom = '\uFEFF'; // UTF-8 BOM สำหรับ Excel
+  const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${className}_report.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function TeacherDashboard() {
   const { colors } = useTheme();
   const { player } = useGameStore();
@@ -197,7 +218,7 @@ export default function TeacherDashboard() {
               </div>
 
               {/* Tabs */}
-              <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 12, alignItems: 'center' }}>
                 {([
                   { key: 'students', label: `นักเรียน (${students.length})` },
                   { key: 'assignments', label: `งาน (${assignments.length})` },
@@ -210,6 +231,17 @@ export default function TeacherDashboard() {
                     color: activeTab === key ? '#FBBF24' : colors.textMuted,
                   }}>{label}</button>
                 ))}
+                <div style={{ flex: 1 }} />
+                {students.length > 0 && (
+                  <button
+                    onClick={() => exportClassroomCSV(selected.className, students)}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      border: '1px solid rgba(74,222,128,0.4)', background: 'rgba(74,222,128,0.08)',
+                      color: '#4ade80',
+                    }}
+                  >Export CSV</button>
+                )}
               </div>
 
               {activeTab === 'students' ? (

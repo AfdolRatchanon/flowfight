@@ -2,7 +2,35 @@ import { useNavigate } from 'react-router-dom';
 import { ACHIEVEMENTS } from '../../utils/achievements';
 import { useGameStore } from '../../stores/gameStore';
 import { useTheme } from '../../contexts/ThemeContext';
+import { LEVELS } from '../../utils/constants';
 import VolumeButton from './VolumeButton';
+
+const CURRICULUM_BADGES = [
+  {
+    id: 'badge_apprentice',
+    name: 'Algorithm Apprentice',
+    subtitle: 'ปวช. — ผ่านด่าน 1–10',
+    icon: '🥉',
+    color: '#CD7F32',
+    requiredLevels: LEVELS.filter((l) => l.number >= 1 && l.number <= 10).map((l) => l.id),
+  },
+  {
+    id: 'badge_expert',
+    name: 'Algorithm Expert',
+    subtitle: 'ปวช. สูง — ผ่านด่าน 11–20',
+    icon: '🥈',
+    color: '#C0C0C0',
+    requiredLevels: LEVELS.filter((l) => l.number >= 1 && l.number <= 20).map((l) => l.id),
+  },
+  {
+    id: 'badge_master',
+    name: 'Algorithm Master',
+    subtitle: 'ปวส. — ผ่านด่าน 1–30',
+    icon: '🥇',
+    color: '#FFD700',
+    requiredLevels: LEVELS.filter((l) => l.number >= 1 && l.number <= 30).map((l) => l.id),
+  },
+];
 
 export default function AchievementsPage() {
   const { player } = useGameStore();
@@ -12,6 +40,7 @@ export default function AchievementsPage() {
   const unlocked = new Set(player?.achievements ?? []);
   const totalUnlocked = ACHIEVEMENTS.filter((a) => unlocked.has(a.id)).length;
   const pct = Math.round((totalUnlocked / ACHIEVEMENTS.length) * 100);
+  const completedLevels = new Set(player?.levelsCompleted ?? []);
 
   return (
     <div style={{ minHeight: '100vh', background: colors.bgGrad, padding: 24 }}>
@@ -61,6 +90,60 @@ export default function AchievementsPage() {
           </div>
         </div>
       </div>
+
+      {/* Curriculum Badges */}
+      <div style={{ marginBottom: 24 }}>
+        <p style={{ color: '#FBBF24', fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, margin: '0 0 12px', letterSpacing: 1 }}>
+          Curriculum Badges
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+          {CURRICULUM_BADGES.map((badge) => {
+            const done = badge.requiredLevels.every((id) => completedLevels.has(id));
+            const progress = badge.requiredLevels.filter((id) => completedLevels.has(id)).length;
+            const pctB = Math.round((progress / badge.requiredLevels.length) * 100);
+            return (
+              <div key={badge.id} style={{
+                background: done ? `rgba(${badge.color === '#FFD700' ? '251,191,36' : badge.color === '#C0C0C0' ? '192,192,192' : '205,127,50'},0.08)` : colors.bgSurface,
+                border: `1px solid ${done ? badge.color + '66' : colors.borderSubtle}`,
+                borderRadius: 14, padding: '16px 18px',
+                display: 'flex', alignItems: 'center', gap: 14,
+                opacity: done ? 1 : 0.6,
+              }}>
+                <span style={{ fontSize: 40, filter: done ? 'none' : 'grayscale(1)', flexShrink: 0 }}>{badge.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ color: done ? badge.color : colors.textSub, fontWeight: 700, fontSize: 14, margin: '0 0 2px' }}>{badge.name}</p>
+                  <p style={{ color: colors.textMuted, fontSize: 11, margin: '0 0 6px' }}>{badge.subtitle}</p>
+                  <div style={{ height: 5, background: colors.border, borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: pctB + '%', background: badge.color, borderRadius: 3, transition: 'width 0.5s ease' }} />
+                  </div>
+                  <p style={{ color: colors.textMuted, fontSize: 10, margin: '3px 0 0' }}>{progress}/{badge.requiredLevels.length} ด่าน</p>
+                </div>
+                {done && <span style={{ color: '#4ade80', fontSize: 22, flexShrink: 0 }}>✓</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Certificate link */}
+      <button
+        onClick={() => navigate('/certificate')}
+        style={{
+          width: '100%', padding: '14px 20px', borderRadius: 12, marginBottom: 24,
+          border: '1px solid rgba(184,150,12,0.35)',
+          background: 'rgba(184,150,12,0.07)',
+          color: '#FFD700', fontWeight: 700, fontSize: 14,
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+          textAlign: 'left',
+        }}
+      >
+        <span style={{ fontSize: 22 }}>📜</span>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: 0, fontFamily: "'Cinzel', serif", letterSpacing: 1 }}>ใบประกาศนียบัตร</p>
+          <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,215,0,0.6)', fontWeight: 400 }}>Certificate of Achievement — พิมพ์/Save PDF</p>
+        </div>
+        <span style={{ color: 'rgba(255,215,0,0.5)', fontSize: 18 }}>›</span>
+      </button>
 
       {/* Achievement grid */}
       <div style={{

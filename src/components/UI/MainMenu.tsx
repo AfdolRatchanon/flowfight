@@ -14,6 +14,7 @@ const MENU_ITEMS = [
   { icon: '🎨', label: 'Character', path: '/character', color: '#7c3aed' },
   { icon: '🏆', label: 'Leaderboard', path: '/leaderboard', color: '#10b981' },
   { icon: '🥇', label: 'Achievements', path: '/achievements', color: '#f59e0b' },
+  { icon: '🧪', label: 'Sandbox Mode', path: '/sandbox', color: '#06b6d4' },
 ];
 
 const ADMIN_ITEMS = [

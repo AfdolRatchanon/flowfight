@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f2040"/>
+  <rect x="16" y="16" width="480" height="480" rx="80" fill="none" stroke="#B8960C" stroke-width="6"/>
+  <!-- Sword vertical -->
+  <rect x="238" y="50" width="36" height="270" rx="14" fill="#FFD700"/>
+  <!-- Crossguard -->
+  <rect x="150" y="296" width="212" height="36" rx="18" fill="#B8960C"/>
+  <!-- Grip -->
+  <rect x="232" y="332" width="48" height="110" rx="24" fill="#7c3aed"/>
+  <!-- Pommel -->
+  <ellipse cx="256" cy="452" rx="36" ry="28" fill="#B8960C"/>
+  <!-- Diamond tip -->
+  <polygon points="256,50 270,100 256,140 242,100" fill="#FFFFFF"/>
+</svg>
