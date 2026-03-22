@@ -892,7 +892,7 @@ export default function BattleScreen() {
           executeBattle(SPEED_LEVELS[speedIdx].ms, (level.requiredBlocks ?? []) as RequiredBlock[], turnManaMax);
         }
       } else if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) {
-        if ((status === 'victory' || status === 'defeat') && level) {
+        if (!isExecuting && (status === 'victory' || status === 'defeat' || battlePhase === 'planning') && level) {
           setLevelUpData(null); setXpGained(0); setBonusXpGained(0); setXpMultiplierPct(100); setMissingBlocks([]);
           progressSaved.current = false;
           setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
@@ -1374,7 +1374,8 @@ export default function BattleScreen() {
                       fontWeight: 700, fontSize: 'clamp(12px,1.3vw,17px)', opacity: status === 'victory' || status === 'defeat' ? 0.4 : 1,
                       boxShadow: isExecuting ? 'none' : '0 4px 12px rgba(22,163,74,0.4)', minWidth: 'clamp(56px,6vw,80px)',
                     }}>
-                    {isExecuting ? '⏳' : battlePhase === 'enemy_turn' ? '👹...' : battlePhase === 'resolution' ? '⚙️...' : '▶ Run'}
+                    <span style={{ display: 'block' }}>{isExecuting ? '⏳' : battlePhase === 'enemy_turn' ? '👹...' : battlePhase === 'resolution' ? '⚙️...' : '▶ Run'}</span>
+                  <span style={{ display: 'block', fontSize: 'clamp(6px,0.6vw,9px)', opacity: 0.55, fontWeight: 400, letterSpacing: 0.5 }}>Space</span>
                   </button>
                   <button onClick={stopBattle} disabled={!isExecuting} style={{
                     background: isExecuting ? 'linear-gradient(135deg,#dc2626,#991b1b)' : colors.bgSurface,
@@ -1382,7 +1383,11 @@ export default function BattleScreen() {
                     color: isExecuting ? colors.text : colors.textMuted,
                     padding: 'clamp(7px,0.8vh,11px) clamp(9px,0.9vw,14px)', borderRadius: 9, cursor: isExecuting ? 'pointer' : 'not-allowed',
                     fontWeight: 700, fontSize: 'clamp(12px,1.3vw,17px)', boxShadow: isExecuting ? '0 4px 12px rgba(220,38,38,0.4)' : 'none',
-                  }}>⏹</button>
+                    lineHeight: 1.2,
+                  }}>
+                    <span style={{ display: 'block' }}>⏹</span>
+                    <span style={{ display: 'block', fontSize: 'clamp(6px,0.6vw,9px)', opacity: 0.55, fontWeight: 400, letterSpacing: 0.5 }}>Esc</span>
+                  </button>
                 </div>
                 <div style={{ display: 'flex', gap: 2, alignItems: 'center', width: '100%', justifyContent: 'center', minWidth: 0 }}>
                   <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(6px,0.7vw,10px)', flexShrink: 1, minWidth: 0, overflow: 'hidden' }}>ช้า</span>

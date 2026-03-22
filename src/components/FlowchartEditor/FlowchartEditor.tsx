@@ -443,7 +443,7 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
           fitViewOptions={{ padding: 0.3, maxZoom: 1.1 }}
           minZoom={0.2}
           maxZoom={2}
-          deleteKeyCode="Delete"
+          deleteKeyCode={['Delete', 'Backspace']}
           snapToGrid
           snapGrid={[16, 16]}
           style={{ background: colors.rfBg }}
