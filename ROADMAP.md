@@ -26,7 +26,7 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 - [x] **Keyboard Shortcuts** — Space = Run, R = Retry, Esc = Stop (v0.16.0)
 - [x] **Flowchart Undo/Redo** — Ctrl+Z / Ctrl+Y, history 50 steps (v0.16.0)
 - [x] **Volume Slider** — popup ปรับ BGM/SFX แยก + mute toggle (v0.16.0)
-- [ ] **Mobile / Tablet Support** — รองรับ touch screen
+- [x] **Mobile / Tablet Support** — รองรับ touch screen v0.21.2
 
 ---
 
@@ -73,7 +73,7 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 
 | ฟีเจอร์ | รายละเอียด | สถานะ |
 |---|---|---|
-| **Mobile / Tablet Support** | Responsive layout สำหรับ touch screen | [ ] |
+| **Mobile / Tablet Support** | Responsive layout สำหรับ touch screen | [x] v0.21.2 |
 | **PWA / Offline Mode** | เล่นได้แม้ internet ไม่เสถียร sync ทีหลัง | [x] v0.21.0 |
 | **Sandbox Mode** | วาด flowchart อิสระ ไม่มีศัตรู ฝึก logic ล้วน ๆ | [x] v0.21.0 |
 | **Multi-language** | ภาษาอังกฤษ สำหรับ international | [ ] |

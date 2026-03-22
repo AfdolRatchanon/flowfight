@@ -137,6 +137,12 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
   const setActiveHandleKey = useFlowchartStore((s) => s.setActiveHandleKey);
   const store = useFlowchartStore();
   const { colors } = useTheme();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(storeNodes as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges as Edge[]);
@@ -373,6 +379,24 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       <div ref={wrapperRef} style={{ flex: 1, position: 'relative' }}>
+        {/* Mobile: undo/redo + tap hint */}
+        {isMobile && (
+          <div style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 200, display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button
+              onClick={() => useFlowchartStore.getState().undo()}
+              style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 16, touchAction: 'manipulation', cursor: 'pointer' }}
+              title="Undo">↩</button>
+            <button
+              onClick={() => useFlowchartStore.getState().redo()}
+              style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 16, touchAction: 'manipulation', cursor: 'pointer' }}
+              title="Redo">↪</button>
+            {storeNodes.length <= 2 && (
+              <span style={{ background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.75)', borderRadius: 8, padding: '6px 10px', fontSize: 11 }}>
+                แตะ canvas เพื่อเพิ่ม block
+              </span>
+            )}
+          </div>
+        )}
         {(nodeLimit !== undefined || (turnManaMax !== undefined && turnManaUsed !== undefined)) && (
           <div style={{
             position: 'absolute', top: 8, left: 8, zIndex: 100,

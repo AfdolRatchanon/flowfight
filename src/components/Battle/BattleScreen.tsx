@@ -1394,10 +1394,14 @@ export default function BattleScreen() {
                   <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(6px,0.7vw,10px)', flexShrink: 1, minWidth: 0, overflow: 'hidden' }}>ช้า</span>
                   {SPEED_LEVELS.map((s, i) => (
                     <button key={i} onClick={() => setSpeedIdx(i)} disabled={isExecuting} style={{
-                      width: 'clamp(20px,2.2vw,30px)', height: 'clamp(16px,1.8vh,24px)', borderRadius: 3, border: 'none',
+                      width: isMobile ? 36 : 'clamp(20px,2.2vw,30px)',
+                      height: isMobile ? 32 : 'clamp(16px,1.8vh,24px)',
+                      borderRadius: 3, border: 'none',
                       background: speedIdx === i ? 'linear-gradient(135deg,#e94560,#7c3aed)' : 'rgba(255,255,255,0.15)',
                       color: speedIdx === i ? '#fff' : 'rgba(255,255,255,0.75)',
-                      fontSize: 'clamp(7px,0.8vw,11px)', fontWeight: 700, cursor: isExecuting ? 'not-allowed' : 'pointer', flexShrink: 0,
+                      fontSize: isMobile ? 11 : 'clamp(7px,0.8vw,11px)', fontWeight: 700,
+                      cursor: isExecuting ? 'not-allowed' : 'pointer', flexShrink: 0,
+                      touchAction: 'manipulation',
                     }}>{s.label}</button>
                   ))}
                   <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(6px,0.7vw,10px)', flexShrink: 1, minWidth: 0, overflow: 'hidden' }}>เร็ว</span>
