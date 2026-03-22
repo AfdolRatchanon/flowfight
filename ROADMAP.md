@@ -51,7 +51,7 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 | **ประถม** | 8–12 | Sequence พื้นฐาน, บวก/ลบง่าย ๆ, ศัตรูเป็นสัตว์น่ารัก | 10 ด่าน | [ ] |
 | **มัธยม** | 12–18 | Decision, Loop, Counter | 15 ด่าน (ปัจจุบัน) | มีแล้ว |
 | **ปวช.** | 15–18 | Algorithm เต็มรูปแบบ, Class Skills, Optimization | 20 ด่าน (ปัจจุบัน) | มีแล้ว |
-| **ปวส.** | 18–20 | Nested Loop, Pattern Recognition, Boss Challenge | 10 ด่าน advanced | [ ] |
+| **ปวส.** | 18–20 | Nested Loop, Pattern Recognition, Boss Challenge | 10 ด่าน advanced | [x] v0.19.0 |
 
 ---
 

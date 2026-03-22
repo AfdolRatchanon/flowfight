@@ -31,6 +31,17 @@ const LEVEL_IMAGE: Record<string, string> = {
   level_18: 'dark-commander.png',
   level_19: 'the-lich-lord.png',
   level_20: 'the-dark-overlord.png',
+  // ปวส. levels — ใช้ภาพเดิมที่มีอยู่จนกว่าจะมี asset ใหม่
+  level_21: 'spider.png',
+  level_22: 'stone-troll.png',
+  level_23: 'dragons-lair.png',
+  level_24: 'the-dark-overlord.png',
+  level_25: 'the-lich-lord.png',
+  level_26: 'the-dark-overlord.png',
+  level_27: 'dark-commander.png',
+  level_28: 'the-lich-lord.png',
+  level_29: 'dragons-lair.png',
+  level_30: 'the-dark-overlord.png',
 };
 
 const ENEMY_EMOJI: Record<string, string> = {

@@ -11,7 +11,12 @@ function makeChar(overrides: Partial<Character> = {}): Character {
     id: 'test', playerId: 'p1', name: 'Hero', class: 'knight',
     level: 1, experience: 0,
     stats: { maxHP: 100, currentHP: 100, attack: 20, defense: 5, speed: 10 },
-    equippedItems: {},
+    appearance: { skinId: 'default', colors: { primary: '#fff', secondary: '#000', accent: '#f00' } },
+    equipment: { weapon: null, armor: null, head: null, accessory: null },
+    gameMode: 'normal',
+    isAlive: true,
+    currentLevel: 1,
+    createdAt: 0,
     lastModified: 0,
     ...overrides,
   };

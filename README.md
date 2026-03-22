@@ -449,7 +449,7 @@ public/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026 | v0.18.4 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
+> อัปเดต: มีนาคม 2026 | v0.19.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -510,6 +510,22 @@ public/
 ---
 
 ## Changelog
+
+### v0.19.0 (มีนาคม 2026)
+
+**Phase 2 — ปวส. Curriculum (10 ด่านใหม่)**
+- **level_21 Nested Decisions** — if/else ซ้อนกัน 2 ชั้น (Ailment + HP พร้อมกัน)
+- **level_22 Counter Intelligence** — Multi-Condition Loop (Turn + HP ใน Loop เดียวกัน)
+- **level_23 Tri-Ailment Dragon** — จัดการ Burn + Poison + Freeze ทั้ง 3 พร้อมกัน
+- **level_24 Skill Optimizer** — Class Skill Timing เจาะ Armor สูง
+- **level_25 Priority Protocol** — เรียงลำดับ Condition ให้ถูกต้อง (Priority Queue)
+- **level_26 Infinite Regress** — Dual Exit Condition Loop (enemy_alive + turn_gte)
+- **level_27 Enrage Protocol** — รับมือ Enemy State Change (Enrage < 40% HP)
+- **level_28 Efficiency Challenge** — ออกแบบ Flowchart ใช้ Node น้อยที่สุด
+- **level_29 The Architect's Trial** — Sub-Boss ใช้ทุก Condition Type
+- **level_30 Grand Architect** — ปวส. Final Boss (Void Emperor, 1000 HP, budget/turn 4)
+- อัปเดต ROADMAP.md: ปวส. = [x] v0.19.0
+- อัปเดต CLAUDE.md: Development Priority
 
 ### v0.18.4 (มีนาคม 2026)
 
