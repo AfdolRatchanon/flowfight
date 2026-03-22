@@ -1571,21 +1571,30 @@ export default function BattleScreen() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => {
-                  setLevelUpData(null); setXpGained(0); setMissingBlocks([]);
-                  progressSaved.current = false;
-                  setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
-                  liveBattleStateRef.current = null;
-                  clearToStartEnd();
-                  restartBattle(getBoostedChar() as any, level.enemy as any, level.id); applyInitialHeroState(level);
-                }}
-                disabled={isExecuting}
-                style={{
-                  background: colors.bgSurface, border: `1px solid ${colors.border}`,
-                  color: colors.textSub, padding: '4px 16px', borderRadius: 8,
-                  cursor: isExecuting ? 'not-allowed' : 'pointer', fontSize: 11,
-                }}>↺ Reset Flowchart</button>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                {isMobile && <>
+                  <button onClick={() => useFlowchartStore.getState().undo()} disabled={isExecuting}
+                    style={{ background: colors.bgSurface, border: `1px solid ${colors.border}`, color: colors.textSub, padding: '4px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13, minWidth: 36, touchAction: 'manipulation' }} title="Undo">↩</button>
+                  <button onClick={() => useFlowchartStore.getState().redo()} disabled={isExecuting}
+                    style={{ background: colors.bgSurface, border: `1px solid ${colors.border}`, color: colors.textSub, padding: '4px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13, minWidth: 36, touchAction: 'manipulation' }} title="Redo">↪</button>
+                </>}
+                <button
+                  onClick={() => {
+                    setLevelUpData(null); setXpGained(0); setMissingBlocks([]);
+                    progressSaved.current = false;
+                    setCurrentTurn(1); setBattlePhase('planning'); setEnemyBehaviorIdx(0);
+                    liveBattleStateRef.current = null;
+                    clearToStartEnd();
+                    restartBattle(getBoostedChar() as any, level.enemy as any, level.id); applyInitialHeroState(level);
+                  }}
+                  disabled={isExecuting}
+                  style={{
+                    background: colors.bgSurface, border: `1px solid ${colors.border}`,
+                    color: colors.textSub, padding: '4px 16px', borderRadius: 8,
+                    cursor: isExecuting ? 'not-allowed' : 'pointer', fontSize: 11,
+                    touchAction: 'manipulation',
+                  }}>↺ Reset Flowchart</button>
+              </div>
             </div>
           </div>
 
