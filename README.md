@@ -449,7 +449,7 @@ public/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026 | v0.18.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
+> อัปเดต: มีนาคม 2026 | v0.18.4 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -510,6 +510,37 @@ public/
 ---
 
 ## Changelog
+
+### v0.18.4 (มีนาคม 2026)
+
+**Testing & Version Correction**
+- **Unit Tests** — เพิ่ม test สำหรับ `levelSystem` (15 tests) และ `achievements` (24 tests) รวม 61 unit tests ทั้งหมด
+- **Pre-commit Hook** — รัน `npm test` อัตโนมัติก่อนทุก commit ถ้า fail → abort
+- **CLAUDE.md** — เพิ่ม Testing section + Version management rules
+- **Version correction** — แก้ไข version regression จาก v0.17.2–0.17.4 → v0.18.2–0.18.4
+
+### v0.18.3 (มีนาคม 2026)
+
+**Security & Validation**
+- **loginAnonymous** — validate firstName/surname 1–50 chars (ป้องกัน storage abuse)
+- **savePlayerProgress** — ตรวจ levelId ว่าอยู่ใน LEVELS จริง (ป้องกัน fake level injection)
+- **TeacherDashboard** — ไม่อนุญาตตั้ง assignment deadline เป็นอดีต
+- **Firestore rules** — assignment: deadline > now(), title 1–200 chars, levelIds ≤ 20
+
+### v0.18.2 (มีนาคม 2026)
+
+**Security Hardening**
+- **Firestore rules** — แยก `get` / `list` permission: students อ่านได้เฉพาะ doc ตัวเอง, teacher/admin list ได้
+- **BattleScreen** — เพิ่ม character guard: ไม่มี character → redirect `/character` (ปิด demo exploit)
+- **AdminDashboard** — เพิ่มปุ่มกลับ home + try/catch บน loadStats
+- **LevelSelect** — ลบ Endless Mode card ที่ comment ออก (dead code)
+
+### v0.18.1 (มีนาคม 2026)
+
+**UX & Features**
+- **Flowchart Save Indicator** — แสดงสถานะ ↻ กำลังบันทึก / ☁️ บันทึกแล้ว ✓ ใน BattleScreen toolbar
+- **AchievementsPage** — หน้าแสดง achievement ทั้งหมด (`/achievements`): progress bar, locked = ???
+- **MainMenu** — เพิ่มปุ่ม Achievements ใน menu
 
 ### v0.18.0 (มีนาคม 2026)
 
