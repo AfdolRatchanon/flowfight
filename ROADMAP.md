@@ -60,9 +60,9 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 
 | ฟีเจอร์ | รายละเอียด | สถานะ |
 |---|---|---|
-| **Auto-grading** | ให้คะแนน flowchart ตาม efficiency (จำนวน node, turn, HP เหลือ) | [ ] |
-| **Learning Objective Tag** | แต่ละด่าน tag concept ที่สอน (IF/ELSE, LOOP, etc.) | [ ] |
-| **Teacher Analytics Dashboard** | กราฟ class average, นักเรียนที่ต้องช่วยเหลือ, concept ที่ทุกคนติด | [ ] |
+| **Auto-grading** | ให้คะแนน flowchart ตาม efficiency (จำนวน node, turn, HP เหลือ) | [x] v0.20.0 |
+| **Learning Objective Tag** | แต่ละด่าน tag concept ที่สอน (IF/ELSE, LOOP, etc.) | [x] มีอยู่แล้ว (concept field) |
+| **Teacher Analytics Dashboard** | กราฟ class average, นักเรียนที่ต้องช่วยเหลือ, concept ที่ทุกคนติด | [x] v0.20.0 |
 | **Export Report** | PDF/Excel สรุป progress ส่งผู้ปกครองหรือ ผอ. | [ ] |
 | **Badge & Certificate** | ใบประกาศเมื่อผ่านครบ curriculum ระดับ | [ ] |
 

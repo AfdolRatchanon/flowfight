@@ -449,7 +449,7 @@ public/
 
 ## สถานะระบบ
 
-> อัปเดต: มีนาคม 2026 | v0.19.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
+> อัปเดต: มีนาคม 2026 | v0.20.0 | [เล่นออนไลน์](https://project-rpg-flowchart.web.app/)
 
 ### สิ่งที่พัฒนาแล้ว
 
@@ -510,6 +510,17 @@ public/
 ---
 
 ## Changelog
+
+### v0.20.0 (มีนาคม 2026)
+
+**Phase 3 — Auto-grading & Analytics**
+- **Auto-grading**: score 0–100 ต่อด่าน (HP%×0.6 + NodeEfficiency×0.4) บันทึกใน Firestore `levelScores`
+- **Teacher Analytics tab**: class avg score, per-level bar chart, รายชื่อนักเรียนต้องช่วย (avg < 60)
+- **Teacher Student list**: แสดงชื่อ-นามสกุล, อีเมล, avg score badge ต่อคน
+- **Admin Users tab**: ดู users ทั้งหมด พร้อม role/email/score/progress
+- `users` collection เก็บข้อมูลจริงครบ: firstName, surname, email, role, levelScores
+
+---
 
 ### v0.19.0 (มีนาคม 2026)
 
