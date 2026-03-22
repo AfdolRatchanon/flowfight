@@ -381,17 +381,17 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
       <div ref={wrapperRef} style={{ flex: 1, position: 'relative' }}>
         {/* Mobile: undo/redo + tap hint */}
         {isMobile && (
-          <div style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 200, display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div style={{ position: 'absolute', bottom: 24, left: 8, zIndex: 9999, display: 'flex', gap: 6, alignItems: 'center', pointerEvents: 'auto' }}>
             <button
-              onClick={() => useFlowchartStore.getState().undo()}
-              style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 16, touchAction: 'manipulation', cursor: 'pointer' }}
+              onPointerDown={(e) => { e.stopPropagation(); useFlowchartStore.getState().undo(); }}
+              style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 16, touchAction: 'manipulation', cursor: 'pointer', minWidth: 44, minHeight: 44 }}
               title="Undo">↩</button>
             <button
-              onClick={() => useFlowchartStore.getState().redo()}
-              style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 16, touchAction: 'manipulation', cursor: 'pointer' }}
+              onPointerDown={(e) => { e.stopPropagation(); useFlowchartStore.getState().redo(); }}
+              style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 16, touchAction: 'manipulation', cursor: 'pointer', minWidth: 44, minHeight: 44 }}
               title="Redo">↪</button>
             {storeNodes.length <= 2 && (
-              <span style={{ background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.75)', borderRadius: 8, padding: '6px 10px', fontSize: 11 }}>
+              <span style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', borderRadius: 8, padding: '6px 10px', fontSize: 11 }}>
                 แตะ canvas เพื่อเพิ่ม block
               </span>
             )}
