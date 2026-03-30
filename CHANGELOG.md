@@ -4,6 +4,37 @@
 
 ---
 
+### v0.28.0 (มีนาคม 2026)
+
+**Code View + UX Improvements**
+- **Code View** — ปุ่ม `{}` ใน FlowchartEditor เปิด panel แสดง Pseudocode / Python ที่เทียบเท่ากับผังงานที่นักเรียนต่อ — อัปเดต real-time, รองรับ if/else และ loop (ตาม Research Recommendation 5.3.3.1)
+- **Password show/hide** — LoginPage มีปุ่ม 👁 toggle แสดง/ซ่อนรหัสผ่าน
+
+---
+
+### v0.27.0 (มีนาคม 2026)
+
+**Real-time Dashboard + Research UX Improvements**
+- **TeacherDashboard Real-time** — แทน one-time fetch ด้วย `onSnapshot` 2 ตัว: classroom doc + users query by classroomCode — fire เฉพาะเมื่อข้อมูลเปลี่ยน
+- **Survey banner** — ModeSelect แสดง banner แจ้งเมื่อทำ posttest แล้วแต่ยังไม่ทำ survey
+- **Invitation Link auto-fill** — URL `/?join=CODE` เปิด JoinClassroomModal พร้อม code กรอกไว้ล่วงหน้า
+
+---
+
+### v0.26.0 (มีนาคม 2026)
+
+**Research Support System — Pretest/Posttest/Survey + Teacher Research Controls**
+- **Pretest gate** — ถ้า classroom เปิด Research Mode, นักเรียนต้องทำ Pretest ก่อนเข้า Level Select (`ModeSelect.tsx`)
+- **Posttest banner** — แสดงแจ้งเตือนเมื่อครูเปิด Post-test แล้วแต่นักเรียนยังไม่ได้ทำ
+- **Posttest → Survey redirect** — หลังทำ Posttest เสร็จจะ redirect ไป `/survey` อัตโนมัติ
+- **TeacherDashboard Research controls** — Research Mode toggle (on/off), "เปิด Post-test" button, Copy Invite Link
+- **Research Dashboard Tab** — ตารางแสดง Pre/Post/Gain/In-game/Survey ต่อนักเรียน + class summary (x̄)
+- **Research CSV Export** — SPSS-ready: pretest/posttest (total + ต่อหมวด), gain, D1-D15 scores, attempts, ingame_avg, survey dim1-5, overall
+- **MainMenu redesign** — role-based layout: student เห็น assignments เท่านั้น, teacher เห็น Dashboard shortcut, admin เห็น Admin + Teacher shortcuts
+- **ConfirmModal** — ใช้ที่ logout ทุกจุด (MainMenu, TeacherDashboard, JoinClassroomModal)
+
+---
+
 ### v0.25.0 (มีนาคม 2026)
 
 **Sandbox Mode — Flowgorithm-style Flowchart Editor**

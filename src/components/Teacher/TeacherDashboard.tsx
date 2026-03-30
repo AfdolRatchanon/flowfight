@@ -1,16 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { onSnapshot, doc, query, collection, where } from 'firebase/firestore';
+import { db } from '../../services/firebaseService';
 import { logout } from '../../services/authService';
 import {
-  createClassroom, getTeacherClassrooms, getClassroomStudents,
+  createClassroom, getTeacherClassrooms,
   createAssignment, getClassroomAssignments, deleteAssignment,
+  updateClassroomResearch,
 } from '../../services/teacherService';
 import { getClassroomCustomLevels, deleteCustomLevel, publishCustomLevel } from '../../services/customLevelService';
 import { useGameStore } from '../../stores/gameStore';
 import { useTheme } from '../../contexts/ThemeContext';
-import type { Assignment, Classroom, CustomLevel, StudentProgress } from '../../types/game.types';
+import type { Assignment, Classroom, CustomLevel, StudentProgress, ResearchTests, ResearchSurveyResult } from '../../types/game.types';
+import { getResearchTests, getResearchSurvey } from '../../services/researchService';
+import { interpretSatisfactionScore } from '../../utils/surveyQuestions';
+import { DIMENSION_LABELS } from '../../utils/surveyQuestions';
 import { LEVELS } from '../../utils/constants';
 import VolumeButton from '../UI/VolumeButton';
 import CustomLevelEditor from './CustomLevelEditor';
+import ConfirmModal from '../UI/ConfirmModal';
 
 function exportClassroomCSV(className: string, students: StudentProgress[]) {
   const levelHeaders = LEVELS.map((l) => `D${l.number} Score`).join(',');
@@ -33,6 +40,78 @@ function exportClassroomCSV(className: string, students: StudentProgress[]) {
   URL.revokeObjectURL(url);
 }
 
+type ResearchDataMap = Record<string, { tests: ResearchTests; survey: ResearchSurveyResult | null }>;
+
+function exportResearchCSV(
+  className: string,
+  students: StudentProgress[],
+  researchData: ResearchDataMap,
+) {
+  const levelHeaders = LEVELS.map((l) => `ingame_D${l.number}`).join(',');
+  const attemptHeaders = LEVELS.map((l) => `attempts_D${l.number}`).join(',');
+  const header = [
+    'ชื่อ-นามสกุล', 'Username', 'Email',
+    'pretest_total', 'pretest_sequence', 'pretest_decision', 'pretest_loop',
+    'posttest_total', 'posttest_sequence', 'posttest_decision', 'posttest_loop',
+    'gain_score',
+    levelHeaders, attemptHeaders,
+    'ingame_avg',
+    'survey_dim1', 'survey_dim2', 'survey_dim3', 'survey_dim4', 'survey_dim5', 'survey_overall',
+    'survey_level',
+  ].join(',') + '\n';
+
+  const rows = students.map((s) => {
+    const displayName = s.firstName && s.surname ? `${s.firstName} ${s.surname}` : s.username;
+    const rd = researchData[s.uid];
+    const pre = rd?.tests.pretest;
+    const post = rd?.tests.posttest;
+    const survey = rd?.survey;
+
+    const preTotal   = pre  ? pre.score  : 'NA';
+    const preSeq     = pre  ? pre.scoreByCategory.sequence : 'NA';
+    const preDec     = pre  ? pre.scoreByCategory.decision : 'NA';
+    const preLoop    = pre  ? pre.scoreByCategory.loop     : 'NA';
+    const postTotal  = post ? post.score  : 'NA';
+    const postSeq    = post ? post.scoreByCategory.sequence : 'NA';
+    const postDec    = post ? post.scoreByCategory.decision : 'NA';
+    const postLoop   = post ? post.scoreByCategory.loop     : 'NA';
+    const gain       = (pre && post) ? post.score - pre.score : 'NA';
+
+    const levelScores   = LEVELS.map((l) => s.levelScores?.[l.id]  ?? 'NA').join(',');
+    const levelAttempts = LEVELS.map((l) => s.levelAttempts?.[l.id] ?? 'NA').join(',');
+    const allScores = Object.values(s.levelScores ?? {}) as number[];
+    const ingameAvg = allScores.length > 0 ? (allScores.reduce((a, b) => a + b, 0) / allScores.length).toFixed(2) : 'NA';
+
+    const dim1    = survey ? survey.scores.dim1    : 'NA';
+    const dim2    = survey ? survey.scores.dim2    : 'NA';
+    const dim3    = survey ? survey.scores.dim3    : 'NA';
+    const dim4    = survey ? survey.scores.dim4    : 'NA';
+    const dim5    = survey ? survey.scores.dim5    : 'NA';
+    const overall = survey ? survey.scores.overall : 'NA';
+    const level   = survey ? interpretSatisfactionScore(survey.scores.overall) : 'NA';
+
+    return [
+      `"${displayName}"`, `"${s.username}"`, `"${s.email ?? ''}"`,
+      preTotal, preSeq, preDec, preLoop,
+      postTotal, postSeq, postDec, postLoop,
+      gain,
+      levelScores, levelAttempts,
+      ingameAvg,
+      dim1, dim2, dim3, dim4, dim5, overall,
+      `"${level}"`,
+    ].join(',');
+  }).join('\n');
+
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${className}_research.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function TeacherDashboard() {
   const { colors } = useTheme();
   const { player } = useGameStore();
@@ -43,7 +122,9 @@ export default function TeacherDashboard() {
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'students' | 'assignments' | 'analytics' | 'custom'>('students');
+  const [activeTab, setActiveTab] = useState<'students' | 'assignments' | 'analytics' | 'custom' | 'research'>('students');
+  const [researchData, setResearchData] = useState<ResearchDataMap>({});
+  const [researchLoading, setResearchLoading] = useState(false);
   const [customLevels, setCustomLevels] = useState<CustomLevel[]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const [editingLevel, setEditingLevel] = useState<CustomLevel | undefined>();
@@ -52,6 +133,9 @@ export default function TeacherDashboard() {
   const [newAssLevels, setNewAssLevels] = useState<string[]>([]);
   const [newAssDeadline, setNewAssDeadline] = useState('');
   const [creatingAss, setCreatingAss] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [researchUpdating, setResearchUpdating] = useState(false);
 
   useEffect(() => {
     if (!player?.id) return;
@@ -62,16 +146,86 @@ export default function TeacherDashboard() {
     });
   }, [player?.id]);
 
+  // ใช้ ref เก็บ unsubscribe functions เพื่อ cleanup ถูกต้อง
+  const unsubClassroomRef = useRef<(() => void) | null>(null);
+  const unsubStudentsRef  = useRef<(() => void) | null>(null);
+
   useEffect(() => {
+    // cleanup listeners ของห้องเดิมก่อน
+    unsubClassroomRef.current?.();
+    unsubStudentsRef.current?.();
+
     if (!selectedRoom) return;
     setStudents([]);
-    getClassroomStudents(selectedRoom).then(setStudents);
-    getClassroomAssignments(selectedRoom).then(setAssignments);
-    getClassroomCustomLevels(selectedRoom).then(setCustomLevels);
+    setResearchData({});
+
+    // Real-time: classroom doc → อัปเดต researchMode, posttestUnlocked, student count
+    unsubClassroomRef.current = onSnapshot(
+      doc(db, 'classrooms', selectedRoom),
+      (snap) => {
+        if (!snap.exists()) return;
+        setClassrooms((prev) =>
+          prev.map((c) => c.roomCode === selectedRoom ? { ...c, ...snap.data() } : c),
+        );
+      },
+    );
+
+    // Real-time: user docs ที่ classroomCode ตรงกับ selectedRoom
+    // fires เฉพาะตอนข้อมูลเปลี่ยนจริง — ไม่ใช่ polling
+    unsubStudentsRef.current = onSnapshot(
+      query(collection(db, 'users'), where('classroomCode', '==', selectedRoom)),
+      (snap) => {
+        const list: StudentProgress[] = snap.docs.map((d) => {
+          const u = d.data();
+          return {
+            uid: d.id,
+            username: u.username ?? d.id,
+            firstName: u.firstName,
+            surname: u.surname,
+            email: u.email,
+            role: u.role ?? 'student',
+            levelsCompleted: u.levelsCompleted ?? [],
+            levelScores: u.levelScores ?? {},
+            levelAttempts: u.levelAttempts ?? {},
+            lastActive: u.lastActive ?? 0,
+            classroomCode: u.classroomCode,
+          };
+        });
+        setStudents(list);
+      },
+    );
+
+    // One-time loads (เปลี่ยนน้อย ไม่จำเป็นต้อง real-time)
+    getClassroomAssignments(selectedRoom).then(setAssignments).catch(() => {});
+    getClassroomCustomLevels(selectedRoom).then(setCustomLevels).catch(() => {});
+
+    return () => {
+      unsubClassroomRef.current?.();
+      unsubStudentsRef.current?.();
+    };
   }, [selectedRoom]);
 
   function refreshCustomLevels() {
     if (selectedRoom) getClassroomCustomLevels(selectedRoom).then(setCustomLevels);
+  }
+
+  async function loadResearchData(studentList: StudentProgress[]) {
+    if (researchLoading || studentList.length === 0) return;
+    setResearchLoading(true);
+    try {
+      const entries = await Promise.all(
+        studentList.map(async (s) => {
+          const [tests, survey] = await Promise.all([
+            getResearchTests(s.uid).catch(() => ({})),
+            getResearchSurvey(s.uid).catch(() => null),
+          ]);
+          return [s.uid, { tests, survey }] as [string, { tests: ResearchTests; survey: ResearchSurveyResult | null }];
+        }),
+      );
+      setResearchData(Object.fromEntries(entries));
+    } finally {
+      setResearchLoading(false);
+    }
   }
 
   async function handleCreateClassroom() {
@@ -118,6 +272,36 @@ export default function TeacherDashboard() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function copyInviteLink(code: string) {
+    const link = `${window.location.origin}/?join=${code}`;
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  }
+
+  async function handleToggleResearchMode() {
+    if (!selectedRoom || !selected) return;
+    setResearchUpdating(true);
+    try {
+      const newVal = !selected.researchMode;
+      await updateClassroomResearch(selectedRoom, { researchMode: newVal });
+      setClassrooms((prev) => prev.map((c) => c.roomCode === selectedRoom ? { ...c, researchMode: newVal } : c));
+    } finally {
+      setResearchUpdating(false);
+    }
+  }
+
+  async function handleUnlockPosttest() {
+    if (!selectedRoom) return;
+    setResearchUpdating(true);
+    try {
+      await updateClassroomResearch(selectedRoom, { posttestUnlocked: true });
+      setClassrooms((prev) => prev.map((c) => c.roomCode === selectedRoom ? { ...c, posttestUnlocked: true } : c));
+    } finally {
+      setResearchUpdating(false);
+    }
+  }
+
   const selected = classrooms.find((c) => c.roomCode === selectedRoom);
   const totalLevels = LEVELS.length;
 
@@ -141,7 +325,7 @@ export default function TeacherDashboard() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <VolumeButton variant="header" />
-          <button onClick={() => logout()} style={{
+          <button onClick={() => setShowLogoutConfirm(true)} style={{
             padding: '8px 16px', borderRadius: 10,
             border: `1px solid ${colors.borderSubtle}`, background: 'transparent',
             color: colors.textMuted, fontSize: 13, cursor: 'pointer',
@@ -227,15 +411,60 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
+              {/* Research Settings */}
+              <div style={{ ...cardStyle, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ color: colors.textSub, fontWeight: 700, fontSize: 12 }}>Research Mode</span>
+                <button
+                  onClick={handleToggleResearchMode}
+                  disabled={researchUpdating}
+                  style={{
+                    padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    border: selected.researchMode ? '1px solid rgba(52,211,153,0.5)' : `1px solid ${colors.borderSubtle}`,
+                    background: selected.researchMode ? 'rgba(52,211,153,0.15)' : 'transparent',
+                    color: selected.researchMode ? '#34d399' : colors.textMuted,
+                  }}
+                >{selected.researchMode ? 'เปิดอยู่' : 'ปิดอยู่'}</button>
+
+                {selected.researchMode && (
+                  <button
+                    onClick={handleUnlockPosttest}
+                    disabled={researchUpdating || !!selected.posttestUnlocked}
+                    style={{
+                      padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      border: selected.posttestUnlocked ? '1px solid rgba(52,211,153,0.4)' : '1px solid rgba(251,191,36,0.4)',
+                      background: selected.posttestUnlocked ? 'rgba(52,211,153,0.08)' : 'rgba(251,191,36,0.1)',
+                      color: selected.posttestUnlocked ? '#34d399' : '#fbbf24',
+                      opacity: selected.posttestUnlocked ? 0.6 : 1,
+                    }}
+                  >{selected.posttestUnlocked ? 'Post-test เปิดแล้ว' : 'เปิด Post-test'}</button>
+                )}
+
+                <div style={{ flex: 1 }} />
+                <button
+                  onClick={() => copyInviteLink(selected.roomCode)}
+                  style={{
+                    padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    border: '1px solid rgba(99,102,241,0.4)', background: 'rgba(99,102,241,0.1)',
+                    color: copiedLink ? '#4ade80' : '#818cf8',
+                  }}
+                >{copiedLink ? 'คัดลอกแล้ว!' : 'Copy Invite Link'}</button>
+              </div>
+
               {/* Tabs */}
-              <div style={{ display: 'flex', gap: 4, marginBottom: 12, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                 {([
                   { key: 'students', label: `นักเรียน (${students.length})` },
                   { key: 'assignments', label: `งาน (${assignments.length})` },
                   { key: 'analytics', label: 'Analytics' },
                   { key: 'custom', label: `ด่านของฉัน (${customLevels.length})` },
+                  { key: 'research', label: 'วิจัย' },
                 ] as const).map(({ key, label }) => (
-                  <button key={key} onClick={() => setActiveTab(key)} style={{
+                  <button key={key} onClick={() => {
+                    setActiveTab(key);
+                    if (key === 'research' && Object.keys(researchData).length === 0 && students.length > 0) {
+                      loadResearchData(students);
+                    }
+                  }} style={{
                     padding: '6px 18px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
                     border: activeTab === key ? '1px solid rgba(251,191,36,0.5)' : `1px solid ${colors.borderSubtle}`,
                     background: activeTab === key ? 'rgba(251,191,36,0.1)' : 'transparent',
@@ -243,7 +472,7 @@ export default function TeacherDashboard() {
                   }}>{label}</button>
                 ))}
                 <div style={{ flex: 1 }} />
-                {students.length > 0 && (
+                {students.length > 0 && activeTab !== 'research' && (
                   <button
                     onClick={() => exportClassroomCSV(selected.className, students)}
                     style={{
@@ -252,6 +481,16 @@ export default function TeacherDashboard() {
                       color: '#4ade80',
                     }}
                   >Export CSV</button>
+                )}
+                {activeTab === 'research' && students.length > 0 && (
+                  <button
+                    onClick={() => exportResearchCSV(selected.className, students, researchData)}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      border: '1px solid rgba(139,92,246,0.5)', background: 'rgba(139,92,246,0.1)',
+                      color: '#a78bfa',
+                    }}
+                  >Export Research CSV</button>
                 )}
               </div>
 
@@ -447,6 +686,121 @@ export default function TeacherDashboard() {
                     ))
                   )}
                 </div>
+              ) : activeTab === 'research' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {researchLoading ? (
+                    <p style={{ color: colors.textMuted, textAlign: 'center', padding: 32 }}>กำลังโหลดข้อมูลวิจัย...</p>
+                  ) : students.length === 0 ? (
+                    <p style={{ color: colors.textMuted, textAlign: 'center', padding: 32 }}>ยังไม่มีนักเรียน</p>
+                  ) : (
+                    <>
+                      {/* Class summary */}
+                      {(() => {
+                        const preDone   = students.filter((s) => researchData[s.uid]?.tests.pretest).length;
+                        const postDone  = students.filter((s) => researchData[s.uid]?.tests.posttest).length;
+                        const survDone  = students.filter((s) => researchData[s.uid]?.survey).length;
+                        const preMeans  = students.map((s) => researchData[s.uid]?.tests.pretest?.score).filter((v): v is number => v !== undefined);
+                        const postMeans = students.map((s) => researchData[s.uid]?.tests.posttest?.score).filter((v): v is number => v !== undefined);
+                        const survMeans = students.map((s) => researchData[s.uid]?.survey?.scores.overall).filter((v): v is number => v !== undefined);
+                        const avg = (arr: number[]) => arr.length > 0 ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2) : '—';
+                        return (
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                            {[
+                              { label: 'Pretest', done: preDone, mean: avg(preMeans), unit: '/20', color: '#60a5fa' },
+                              { label: 'Posttest', done: postDone, mean: avg(postMeans), unit: '/20', color: '#34d399' },
+                              { label: 'Survey', done: survDone, mean: avg(survMeans), unit: '/5', color: '#a78bfa' },
+                            ].map((item) => (
+                              <div key={item.label} style={{ ...cardStyle, flex: 1, minWidth: 120 }}>
+                                <p style={{ color: item.color, fontSize: 20, fontWeight: 800, margin: 0 }}>{item.mean}{item.unit}</p>
+                                <p style={{ color: colors.textMuted, fontSize: 11, margin: '2px 0' }}>{item.label} (x̄)</p>
+                                <p style={{ color: colors.textMuted, fontSize: 11 }}>{item.done}/{students.length} คน</p>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Per-student table */}
+                      <div style={{ ...cardStyle, overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr>
+                              {['ชื่อ', 'Pre', 'Post', 'Gain', 'Avg In-game', 'Survey', 'ระดับ', 'สถานะ'].map((h) => (
+                                <th key={h} style={{ color: colors.textMuted, fontWeight: 700, padding: '6px 8px', textAlign: 'left', borderBottom: `1px solid ${colors.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {students.map((s) => {
+                              const displayName = s.firstName && s.surname ? `${s.firstName} ${s.surname}` : s.username;
+                              const rd = researchData[s.uid];
+                              const pre  = rd?.tests.pretest?.score;
+                              const post = rd?.tests.posttest?.score;
+                              const gain = (pre !== undefined && post !== undefined) ? post - pre : undefined;
+                              const allScores = Object.values(s.levelScores ?? {}) as number[];
+                              const ingameAvg = allScores.length > 0 ? (allScores.reduce((a, b) => a + b, 0) / allScores.length).toFixed(1) : '—';
+                              const survOverall = rd?.survey?.scores.overall;
+                              const survLevel   = survOverall !== undefined ? interpretSatisfactionScore(survOverall) : '—';
+                              const hasPre  = pre  !== undefined;
+                              const hasPost = post !== undefined;
+                              const hasSurv = survOverall !== undefined;
+                              const statusDots = [hasPre, hasPost, hasSurv];
+                              return (
+                                <tr key={s.uid} style={{ borderBottom: `1px solid ${colors.border}` }}>
+                                  <td style={{ color: colors.text, padding: '7px 8px', fontWeight: 600 }}>{displayName}</td>
+                                  <td style={{ color: hasPre ? '#60a5fa' : colors.textMuted, padding: '7px 8px' }}>{hasPre ? `${pre}/20` : '—'}</td>
+                                  <td style={{ color: hasPost ? '#34d399' : colors.textMuted, padding: '7px 8px' }}>{hasPost ? `${post}/20` : '—'}</td>
+                                  <td style={{ color: gain !== undefined ? (gain >= 0 ? '#4ade80' : '#f87171') : colors.textMuted, padding: '7px 8px', fontWeight: 700 }}>
+                                    {gain !== undefined ? (gain >= 0 ? `+${gain}` : `${gain}`) : '—'}
+                                  </td>
+                                  <td style={{ color: colors.text, padding: '7px 8px' }}>{ingameAvg}</td>
+                                  <td style={{ color: hasSurv ? '#a78bfa' : colors.textMuted, padding: '7px 8px' }}>{hasSurv ? survOverall!.toFixed(2) : '—'}</td>
+                                  <td style={{ color: colors.textMuted, padding: '7px 8px', fontSize: 11 }}>{survLevel}</td>
+                                  <td style={{ padding: '7px 8px' }}>
+                                    <div style={{ display: 'flex', gap: 4 }}>
+                                      {statusDots.map((done, i) => (
+                                        <span key={i} title={['Pre', 'Post', 'Survey'][i]} style={{
+                                          width: 8, height: 8, borderRadius: '50%',
+                                          background: done ? '#4ade80' : colors.border,
+                                          display: 'inline-block',
+                                        }} />
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Dimension scores summary */}
+                      {students.some((s) => researchData[s.uid]?.survey) && (
+                        <div style={{ ...cardStyle }}>
+                          <p style={{ color: colors.textSub, fontWeight: 700, fontSize: 13, margin: '0 0 10px' }}>คะแนนแบบสอบถามแยกมิติ (x̄)</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {([1, 2, 3, 4, 5] as const).map((dim) => {
+                              const vals = students
+                                .map((s) => researchData[s.uid]?.survey?.scores[`dim${dim}` as keyof typeof researchData[string]['survey']['scores']])
+                                .filter((v): v is number => typeof v === 'number');
+                              const mean = vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+                              const pct = (mean / 5) * 100;
+                              return (
+                                <div key={dim} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ color: colors.textMuted, fontSize: 11, width: 180, flexShrink: 0 }}>มิติ {dim}: {DIMENSION_LABELS[dim]}</span>
+                                  <div style={{ flex: 1, height: 12, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                                    <div style={{ height: '100%', borderRadius: 3, width: pct + '%', background: '#a78bfa', transition: 'width 0.4s' }} />
+                                  </div>
+                                  <span style={{ color: '#a78bfa', fontSize: 12, fontWeight: 700, width: 36, textAlign: 'right' }}>{mean.toFixed(2)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {/* Create assignment form */}
@@ -548,6 +902,16 @@ export default function TeacherDashboard() {
             onCancel={() => { setShowEditor(false); setEditingLevel(undefined); }}
           />
         </div>
+      )}
+
+      {showLogoutConfirm && (
+        <ConfirmModal
+          title="ออกจากระบบ?"
+          confirmLabel="ออกจากระบบ"
+          danger
+          onConfirm={() => logout()}
+          onCancel={() => setShowLogoutConfirm(false)}
+        />
       )}
     </div>
   );

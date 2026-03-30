@@ -25,11 +25,20 @@
 
 ## Commit Policy
 
-- **ห้าม commit** ถ้า user ไม่ได้สั่ง
-- ก่อน commit ต้องบอก user ก่อนเสมอว่าจะ commit อะไร รอ user อนุมัติ
-- **ห้าม push ทุกกรณี** — user จะ push เอง Claude ทำได้แค่ commit เท่านั้น
-- Commit message: `type: description (vX.Y.Z)` + `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+- **Claude commit ได้เมื่อ user สั่ง** — ใช้ git config บนเครื่อง (AfdolRatchanon) อัตโนมัติ
+- **ห้าม push ทุกกรณี** — user จะ push เอง
+- **ห้ามใส่ Co-Authored-By** ทุกกรณี — commit ต้องเป็นชื่อ user ล้วน ๆ
+- Commit message format: `type: description (vX.Y.Z)`
 - Version: SemVer — MAJOR.MINOR.PATCH (feature=MINOR, fix/docs=PATCH)
+
+### ถ้าต้องลบ Co-Authored-By ออกจาก commit ที่ผ่านมา
+```bash
+# ลบออกจาก commit ช่วง <from> ถึง HEAD (รวม <from> ด้วย)
+git stash
+FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter 'sed "/^Co-Authored-By/d"' <from>^..HEAD
+git stash pop
+# จากนั้น user รัน: git push --force
+```
 
 ## Communication Style
 
@@ -154,25 +163,36 @@ npm run lint       # รันเพื่อตรวจสอบ — อย่
 
 > ดู [ROADMAP.md](ROADMAP.md) เสมอก่อนเริ่มทำ feature ใหม่
 
+**โฟกัส: ระดับอาชีวศึกษา (ปวช./ปวส.) ก่อน — ระบบหลักต้องสมบูรณ์ก่อนขยาย**
+
 **ลำดับความสำคัญปัจจุบัน (มีนาคม 2026):**
 ```
 เสร็จแล้ว:
   Phase 1 LMS Foundation    — Teacher/Classroom/Assignment [x] v0.17–18
   Phase 2 ปวส. Curriculum   — level_21–30 [x] v0.19.0
   Phase 3 Analytics         — Auto-grading, Teacher Analytics [x] v0.20.0
-  Phase 4 Platform          — PWA, Sandbox Mode [x] v0.21.0
+  Phase 4 Platform          — PWA, Sandbox Mode, Mobile [x] v0.21.0–21.2
+  Phase 5 (บางส่วน)         — Custom Level Editor, Class Competition, AI Hint [x] v0.22–24
 
-ถัดไป:
-  1. Mobile / Tablet Support — Responsive layout สำหรับ touch screen
-  2. Phase 5 Advanced LMS    — Custom Level Editor, Class Competition, AI Hint
-  3. Curriculum Alignment    — เชื่อมกับหลักสูตร สอศ. (ปวช./ปวส.) อย่างเป็นทางการ
-  4. ประถม / มัธยม           — ทำสุดท้าย (ต้องออกแบบ UX ใหม่ทั้งหมด)
+กำลังทำ (Phase 5 ต่อ — ระบบการศึกษาหลัก ปวช./ปวส.):
+  1. Tutorial + Campaign ที่สมบูรณ์สำหรับ ปวช.
+  2. Endless Mode (ไม่ซับซ้อน)
+  3. Concept Glossary — อธิบาย concept ใน app
+  4. Loss Analysis Screen — หลังแพ้บอกว่าทำไม
+  5. Curriculum Alignment (สอศ. ปวช./ปวส.)
+
+DEFER (ทำหลังระบบหลักเสร็จ):
+  - ประถม / มัธยม curriculum
+  - Parent Portal
+  - Multi-language (EN)
+  - Infinity Dev Terminal Shop (rollShopInventory)
+  - Peer Review
 ```
 
 **กฎ:** ทุกครั้งที่เริ่ม feature ใหม่ → อัปเดต ROADMAP.md เปลี่ยน `[ ]` เป็น `[x] vX.Y.Z`
 
 ## Current Version
-**v0.25.0** — ดู ROADMAP.md สำหรับ Phase ถัดไป
+**v0.28.0** — ดู ROADMAP.md สำหรับ Phase ถัดไป
 
 ### กฎการจัดการ Version (ห้ามผิดเด็ดขาด)
 

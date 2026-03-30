@@ -459,6 +459,7 @@ export default function BattleScreen() {
   const navigate = useNavigate();
   const { character, player, setPlayer, setCharacter, dailyFarmPlays, setDailyFarmPlays } = useGameStore();
   const { status, heroHP, heroMaxHP, enemyHP, enemyMaxHP, battleLog, isExecuting, totalDamageTaken, heroBurnRounds, heroFreezeRounds, heroPoisonRounds, enemyStunnedRounds, enemyBurnRounds, enemyFreezeRounds, enemyPoisonRounds, heroBerserkRounds, healCharges, comboCount, startBattle, restartBattle, stopBattle, executeBattle } = useBattle();
+  const sessionAttempts = useBattleStore((s) => s.sessionAttempts);
   const { antidotes: shopAntidotes, potions: shopPotions, gold: shopGold, addGold, setPotions, setAntidotes } = useShopStore();
   const { validationError, nodes: flowNodes, edges: flowEdges, setNodes: setFlowNodes, setEdges: setFlowEdges, clearToStartEnd } = useFlowchartStore();
   const [speedIdx, setSpeedIdx] = useState(1);
@@ -1122,11 +1123,12 @@ export default function BattleScreen() {
         heroMaxHP: heroMaxHP,
       };
 
-      // Auto-grading score: HP% (60%) + node efficiency (40%)
-      const hpScore = Math.round((Math.max(0, heroHP) / heroMaxHP) * 60);
-      const nodeCount = flowNodes.filter((n) => n.type === 'action' || n.type === 'condition' || n.type === 'loop').length;
-      const nodeScore = Math.max(0, 40 - Math.max(0, nodeCount - 3) * 4);
-      const levelScore = won ? Math.min(100, hpScore + nodeScore) : 0;
+      // Auto-grading score: Mastery Learning (Bloom, 1968)
+      // คะแนน = max(25, 100 - (attempts - 1) × 15)
+      // attempt = previous attempts (cross-session, stored in Firestore) + current session attempts
+      const prevAttempts = player.levelAttempts?.[level.id] ?? 0;
+      const totalAttempts = prevAttempts + sessionAttempts;
+      const levelScore = won ? Math.max(25, 100 - (totalAttempts - 1) * 15) : 0;
 
       savePlayerProgress(player.id, level.id, won, player.username ?? undefined, won ? levelScore : undefined).then((updated) => {
         if (updated) {

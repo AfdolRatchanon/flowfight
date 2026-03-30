@@ -352,6 +352,23 @@ export async function saveLevelLeaderboardEntry(
   });
 }
 
+// ===== Research: Attempt Tracking =====
+
+/**
+ * บันทึกจำนวน attempt ต่อด่าน (รวมทั้งที่แพ้)
+ * เรียกทุกครั้งที่ผู้เล่น Execute flowchart ครั้งแรกของ battle
+ */
+export async function saveLevelAttempt(uid: string, levelId: string): Promise<void> {
+  const isKnownLevel = LEVELS.some((l) => l.id === levelId) || levelId === 'endless';
+  if (!isKnownLevel) return;
+  const ref = doc(db, 'users', uid);
+  const snap = await getDoc(ref);
+  const data: Partial<Player> = snap.exists() ? (snap.data() as Player) : {};
+  const prev: Record<string, number> = { ...((data.levelAttempts ?? {}) as Record<string, number>) };
+  prev[levelId] = (prev[levelId] ?? 0) + 1;
+  await setDoc(ref, { levelAttempts: prev }, { merge: true });
+}
+
 // ===== Daily Farm System =====
 
 function getThaiDate(): string {

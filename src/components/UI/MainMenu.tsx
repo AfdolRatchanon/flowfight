@@ -1,41 +1,80 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { onSnapshot, doc } from 'firebase/firestore';
 import { logout } from '../../services/authService';
 import { upgradeToTeacher, getClassroomAssignments } from '../../services/teacherService';
+import { getResearchTests } from '../../services/researchService';
+import { db } from '../../services/firebaseService';
 import { useGameStore } from '../../stores/gameStore';
 import { levelProgressPct, xpToNextLevel, MAX_LEVEL } from '../../utils/levelSystem';
 import { useTheme } from '../../contexts/ThemeContext';
-import type { Assignment } from '../../types/game.types';
+import type { Assignment, Classroom } from '../../types/game.types';
 import VolumeButton from './VolumeButton';
 import JoinClassroomModal from './JoinClassroomModal';
+import ConfirmModal from './ConfirmModal';
 
-const MENU_ITEMS = [
-  { icon: '⚔️', label: 'Play Game', path: '/levels', color: '#e94560' },
-  { icon: '🎨', label: 'Character', path: '/character', color: '#7c3aed' },
-  { icon: '🏆', label: 'Leaderboard', path: '/leaderboard', color: '#10b981' },
-  { icon: '🥇', label: 'Achievements', path: '/achievements', color: '#f59e0b' },
-  { icon: '🧪', label: 'Sandbox Mode', path: '/sandbox', color: '#06b6d4' },
+
+const GAME_ITEMS = [
+  { icon: '⚔️', label: 'Play Game',    path: '/levels',               color: '#e94560' },
+  { icon: '🎨', label: 'Character',    path: '/character',            color: '#7c3aed' },
+  { icon: '🏆', label: 'Leaderboard',  path: '/leaderboard',          color: '#10b981' },
+  { icon: '🥇', label: 'Achievements', path: '/achievements',         color: '#f59e0b' },
+  { icon: '🧪', label: 'Sandbox Mode', path: '/sandbox',              color: '#06b6d4' },
 ];
-
-const ADMIN_ITEMS = [
-  { icon: '🛡️', label: 'Admin Panel', path: '/admin', color: '#FBBF24' },
-  { icon: '📊', label: 'Teacher Dashboard', path: '/teacher', color: '#f97316' },
-];
-
 
 export default function MainMenu() {
   const { player, character } = useGameStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const { colors } = useTheme();
   const [showJoinClassroom, setShowJoinClassroom] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
   const [classroomCode, setClassroomCode] = useState(player?.classroomCode);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [researchBanner, setResearchBanner] = useState<'pretest' | 'posttest' | null>(null);
+
+  // เปิด JoinClassroomModal อัตโนมัติถ้า URL มี ?join=CODE
+  useEffect(() => {
+    const code = new URLSearchParams(location.search).get('join') ?? '';
+    if (code.length === 6 && /^\d+$/.test(code)) {
+      setInviteCode(code);
+      setShowJoinClassroom(true);
+      navigate('/', { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!classroomCode) { setAssignments([]); return; }
+    if (!classroomCode) return;
     getClassroomAssignments(classroomCode).then(setAssignments).catch(() => {});
   }, [classroomCode]);
+
+  // Research banner — real-time classroom listener
+  useEffect(() => {
+    if (!classroomCode || !player?.id) { setResearchBanner(null); return; }
+    const uid = player.id;
+
+    const unsub = onSnapshot(
+      doc(db, 'classrooms', classroomCode),
+      (snap) => {
+        if (!snap.exists()) { setResearchBanner(null); return; }
+        const c = snap.data() as Classroom;
+        if (!c.researchMode) { setResearchBanner(null); return; }
+
+        getResearchTests(uid)
+          .then((tests) => {
+            if (!tests.pretest) { setResearchBanner('pretest'); return; }
+            if (c.posttestUnlocked && !tests.posttest) { setResearchBanner('posttest'); return; }
+            setResearchBanner(null);
+          })
+          .catch(() => {});
+      },
+      () => {},
+    );
+    return () => unsub();
+  }, [classroomCode, player?.id]);
+
+  const role = player?.role ?? 'student';
 
   return (
     <div style={{
@@ -44,7 +83,7 @@ export default function MainMenu() {
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: 24, position: 'relative', overflow: 'hidden',
     }}>
-      {/* Volume button — top right corner */}
+      {/* Volume button */}
       <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10 }}>
         <VolumeButton variant="header" />
       </div>
@@ -58,7 +97,7 @@ export default function MainMenu() {
 
       <div className="menu-container">
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div className="float" style={{ fontSize: 'clamp(56px, 6vw, 80px)', marginBottom: 16, filter: 'drop-shadow(0 0 20px rgba(233,69,96,0.5))' }}>⚔️</div>
           <h1 style={{ fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 800, letterSpacing: 4, marginBottom: 8, background: 'linear-gradient(135deg, #ffffff 0%, #e94560 50%, #7c3aed 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             FLOWFIGHT
@@ -72,62 +111,51 @@ export default function MainMenu() {
           )}
         </div>
 
-        {/* Character card */}
+        {/* ── Admin/Teacher shortcut buttons ── */}
+        {role === 'admin' && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <DashButton icon="🛡️" label="Admin Panel"       color="#FBBF24" onClick={() => navigate('/admin')} />
+            <DashButton icon="📊" label="Teacher Dashboard" color="#f97316" onClick={() => navigate('/teacher')} />
+          </div>
+        )}
+        {role === 'teacher' && (
+          <div style={{ marginBottom: 16 }}>
+            <DashButton icon="📊" label="Teacher Dashboard" color="#f97316" onClick={() => navigate('/teacher')} fullWidth />
+          </div>
+        )}
+
+        {/* ── Character card ── */}
         {character && (() => {
-          const xpPct = levelProgressPct(character.level, character.experience);
+          const xpPct  = levelProgressPct(character.level, character.experience);
           const xpLeft = xpToNextLevel(character.level, character.experience);
           return (
             <div style={{
-              background: colors.bgSurface,
-              border: `1px solid ${colors.borderSubtle}`,
+              background: colors.bgSurface, border: `1px solid ${colors.borderSubtle}`,
               borderRadius: 16, padding: '14px 20px', marginBottom: 20,
               display: 'flex', alignItems: 'center', gap: 16,
             }}>
-              {/* Avatar */}
               <div style={{
                 width: 52, height: 52, borderRadius: 12, flexShrink: 0,
                 background: 'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(233,69,96,0.2))',
                 border: '2px solid rgba(124,58,237,0.4)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
               }}>
                 <img src={`/characters/${character.class}.png`} alt={character.class} style={{ width: 44, height: 44, objectFit: 'contain', imageRendering: 'pixelated' }} />
               </div>
-
-              {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                  <span style={{
-                    background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                    color: '#1c1917', fontSize: 10, fontWeight: 900,
-                    padding: '2px 8px', borderRadius: 6,
-                  }}>Lv.{character.level}</span>
+                  <span style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', color: '#1c1917', fontSize: 10, fontWeight: 900, padding: '2px 8px', borderRadius: 6 }}>Lv.{character.level}</span>
                   <span style={{ color: colors.text, fontWeight: 700, fontSize: 14 }}>{character.name}</span>
-                  <span style={{ color: colors.textMuted, fontSize: 12, textTransform: 'capitalize' }}>
-                    {character.class}
-                  </span>
+                  <span style={{ color: colors.textMuted, fontSize: 12, textTransform: 'capitalize' }}>{character.class}</span>
                 </div>
-
-                {/* XP bar */}
                 <div style={{ width: '100%', height: 6, background: colors.bgSurface, borderRadius: 3, overflow: 'hidden', marginBottom: 4 }}>
-                  <div style={{
-                    width: xpPct + '%', height: '100%', borderRadius: 3,
-                    background: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
-                    boxShadow: '0 0 6px rgba(251,191,36,0.5)',
-                    transition: 'width 0.5s ease',
-                  }} />
+                  <div style={{ width: xpPct + '%', height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, #fbbf24, #f59e0b)', boxShadow: '0 0 6px rgba(251,191,36,0.5)', transition: 'width 0.5s ease' }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: colors.textMuted, fontSize: 10 }}>
-                    {character.level >= MAX_LEVEL ? 'MAX LEVEL' : `${xpLeft} XP → Lv.${character.level + 1}`}
-                  </span>
-                  <span style={{ color: colors.textMuted, fontSize: 10 }}>
-                    {character.experience} XP
-                  </span>
+                  <span style={{ color: colors.textMuted, fontSize: 10 }}>{character.level >= MAX_LEVEL ? 'MAX LEVEL' : `${xpLeft} XP → Lv.${character.level + 1}`}</span>
+                  <span style={{ color: colors.textMuted, fontSize: 10 }}>{character.experience} XP</span>
                 </div>
               </div>
-
-              {/* Stats */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0, fontSize: 11 }}>
                 <span style={{ color: '#f87171' }}>❤️ {character.stats.maxHP}</span>
                 <span style={{ color: '#fb923c' }}>⚔️ {character.stats.attack}</span>
@@ -137,84 +165,116 @@ export default function MainMenu() {
           );
         })()}
 
-        {/* Fallback if no character yet */}
         {!character && player && (
           <div style={{
             background: 'rgba(124,58,237,0.06)', border: '1px dashed rgba(124,58,237,0.3)',
             borderRadius: 16, padding: '14px 20px', marginBottom: 20,
             textAlign: 'center', cursor: 'pointer',
           }} onClick={() => navigate('/character')}>
-            <p style={{ color: colors.textMuted, fontSize: 13, margin: 0 }}>
-              ✨ สร้างตัวละครเพื่อเริ่มเกม
-            </p>
+            <p style={{ color: colors.textMuted, fontSize: 13, margin: 0 }}>✨ สร้างตัวละครเพื่อเริ่มเกม</p>
           </div>
         )}
 
-        {/* Menu buttons */}
+        {/* ── Game menu buttons ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-          {player?.role === 'admin' && ADMIN_ITEMS.map((item) => (
-            <MenuButton
-              key={item.path}
-              icon={item.icon}
-              label={item.label}
-              color={item.color}
-              onClick={() => navigate(item.path)}
-            />
-          ))}
-          {MENU_ITEMS.map((item) => (
-            <MenuButton
-              key={item.path}
-              icon={item.icon}
-              label={item.label}
-              color={item.color}
-              onClick={() => navigate(item.path)}
-            />
+          {GAME_ITEMS.map((item) => (
+            <MenuButton key={item.path} icon={item.icon} label={item.label} color={item.color} onClick={() => navigate(item.path)} />
           ))}
         </div>
 
-        {/* Join Classroom */}
-        <button
-          onClick={() => setShowJoinClassroom(true)}
-          style={{
-            width: '100%', padding: '12px 16px', borderRadius: 12, marginBottom: 8,
-            border: classroomCode
-              ? '1px solid rgba(251,191,36,0.4)'
-              : `1px solid ${colors.borderSubtle}`,
-            background: classroomCode ? 'rgba(251,191,36,0.08)' : 'transparent',
-            color: classroomCode ? '#FBBF24' : colors.textMuted,
-            cursor: 'pointer', fontSize: 13, textAlign: 'left',
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}
-        >
-          <span>🏫</span>
-          <span style={{ flex: 1 }}>
-            {classroomCode ? `ห้องเรียน: ${classroomCode}` : 'เข้าร่วมห้องเรียน'}
-          </span>
-          <span style={{ fontSize: 11, opacity: 0.6 }}>จัดการ</span>
-        </button>
-
-        {/* Classroom Leaderboard — แสดงเมื่ออยู่ในห้องเรียน */}
-        {classroomCode && (
-          <button
-            onClick={() => navigate('/classroom-leaderboard')}
+        {/* ── Research banners (student in research classroom) ── */}
+        {researchBanner === 'pretest' && (
+          <div
+            onClick={() => navigate('/pretest')}
             style={{
-              width: '100%', padding: '10px 16px', borderRadius: 12, marginBottom: 12,
-              border: '1px solid rgba(16,185,129,0.3)',
-              background: 'rgba(16,185,129,0.06)',
-              color: '#10b981',
-              cursor: 'pointer', fontSize: 13, textAlign: 'left',
-              display: 'flex', alignItems: 'center', gap: 10,
+              marginBottom: 8, padding: '12px 16px', borderRadius: 12, cursor: 'pointer',
+              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.45)',
+              display: 'flex', alignItems: 'center', gap: 12,
             }}
           >
-            <span>📊</span>
-            <span>อันดับห้องเรียน</span>
-          </button>
+            <span style={{ fontSize: 22, flexShrink: 0 }}>📋</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: '#60a5fa', fontWeight: 700, fontSize: 13, margin: 0 }}>
+                ต้องทำ Pre-test ก่อนเริ่มเล่น
+              </p>
+              <p style={{ color: '#93c5fd', fontSize: 11, margin: 0 }}>
+                ห้องเรียนนี้เปิด Research Mode — กดที่นี่เพื่อทำแบบทดสอบก่อนเรียน
+              </p>
+            </div>
+            <span style={{ color: '#60a5fa', fontSize: 16 }}>›</span>
+          </div>
+        )}
+        {researchBanner === 'posttest' && (
+          <div
+            onClick={() => navigate('/posttest')}
+            style={{
+              marginBottom: 8, padding: '12px 16px', borderRadius: 12, cursor: 'pointer',
+              background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.4)',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 22, flexShrink: 0 }}>📋</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: '#34d399', fontWeight: 700, fontSize: 13, margin: 0 }}>
+                Post-test พร้อมแล้ว!
+              </p>
+              <p style={{ color: '#6ee7b7', fontSize: 11, margin: 0 }}>
+                ครูเปิด Post-test แล้ว — กดที่นี่เพื่อทำแบบทดสอบหลังเรียน
+              </p>
+            </div>
+            <span style={{ color: '#34d399', fontSize: 16 }}>›</span>
+          </div>
+        )}
+
+        {/* ── Classroom section (student only) ── */}
+        {role === 'student' && (
+          <>
+            <button
+              onClick={() => setShowJoinClassroom(true)}
+              style={{
+                width: '100%', padding: '12px 16px', borderRadius: 12, marginBottom: 8,
+                border: classroomCode ? '1px solid rgba(251,191,36,0.4)' : `1px solid ${colors.borderSubtle}`,
+                background: classroomCode ? 'rgba(251,191,36,0.08)' : 'transparent',
+                color: classroomCode ? '#FBBF24' : colors.textMuted,
+                cursor: 'pointer', fontSize: 13, textAlign: 'left',
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}
+            >
+              <span>🏫</span>
+              <span style={{ flex: 1 }}>{classroomCode ? `ห้องเรียน: ${classroomCode}` : 'เข้าร่วมห้องเรียน'}</span>
+              <span style={{ fontSize: 11, opacity: 0.6 }}>จัดการ</span>
+            </button>
+
+            {classroomCode && (
+              <button
+                onClick={() => navigate('/classroom-leaderboard')}
+                style={{
+                  width: '100%', padding: '10px 16px', borderRadius: 12, marginBottom: 12,
+                  border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.06)',
+                  color: '#10b981', cursor: 'pointer', fontSize: 13, textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}
+              >
+                <span>📊</span>
+                <span>อันดับห้องเรียน</span>
+              </button>
+            )}
+
+            {classroomCode && assignments.length > 0 && (
+              <AssignmentsPanel
+                assignments={assignments}
+                completedLevels={player?.levelsCompleted ?? []}
+                colors={colors}
+              />
+            )}
+          </>
         )}
 
         {showJoinClassroom && player && (
           <JoinClassroomModal
             uid={player.id}
             currentCode={classroomCode}
+            initialCode={inviteCode}
             onClose={() => setShowJoinClassroom(false)}
             onJoined={(_className, code) => {
               setClassroomCode(code || undefined);
@@ -223,25 +283,14 @@ export default function MainMenu() {
           />
         )}
 
-        {/* My Assignments — แสดงเมื่อนักเรียนอยู่ในห้องและมี assignment */}
-        {classroomCode && assignments.length > 0 && (
-          <AssignmentsPanel
-            assignments={assignments}
-            completedLevels={player?.levelsCompleted ?? []}
-            colors={colors}
-          />
-        )}
-
-        {/* Upgrade to Teacher (student accounts only) */}
-        {player && player.role !== 'teacher' && (
+        {/* ── Upgrade to Teacher (student only) ── */}
+        {role === 'student' && (
           <button
             onClick={() => setShowUpgradeModal(true)}
             style={{
               width: '100%', padding: '10px 16px', borderRadius: 12, marginBottom: 12,
-              border: '1px solid rgba(251,191,36,0.2)',
-              background: 'transparent',
-              color: 'rgba(251,191,36,0.45)',
-              cursor: 'pointer', fontSize: 12, textAlign: 'left',
+              border: '1px solid rgba(251,191,36,0.2)', background: 'transparent',
+              color: 'rgba(251,191,36,0.45)', cursor: 'pointer', fontSize: 12, textAlign: 'left',
               display: 'flex', alignItems: 'center', gap: 10,
             }}
           >
@@ -258,15 +307,8 @@ export default function MainMenu() {
           />
         )}
 
-        {/* Sign out */}
-        <button
-          onClick={() => logout()}
-          style={{ width: '100%', padding: 12, borderRadius: 12, border: `1px solid ${colors.borderSubtle}`, background: 'transparent', color: colors.textMuted, cursor: 'pointer', fontSize: 13 }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#e94560'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = colors.textMuted; }}
-        >
-          Sign Out
-        </button>
+        {/* ── Sign Out ── */}
+        <SignOutButton colors={colors} />
 
         <p style={{ textAlign: 'center', color: colors.textMuted, fontSize: 11, marginTop: 20, opacity: 0.5 }}>
           v{import.meta.env.VITE_APP_VERSION ?? '0.12.2'}
@@ -284,6 +326,99 @@ export default function MainMenu() {
   );
 }
 
+// ─── DashButton ───────────────────────────────────────────────────────────────
+function DashButton({ icon, label, color, onClick, fullWidth }: {
+  icon: string; label: string; color: string; onClick: () => void; fullWidth?: boolean;
+}) {
+  const { colors } = useTheme();
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: fullWidth ? undefined : 1,
+        width: fullWidth ? '100%' : undefined,
+        padding: '12px 16px', borderRadius: 12, cursor: 'pointer',
+        border: `1px solid ${color}44`, background: `${color}12`,
+        color, fontWeight: 700, fontSize: 14,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = `${color}22`; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = `${color}12`; }}
+    >
+      <span style={{ fontSize: 18 }}>{icon}</span>
+      <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+      <span style={{ opacity: 0.6, color: colors.textMuted }}>›</span>
+    </button>
+  );
+}
+
+// ─── SignOutButton ─────────────────────────────────────────────────────────────
+function SignOutButton({ colors }: { colors: ReturnType<typeof useTheme>['colors'] }) {
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <>
+      <button
+        onClick={() => setConfirm(true)}
+        style={{ width: '100%', padding: 12, borderRadius: 12, border: `1px solid ${colors.borderSubtle}`, background: 'transparent', color: colors.textMuted, cursor: 'pointer', fontSize: 13 }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#e94560'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = colors.textMuted; }}
+      >
+        Sign Out
+      </button>
+      {confirm && (
+        <ConfirmModal
+          title="ออกจากระบบ?"
+          message="คืบหน้าของเกมถูกบันทึกแล้ว สามารถกลับมาเล่นต่อได้ตลอดเวลา"
+          confirmLabel="ออกจากระบบ"
+          danger
+          onConfirm={() => logout()}
+          onCancel={() => setConfirm(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── AssignmentsPanel ─────────────────────────────────────────────────────────
+function AssignmentsPanel({ assignments, completedLevels, colors }: {
+  assignments: Assignment[];
+  completedLevels: string[];
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  const [now] = useState(Date.now);
+  const pending = assignments.filter((a) => !a.levelIds.every((id) => completedLevels.includes(id)));
+  if (pending.length === 0) return null;
+  return (
+    <div style={{
+      marginBottom: 12, borderRadius: 12,
+      border: '1px solid rgba(251,191,36,0.25)', background: 'rgba(251,191,36,0.04)', padding: '12px 14px',
+    }}>
+      <p style={{ color: '#FBBF24', fontWeight: 700, fontSize: 12, margin: '0 0 8px', letterSpacing: 1 }}>
+        งานที่ต้องส่ง ({pending.length})
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {pending.map((a) => {
+          const done    = a.levelIds.filter((id) => completedLevels.includes(id)).length;
+          const overdue = a.deadline < now;
+          const deadlineStr = new Date(a.deadline).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+          return (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ color: colors.text, fontSize: 13, fontWeight: 600, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</p>
+                <p style={{ color: overdue ? '#f87171' : colors.textMuted, fontSize: 11, margin: 0 }}>
+                  {overdue ? 'เลยกำหนด!' : `ส่งภายใน ${deadlineStr}`}
+                </p>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: done === a.levelIds.length ? '#4ade80' : '#FBBF24', flexShrink: 0 }}>{done}/{a.levelIds.length}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── UpgradeToTeacherModal ────────────────────────────────────────────────────
 function UpgradeToTeacherModal({ uid, onClose, onSuccess }: { uid: string; onClose: () => void; onSuccess: () => void }) {
   const { colors } = useTheme();
   const { setPlayer, player } = useGameStore();
@@ -295,115 +430,38 @@ function UpgradeToTeacherModal({ uid, onClose, onSuccess }: { uid: string; onClo
     setError(''); setLoading(true);
     try {
       await upgradeToTeacher(uid, inviteCode.trim());
-      // update local player state to teacher so ProtectedRoute redirects immediately
       if (player) setPlayer({ ...player, role: 'teacher' });
       onSuccess();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        background: colors.bgCard, borderRadius: 20,
-        border: `1px solid ${colors.border}`, padding: 28,
-        width: '100%', maxWidth: 360,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-      }}>
-        <h2 style={{ fontFamily: "'Cinzel', serif", color: '#FBBF24', fontSize: 18, margin: '0 0 6px' }}>
-          สมัครบัญชีครู
-        </h2>
-        <p style={{ color: colors.textMuted, fontSize: 13, margin: '0 0 20px' }}>
-          ใส่รหัสเชิญครูที่ได้รับจากผู้ดูแลระบบ
-        </p>
-
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: colors.bgCard, borderRadius: 20, border: `1px solid ${colors.border}`, padding: 28, width: '100%', maxWidth: 360, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+        <h2 style={{ fontFamily: "'Cinzel', serif", color: '#FBBF24', fontSize: 18, margin: '0 0 6px' }}>สมัครบัญชีครู</h2>
+        <p style={{ color: colors.textMuted, fontSize: 13, margin: '0 0 20px' }}>ใส่รหัสเชิญครูที่ได้รับจากผู้ดูแลระบบ</p>
         <input
           placeholder="INVITE CODE"
           value={inviteCode}
           onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
           maxLength={12}
-          style={{
-            width: '100%', padding: '10px 14px', borderRadius: 10,
-            background: colors.bgSurface, border: `1px solid ${colors.border}`,
-            color: '#FBBF24', fontSize: 16, fontWeight: 700, letterSpacing: 4,
-            textAlign: 'center', marginBottom: 12,
-          }}
+          style={{ width: '100%', padding: '10px 14px', borderRadius: 10, background: colors.bgSurface, border: `1px solid ${colors.border}`, color: '#FBBF24', fontSize: 16, fontWeight: 700, letterSpacing: 4, textAlign: 'center', marginBottom: 12 }}
         />
-
         {error && <p style={{ color: '#f87171', fontSize: 13, margin: '0 0 10px', textAlign: 'center' }}>{error}</p>}
-
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={onClose} style={{
-            flex: 1, padding: '10px', borderRadius: 10,
-            border: `1px solid ${colors.borderSubtle}`, background: 'transparent',
-            color: colors.textMuted, fontSize: 13, cursor: 'pointer',
-          }}>ยกเลิก</button>
-          <button onClick={handleUpgrade} disabled={loading || !inviteCode.trim()} style={{
-            flex: 2, padding: '10px', borderRadius: 10,
-            border: '1px solid rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.12)',
-            color: '#FBBF24', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-            opacity: !inviteCode.trim() ? 0.5 : 1,
-          }}>{loading ? 'กำลังสมัคร...' : 'ยืนยัน'}</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${colors.borderSubtle}`, background: 'transparent', color: colors.textMuted, fontSize: 13, cursor: 'pointer' }}>ยกเลิก</button>
+          <button onClick={handleUpgrade} disabled={loading || !inviteCode.trim()} style={{ flex: 2, padding: '10px', borderRadius: 10, border: '1px solid rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.12)', color: '#FBBF24', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: !inviteCode.trim() ? 0.5 : 1 }}>
+            {loading ? 'กำลังสมัคร...' : 'ยืนยัน'}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function AssignmentsPanel({ assignments, completedLevels, colors }: {
-  assignments: Assignment[];
-  completedLevels: string[];
-  colors: ReturnType<typeof import('../../contexts/ThemeContext').useTheme>['colors'];
-}) {
-  const now = Date.now();
-  const pending = assignments.filter((a) => {
-    const done = a.levelIds.every((id) => completedLevels.includes(id));
-    return !done;
-  });
-  if (pending.length === 0) return null;
-
-  return (
-    <div style={{
-      marginBottom: 12, borderRadius: 12,
-      border: '1px solid rgba(251,191,36,0.25)',
-      background: 'rgba(251,191,36,0.04)',
-      padding: '12px 14px',
-    }}>
-      <p style={{ color: '#FBBF24', fontWeight: 700, fontSize: 12, margin: '0 0 8px', letterSpacing: 1 }}>
-        งานที่ต้องส่ง ({pending.length})
-      </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {pending.map((a) => {
-          const done = a.levelIds.filter((id) => completedLevels.includes(id)).length;
-          const overdue = a.deadline < now;
-          const deadlineStr = new Date(a.deadline).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
-          return (
-            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ color: colors.text, fontSize: 13, fontWeight: 600, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</p>
-                <p style={{ color: overdue ? '#f87171' : colors.textMuted, fontSize: 11, margin: 0 }}>
-                  {overdue ? 'เลยกำหนด!' : `ส่งภายใน ${deadlineStr}`}
-                </p>
-              </div>
-              <span style={{
-                fontSize: 11, fontWeight: 700, color: done === a.levelIds.length ? '#4ade80' : '#FBBF24',
-                flexShrink: 0,
-              }}>{done}/{a.levelIds.length}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
+// ─── MenuButton ───────────────────────────────────────────────────────────────
 function MenuButton({ icon, label, color, onClick }: { icon: string; label: string; color: string; onClick: () => void }) {
   const { colors } = useTheme();
   return (
@@ -412,22 +470,12 @@ function MenuButton({ icon, label, color, onClick }: { icon: string; label: stri
       style={{
         display: 'flex', alignItems: 'center', gap: 16,
         padding: '18px 24px', borderRadius: 16, border: 'none', cursor: 'pointer',
-        background: colors.bgSurface,
-        borderLeft: '4px solid ' + color,
+        background: colors.bgSurface, borderLeft: '4px solid ' + color,
         color: colors.text, fontWeight: 700, fontSize: 16,
-        transition: 'all 0.2s ease',
-        outline: `1px solid ${colors.borderSubtle}`,
+        transition: 'all 0.2s ease', outline: `1px solid ${colors.borderSubtle}`,
       }}
-      onMouseEnter={(e) => {
-        const b = e.currentTarget as HTMLButtonElement;
-        b.style.background = colors.bgSurfaceHover;
-        b.style.transform = 'translateX(4px)';
-      }}
-      onMouseLeave={(e) => {
-        const b = e.currentTarget as HTMLButtonElement;
-        b.style.background = colors.bgSurface;
-        b.style.transform = 'translateX(0)';
-      }}
+      onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = colors.bgSurfaceHover; b.style.transform = 'translateX(4px)'; }}
+      onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = colors.bgSurface; b.style.transform = 'translateX(0)'; }}
     >
       <span style={{ fontSize: 24, width: 32, textAlign: 'center' }}>{icon}</span>
       <span>{label}</span>
@@ -435,3 +483,4 @@ function MenuButton({ icon, label, color, onClick }: { icon: string; label: stri
     </button>
   );
 }
+

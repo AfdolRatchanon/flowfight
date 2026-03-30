@@ -184,6 +184,30 @@ service cloud.firestore {
         && (request.resource.data.get('characterLevel', 1) <= 10);
     }
 
+    // ===== Research Tests (Pretest / Posttest) =====
+    // docId = uid, เจ้าของเขียนได้ครั้งเดียว (สร้างใหม่), teacher/admin อ่านได้
+    match /research_tests/{uid} {
+      allow get:    if request.auth != null && (request.auth.uid == uid || isTeacherOrAdmin());
+      allow list:   if isTeacherOrAdmin();
+
+      // สร้างใหม่: เจ้าของเท่านั้น
+      allow create: if request.auth != null && request.auth.uid == uid;
+
+      // อัปเดต: เจ้าของ — อนุญาตให้เพิ่ม pretest หรือ posttest (ไม่เพิ่มลบ field อื่น)
+      // ตรวจสอบว่า keys ที่เปลี่ยนแปลงมีแค่ 'pretest' หรือ 'posttest'
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pretest', 'posttest']);
+    }
+
+    // ===== Research Surveys (Satisfaction) =====
+    // docId = uid, เขียนครั้งเดียว (create only), teacher/admin อ่านได้
+    match /research_surveys/{uid} {
+      allow get:    if request.auth != null && (request.auth.uid == uid || isTeacherOrAdmin());
+      allow list:   if isTeacherOrAdmin();
+      allow create: if request.auth != null && request.auth.uid == uid;
+      // ไม่อนุญาต update/delete — เขียนครั้งเดียว
+    }
+
     // ===== Endless Mode Leaderboard =====
     // docId = playerId
     match /endlessboards/{playerId} {

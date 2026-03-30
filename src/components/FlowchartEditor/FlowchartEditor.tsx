@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -24,6 +24,8 @@ import SelfLoopEdge from './SelfLoopEdge';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ThemeColors } from '../../contexts/ThemeContext';
 import { soundManager } from '../../services/soundManager';
+import { flowchartToCode } from '../../utils/flowchartToCode';
+import type { CodeLang } from '../../utils/flowchartToCode';
 
 const nodeTypes = {
   start: StartNode,
@@ -146,6 +148,8 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
   const [submenuY, setSubmenuY] = useState(0);       // Y of level-1 item → positions level-2
   const [subSubmenuY, setSubSubmenuY] = useState(0); // Y of level-2 item → positions level-3
   const [nodeLimitFlash, setNodeLimitFlash] = useState(false);
+  const [showCodeView, setShowCodeView] = useState(false);
+  const [codeLang, setCodeLang] = useState<CodeLang>('pseudo');
   const menuRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rfInstance = useRef<any>(null);
@@ -373,6 +377,11 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
   // Position the main menu
   const menuX = ctxMenu ? ctxMenu.x + 6 : 0;
   const menuY = ctxMenu ? ctxMenu.y + 6 : 0;
+
+  const generatedCode = useMemo(
+    () => flowchartToCode(storeNodes, storeEdges, codeLang),
+    [storeNodes, storeEdges, codeLang],
+  );
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
@@ -713,6 +722,95 @@ export default function FlowchartEditor({ allowedBlocks, shieldRequiredTypes, no
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {/* ── Code View toggle button ──────────────────────────────────────── */}
+        <button
+          onClick={() => setShowCodeView((v) => !v)}
+          title="Code View — ดู Pseudocode / Python ที่ตรงกับผังงาน"
+          style={{
+            position: 'absolute', bottom: 10, right: 10, zIndex: 200,
+            background: showCodeView ? 'rgba(168,85,247,0.25)' : 'rgba(15,15,30,0.8)',
+            border: `1px solid ${showCodeView ? 'rgba(168,85,247,0.7)' : 'rgba(168,85,247,0.35)'}`,
+            borderRadius: 8, padding: '5px 10px',
+            color: showCodeView ? '#c084fc' : '#a78bfa',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 5,
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{'{}'}</span>
+          Code View
+        </button>
+
+        {/* ── Code View panel ──────────────────────────────────────────────── */}
+        {showCodeView && (
+          <div style={{
+            position: 'absolute', right: 8, top: 8, bottom: 44,
+            width: 300, zIndex: 150,
+            background: 'rgba(10,10,20,0.96)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(168,85,247,0.4)',
+            borderRadius: 12,
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+          }}>
+            {/* header */}
+            <div style={{
+              padding: '8px 10px',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+            }}>
+              <span style={{ color: '#a855f7', fontWeight: 800, fontSize: 10, letterSpacing: 1, flex: 1 }}>
+                CODE VIEW
+              </span>
+              {/* Lang tabs */}
+              {(['pseudo', 'python'] as CodeLang[]).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setCodeLang(l)}
+                  style={{
+                    padding: '3px 8px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                    fontSize: 10, fontWeight: 700,
+                    background: codeLang === l ? 'rgba(168,85,247,0.3)' : 'transparent',
+                    color: codeLang === l ? '#c084fc' : 'rgba(255,255,255,0.35)',
+                  }}
+                >
+                  {l === 'pseudo' ? 'Pseudocode' : 'Python'}
+                </button>
+              ))}
+              <button
+                onClick={() => setShowCodeView(false)}
+                style={{
+                  width: 20, height: 20, borderRadius: 4, border: 'none',
+                  background: 'transparent', color: 'rgba(255,255,255,0.35)',
+                  cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* hint */}
+            <div style={{ padding: '5px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
+              <p style={{ margin: 0, color: 'rgba(255,255,255,0.3)', fontSize: 9, lineHeight: 1.4 }}>
+                แสดง{codeLang === 'pseudo' ? 'ภาษาเทียม (Pseudocode)' : 'ภาษา Python'} ที่เทียบเท่าผังงานของคุณ — อัปเดตอัตโนมัติ
+              </p>
+            </div>
+
+            {/* code */}
+            <pre style={{
+              flex: 1, overflow: 'auto', margin: 0, padding: '10px 12px',
+              fontSize: 11, lineHeight: 1.65,
+              color: '#e2e8f0',
+              fontFamily: "'Courier New', 'Consolas', monospace",
+              whiteSpace: 'pre',
+            }}>
+              {generatedCode}
+            </pre>
           </div>
         )}
       </div>

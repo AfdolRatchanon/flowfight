@@ -6,12 +6,14 @@
 
 ## Vision
 
-FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LMS Platform** สำหรับการสอน Computational Thinking และการเขียน Algorithm ผ่านการเล่นเกม รองรับทุกระดับการศึกษา ตั้งแต่ประถมถึง ปวส. พร้อมระบบบริหารจัดการห้องเรียนสำหรับครู
+FlowFight คือ **LMS Platform** สำหรับการสอน Computational Thinking และการเขียน Algorithm ผ่านการเล่นเกม **โฟกัสหลัก: ระดับอาชีวศึกษา (ปวช./ปวส.)** ก่อน — ให้ระบบการศึกษาหลักสมบูรณ์ก่อนขยายไประดับอื่น
 
 ```
-ประถม → มัธยม → ปวช. → ปวส.
-   ↓        ↓       ↓      ↓
-เล่นเกม + เรียน Flowchart + ครูติดตาม + ระบบประเมิน
+[โฟกัสตอนนี้]       [ขยายในอนาคต]
+ปวช. → ปวส.    →    มัธยม → ประถม
+   ↓      ↓
+Tutorial + Campaign + Endless
+ครูติดตาม + ระบบประเมิน + Curriculum สอศ.
 ```
 
 ---
@@ -43,15 +45,15 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 
 ---
 
-## Phase 2 — Multi-Level Curriculum
-> *รองรับทุกระดับการศึกษา ปรับ difficulty ตาม target*
+## Phase 2 — Curriculum (ปวช./ปวส.)
+> *โฟกัสระดับอาชีวศึกษาก่อน — ระดับอื่นรอขยายในอนาคต*
 
 | ระดับ | อายุ | เนื้อหา | จำนวนด่าน | สถานะ |
 |---|---|---|---|---|
-| **ประถม** | 8–12 | Sequence พื้นฐาน, บวก/ลบง่าย ๆ, ศัตรูเป็นสัตว์น่ารัก | 10 ด่าน | [ ] |
-| **มัธยม** | 12–18 | Decision, Loop, Counter | 15 ด่าน (ปัจจุบัน) | มีแล้ว |
-| **ปวช.** | 15–18 | Algorithm เต็มรูปแบบ, Class Skills, Optimization | 20 ด่าน (ปัจจุบัน) | มีแล้ว |
+| **ปวช.** | 15–18 | Sequence → Decision → Loop → Algorithm เต็มรูปแบบ | 20 ด่าน | มีแล้ว |
 | **ปวส.** | 18–20 | Nested Loop, Pattern Recognition, Boss Challenge | 10 ด่าน advanced | [x] v0.19.0 |
+| **มัธยม** | 12–18 | Decision, Loop, Counter | 15 ด่าน | [ ] DEFER |
+| **ประถม** | 8–12 | Sequence พื้นฐาน, ศัตรูเป็นสัตว์น่ารัก | 10 ด่าน | [ ] DEFER |
 
 ---
 
@@ -76,29 +78,46 @@ FlowFight จะพัฒนาจากเกม RPG + Flowchart สู่ **LM
 | **Mobile / Tablet Support** | Responsive layout สำหรับ touch screen | [x] v0.21.2 |
 | **PWA / Offline Mode** | เล่นได้แม้ internet ไม่เสถียร sync ทีหลัง | [x] v0.21.0 |
 | **Sandbox Mode** | วาด flowchart อิสระ ไม่มีศัตรู ฝึก logic ล้วน ๆ | [x] v0.21.0 |
-| **Multi-language** | ภาษาอังกฤษ สำหรับ international | [ ] |
-| **Parent Portal** | ผู้ปกครองดู progress บุตรหลานได้ | [ ] |
+| **Multi-language** | ภาษาอังกฤษ สำหรับ international | [ ] DEFER |
+| **Parent Portal** | ผู้ปกครองดู progress บุตรหลานได้ | [ ] DEFER |
 
 ---
 
-## Phase 5 — Advanced LMS
-> *ฟีเจอร์ขั้นสูงสำหรับ platform เต็มรูปแบบ*
+## Phase 5 — ระบบการศึกษาหลัก (ปวช./ปวส.)
+> *ทำให้ระบบการศึกษาสมบูรณ์ก่อน — Advanced LMS features ตามมา*
 
 | ฟีเจอร์ | รายละเอียด | สถานะ |
 |---|---|---|
 | **Custom Level Editor** | ครูสร้างด่านเองได้ กำหนด enemy, allowed blocks, objective | [x] v0.22.0 |
 | **Class Competition** | Leaderboard แบบ classroom เทียบกันในห้อง | [x] v0.23.0 |
 | **AI Hint System** | แนะนำเมื่อนักเรียนติดนานเกิน N นาที | [x] v0.24.0 |
-| **Peer Review** | แชร์ flowchart ให้เพื่อนวิจารณ์และให้ feedback | [ ] |
-| **Curriculum Alignment** | เชื่อมโยงกับหลักสูตร **สอศ.** เป็นหลัก (ปวช./ปวส.) — สสวท./อศจ. ทำทีหลัง | [ ] |
+| **Curriculum Alignment** | เชื่อมโยงกับหลักสูตร **สอศ.** (ปวช./ปวส.) อย่างเป็นทางการ | [ ] |
+| **Concept Glossary** | อธิบาย concept (Loop, Decision, Sequence ฯลฯ) ใน app | [ ] |
+| **Loss Analysis Screen** | หลังแพ้บอกว่า flowchart จบตรงไหน + ทำไมถึงแพ้ | [ ] |
+| **Peer Review** | แชร์ flowchart ให้เพื่อนวิจารณ์และให้ feedback | [ ] DEFER |
+| **Infinity Dev Terminal Shop** | rollShopInventory() — items ใน Terminal ตาม wave | [ ] DEFER |
 
 ---
 
-## สรุป Priority
+## สรุป Priority (มีนาคม 2026)
+
+> **โฟกัส: ปวช./ปวส. ก่อน** — ระบบหลักต้องสมบูรณ์ก่อนขยายขอบเขต
 
 ```
-ทำทันที  →  Phase 1  →  Phase 2  →  Phase 3  →  Phase 4  →  Phase 5
- (bug fix)   (ครู/ห้อง)  (curriculum)  (analytics)  (mobile)   (advanced)
+[เสร็จแล้ว]  Phase 1–4 (LMS, Analytics, Mobile, Sandbox)
+
+[กำลังทำ]   Phase 5 — ระบบการศึกษาหลัก ปวช./ปวส.
+              1. Tutorial + Campaign ที่สมบูรณ์
+              2. Endless Mode (ไม่ซับซ้อน)
+              3. Concept Glossary
+              4. Loss Analysis Screen
+              5. Curriculum Alignment (สอศ. ปวช./ปวส.)
+
+[DEFER]      ประถม / มัธยม curriculum
+             Parent Portal
+             Multi-language
+             Infinity Dev Terminal Shop (rollShopInventory)
+             Peer Review
 ```
 
 ---

@@ -14,6 +14,8 @@ interface BattleState {
   currentNodeId: string | null;
   /** Total raw damage taken from enemy (sum of every HP decrease, ignoring heals) */
   totalDamageTaken: number;
+  /** จำนวน attempt ใน session ปัจจุบัน (นับเฉพาะ flowchart ที่ผ่าน validation) */
+  sessionAttempts: number;
   // Balance + ailment display state (updated per step during execution)
   heroBurnRounds: number;
   heroFreezeRounds: number;
@@ -39,6 +41,7 @@ interface BattleState {
   setAilments: (a: { burn: number; freeze: number; poison: number; enemyStun: number; enemyBurn?: number; enemyFreeze?: number; enemyPoison?: number; heroBerserk?: number }) => void;
   setHealCharges: (n: number) => void;
   setComboCount: (n: number) => void;
+  incrementSessionAttempts: () => void;
   resetBattle: () => void;
 }
 
@@ -54,6 +57,7 @@ export const useBattleStore = create<BattleState>((set) => ({
   isExecuting: false,
   currentNodeId: null,
   totalDamageTaken: 0,
+  sessionAttempts: 0,
   heroBurnRounds: 0,
   heroFreezeRounds: 0,
   heroPoisonRounds: 0,
@@ -98,6 +102,7 @@ export const useBattleStore = create<BattleState>((set) => ({
       healCharges: 3,
       comboCount: 0,
       totalDamageTaken: 0,
+      sessionAttempts: 0,
     });
   },
 
@@ -122,6 +127,7 @@ export const useBattleStore = create<BattleState>((set) => ({
   }),
   setHealCharges: (healCharges) => set({ healCharges }),
   setComboCount: (comboCount) => set({ comboCount }),
+  incrementSessionAttempts: () => set((state) => ({ sessionAttempts: state.sessionAttempts + 1 })),
 
   resetBattle: () => set({
     battle: null,
@@ -145,5 +151,6 @@ export const useBattleStore = create<BattleState>((set) => ({
     heroBerserkRounds: 0,
     healCharges: 3,
     comboCount: 0,
+    sessionAttempts: 0,
   }),
 }));

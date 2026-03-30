@@ -6,6 +6,7 @@ import { FlowchartEngine } from '../engines/FlowchartEngine';
 import type { BattleState } from '../engines/FlowchartEngine';
 import { STEP_DELAY_MS } from '../utils/constants';
 import type { Character, Enemy, RequiredBlock } from '../types/game.types';
+import { saveLevelAttempt } from '../services/authService';
 
 const BLOCK_LABELS: Record<RequiredBlock, string> = {
   condition: 'Condition block',
@@ -112,6 +113,12 @@ export function useBattle() {
     flowchartStore.setValid(true);
     battleStore.setExecuting(true);
     battleStore.setStatus('running');
+
+    // Research: นับจำนวน attempt ต่อด่าน (fire-and-forget)
+    const _levelId = battleStore.battle?.levelId;
+    const _uid     = battleStore.battle?.playerId;
+    if (_uid && _levelId) saveLevelAttempt(_uid, _levelId).catch(() => {});
+    battleStore.incrementSessionAttempts();
 
     const charStats  = battleStore.battle?.character.stats;
     const enemyStats = battleStore.battle?.enemy.stats;

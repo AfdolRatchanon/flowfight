@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const navigate = useNavigate();
   const { player } = useGameStore();
   const { colors } = useTheme();
@@ -134,8 +135,29 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)} required />
             )}
             {(mode === 'login' || mode === 'register') && (
-              <input className="input-field" type="password" placeholder="🔒  Password" value={password}
-                onChange={(e) => setPassword(e.target.value)} required />
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="input-field"
+                  type={showPw ? 'text' : 'password'}
+                  placeholder="🔒  Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'rgba(255,255,255,0.4)', fontSize: 16, padding: 0, lineHeight: 1,
+                  }}
+                  title={showPw ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+                >
+                  {showPw ? '🙈' : '👁'}
+                </button>
+              </div>
             )}
             {mode === 'reset' && (
               <input className="input-field" type="email" placeholder="📧  Email" value={email}

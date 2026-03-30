@@ -25,6 +25,7 @@ dist-ssr
 
 # Firebase credentials — ห้าม commit เด็ดขาด
 .env
+scripts/service-account.json
 
 # Firebase project pointer — project-specific, แต่ละคน config เอง
 .firebaserc

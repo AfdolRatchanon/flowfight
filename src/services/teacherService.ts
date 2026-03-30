@@ -188,6 +188,20 @@ export async function deleteAssignment(assignmentId: string): Promise<void> {
 }
 
 // ─── Get students in classroom ────────────────────────────────────────────────
+export async function getClassroom(roomCode: string): Promise<Classroom | null> {
+  const snap = await getDoc(doc(db, 'classrooms', roomCode));
+  if (!snap.exists()) return null;
+  return { roomCode, ...snap.data() } as Classroom;
+}
+
+export async function updateClassroomResearch(
+  roomCode: string,
+  fields: { researchMode?: boolean; posttestUnlocked?: boolean },
+): Promise<void> {
+  await updateDoc(doc(db, 'classrooms', roomCode), fields);
+}
+
+// ─── Get students in classroom ────────────────────────────────────────────────
 export async function getClassroomStudents(roomCode: string): Promise<StudentProgress[]> {
   const classSnap = await getDoc(doc(db, 'classrooms', roomCode));
   if (!classSnap.exists()) return [];

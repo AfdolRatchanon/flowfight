@@ -41,6 +41,8 @@ export interface Player {
   purchasedEquipment?: string[];
   /** จำนวนครั้งที่ clear แต่ละด่าน (สำหรับ diminishing returns) */
   levelClearCounts?: Record<string, number>;
+  /** จำนวน attempt ทั้งหมดต่อด่าน (รวมทั้งที่แพ้) — ใช้สำหรับงานวิจัย */
+  levelAttempts?: Record<string, number>;
   /** รายวัน — reset ทุกเที่ยงคืน UTC+7 */
   dailyFarm?: { date: string; plays: Record<string, number> };
   /** Achievements ที่ปลดล็อคแล้ว — เก็บเป็น achievement ID */
@@ -61,6 +63,8 @@ export interface Classroom {
   className: string;
   students: string[];      // array of student uids
   createdAt: number;
+  researchMode?: boolean;       // เปิด = บังคับ pretest + ปิดกั้น LevelSelect
+  posttestUnlocked?: boolean;   // ครูกด "เปิด Post-test" แล้ว
 }
 
 export interface StudentProgress {
@@ -72,7 +76,68 @@ export interface StudentProgress {
   role?: string;
   levelsCompleted: string[];
   levelScores?: Record<string, number>;
+  levelAttempts?: Record<string, number>;
   lastActive: number;
+  classroomCode?: string;
+}
+
+// ===========================
+// Research (Pretest/Posttest/Survey)
+// ===========================
+
+export type TestCategory = 'sequence' | 'decision' | 'loop';
+
+export interface MCQOption {
+  key: 'a' | 'b' | 'c' | 'd';
+  text: string;
+}
+
+export interface MCQQuestion {
+  id: string;                // 'q1' – 'q20'
+  category: TestCategory;
+  question: string;
+  options: MCQOption[];
+  answer: 'a' | 'b' | 'c' | 'd';
+}
+
+export interface TestScoreByCategory {
+  sequence: number;
+  decision: number;
+  loop: number;
+}
+
+export interface ResearchTestResult {
+  answers: Record<string, 'a' | 'b' | 'c' | 'd'>; // questionId → selected
+  score: number;                                    // 0–20
+  scoreByCategory: TestScoreByCategory;
+  completedAt: number;
+  classroomCode?: string;
+}
+
+export interface ResearchTests {
+  pretest?: ResearchTestResult;
+  posttest?: ResearchTestResult;
+}
+
+export interface SurveyQuestion {
+  id: string;          // 'sq1' – 'sq20'
+  dimension: 1 | 2 | 3 | 4 | 5;
+  text: string;
+}
+
+export interface SurveyDimensionScores {
+  dim1: number;  // Fun & Engagement
+  dim2: number;  // Content Comprehension via Game
+  dim3: number;  // Difficulty & Usability
+  dim4: number;  // Transfer to Programming
+  dim5: number;  // Intention to Use & Recommend
+  overall: number;
+}
+
+export interface ResearchSurveyResult {
+  responses: Record<string, 1 | 2 | 3 | 4 | 5>; // questionId → 1-5
+  scores: SurveyDimensionScores;
+  completedAt: number;
   classroomCode?: string;
 }
 

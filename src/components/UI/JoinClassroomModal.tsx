@@ -3,19 +3,22 @@ import { joinClassroom } from '../../services/teacherService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseService';
+import ConfirmModal from './ConfirmModal';
 
 interface Props {
   uid: string;
   currentCode?: string;
+  initialCode?: string;
   onClose: () => void;
   onJoined: (className: string, code: string) => void;
 }
 
-export default function JoinClassroomModal({ uid, currentCode, onClose, onJoined }: Props) {
+export default function JoinClassroomModal({ uid, currentCode, initialCode, onClose, onJoined }: Props) {
   const { colors } = useTheme();
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(initialCode ?? '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   async function handleJoin() {
     setError(''); setLoading(true);
@@ -65,7 +68,7 @@ export default function JoinClassroomModal({ uid, currentCode, onClose, onJoined
             <p style={{ color: '#FBBF24', fontWeight: 700, fontSize: 18, letterSpacing: 3, margin: 0 }}>
               {currentCode}
             </p>
-            <button onClick={handleLeave} disabled={loading} style={{
+            <button onClick={() => setShowLeaveConfirm(true)} disabled={loading} style={{
               marginTop: 8, padding: '4px 12px', borderRadius: 6,
               border: '1px solid rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.1)',
               color: '#f87171', fontSize: 12, cursor: 'pointer',
@@ -106,6 +109,17 @@ export default function JoinClassroomModal({ uid, currentCode, onClose, onJoined
           }}>{loading ? 'กำลังเข้าร่วม...' : 'เข้าร่วมห้องเรียน'}</button>
         </div>
       </div>
+      {showLeaveConfirm && (
+        <ConfirmModal
+          title="ออกจากห้องเรียน?"
+          message="คุณจะถูกลบออกจากห้องเรียนนี้ และต้องใช้รหัสใหม่เพื่อเข้าร่วมอีกครั้ง"
+          confirmLabel="ออกจากห้องเรียน"
+          danger
+          loading={loading}
+          onConfirm={handleLeave}
+          onCancel={() => setShowLeaveConfirm(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,10 +1,15 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { onSnapshot, doc } from 'firebase/firestore';
 import { LEVELS } from '../../utils/constants';
 import { useGameStore } from '../../stores/gameStore';
 import { useShopStore } from '../../stores/shopStore';
 import { levelProgressPct, MAX_LEVEL } from '../../utils/levelSystem';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFlowchartStore } from '../../stores/flowchartStore';
+import { db } from '../../services/firebaseService';
+import { getResearchTests, getResearchSurvey } from '../../services/researchService';
+import type { Classroom } from '../../types/game.types';
 import BagButton from './BagButton';
 
 export default function ModeSelect() {
@@ -13,6 +18,59 @@ export default function ModeSelect() {
   const { colors } = useTheme();
   const shopStore = useShopStore();
   const completed = player?.levelsCompleted ?? [];
+
+  const [posttestBanner, setPosttestBanner] = useState(false);
+  const [surveyBanner, setSurveyBanner] = useState(false);
+  const [liveClassroom, setLiveClassroom] = useState<Classroom | null>(null);
+
+  // Effect 1 — real-time classroom listener (เพื่อ react ทันทีเมื่อครูเปิด researchMode / posttestUnlocked)
+  useEffect(() => {
+    const code = player?.classroomCode;
+    if (!code) { setLiveClassroom(null); return; }
+
+    const unsub = onSnapshot(
+      doc(db, 'classrooms', code),
+      (snap) => {
+        if (!snap.exists()) { setLiveClassroom(null); return; }
+        setLiveClassroom({ roomCode: code, ...snap.data() } as Classroom);
+      },
+      (err) => console.error('[ModeSelect classroom listener]', err),
+    );
+    return () => unsub();
+  }, [player?.classroomCode]);
+
+  // Effect 2 — research check ทุกครั้งที่ classroom หรือ uid เปลี่ยน
+  useEffect(() => {
+    const uid = player?.id;
+    if (!uid || !liveClassroom) return;
+    if (!liveClassroom.researchMode) {
+      setPosttestBanner(false);
+      setSurveyBanner(false);
+      return;
+    }
+
+    Promise.all([
+      getResearchTests(uid),
+      getResearchSurvey(uid),
+    ]).then(([tests, survey]) => {
+      if (!tests.pretest) {
+        navigate('/pretest', { replace: true });
+        return;
+      }
+      if (liveClassroom.posttestUnlocked && !tests.posttest) {
+        setPosttestBanner(true);
+        setSurveyBanner(false);
+        return;
+      }
+      if (tests.posttest && !survey) {
+        setSurveyBanner(true);
+        setPosttestBanner(false);
+      } else {
+        setPosttestBanner(false);
+        setSurveyBanner(false);
+      }
+    }).catch((err) => console.error('[ModeSelect research check]', err));
+  }, [liveClassroom, player?.id, navigate]);
 
   return (
     <div className="page-outer">
@@ -66,6 +124,54 @@ export default function ModeSelect() {
             </div>
           )}
         </div>
+
+        {/* ── Posttest banner ────────────────────────────────────────────── */}
+        {posttestBanner && (
+          <div
+            onClick={() => navigate('/posttest')}
+            style={{
+              marginBottom: 16, padding: '14px 20px', borderRadius: 14, cursor: 'pointer',
+              background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.4)',
+              display: 'flex', alignItems: 'center', gap: 14,
+              boxShadow: '0 0 0 1px rgba(52,211,153,0.15)',
+            }}
+          >
+            <span style={{ fontSize: 28, flexShrink: 0 }}>📋</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: '#34d399', fontWeight: 700, fontSize: 14, margin: '0 0 2px' }}>
+                Post-test พร้อมแล้ว!
+              </p>
+              <p style={{ color: '#6ee7b7', fontSize: 12, margin: 0 }}>
+                ครูเปิด Post-test แล้ว — กดที่นี่เพื่อทำแบบทดสอบ
+              </p>
+            </div>
+            <span style={{ color: '#34d399', fontSize: 20 }}>›</span>
+          </div>
+        )}
+
+        {/* ── Survey banner ──────────────────────────────────────────────── */}
+        {surveyBanner && (
+          <div
+            onClick={() => navigate('/survey')}
+            style={{
+              marginBottom: 16, padding: '14px 20px', borderRadius: 14, cursor: 'pointer',
+              background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.4)',
+              display: 'flex', alignItems: 'center', gap: 14,
+              boxShadow: '0 0 0 1px rgba(167,139,250,0.15)',
+            }}
+          >
+            <span style={{ fontSize: 28, flexShrink: 0 }}>📝</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: '#a78bfa', fontWeight: 700, fontSize: 14, margin: '0 0 2px' }}>
+                กรุณาทำแบบสอบถามความพึงพอใจ
+              </p>
+              <p style={{ color: '#c4b5fd', fontSize: 12, margin: 0 }}>
+                ทำแบบสอบถาม 20 ข้อ เพื่อให้การวิจัยสมบูรณ์ — กดที่นี่
+              </p>
+            </div>
+            <span style={{ color: '#a78bfa', fontSize: 20 }}>›</span>
+          </div>
+        )}
 
         {/* ── Mode Cards ─────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

@@ -22,6 +22,8 @@ const AchievementsPage  = lazy(() => import('./components/UI/AchievementsPage'))
 const CertificatePage   = lazy(() => import('./components/UI/CertificatePage'));
 const SandboxMode       = lazy(() => import('./components/UI/SandboxMode'));
 const ClassroomLeaderboard = lazy(() => import('./components/UI/ClassroomLeaderboard'));
+const ResearchTestPage     = lazy(() => import('./components/Research/ResearchTestPage'));
+const SatisfactionSurveyPage = lazy(() => import('./components/Research/SatisfactionSurveyPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, player, character } = useGameStore();
@@ -112,6 +114,9 @@ export default function App() {
           <Route path="/certificate" element={<ProtectedRoute><CertificatePage /></ProtectedRoute>} />
           <Route path="/sandbox" element={<ProtectedRoute><SandboxMode /></ProtectedRoute>} />
           <Route path="/classroom-leaderboard" element={<ProtectedRoute><ClassroomLeaderboard /></ProtectedRoute>} />
+          <Route path="/pretest"  element={<ProtectedRoute><ResearchTestPage mode="pretest" /></ProtectedRoute>} />
+          <Route path="/posttest" element={<ProtectedRoute><ResearchTestPage mode="posttest" /></ProtectedRoute>} />
+          <Route path="/survey"   element={<ProtectedRoute><SatisfactionSurveyPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
